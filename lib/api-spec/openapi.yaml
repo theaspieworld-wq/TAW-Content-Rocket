@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: YouTube Shorts Generator API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: jobs
+    description: Video processing jobs
 paths:
   /healthz:
     get:
@@ -24,6 +25,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List all jobs
+      description: Returns all video processing jobs
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Create a new processing job
+      description: Starts processing a YouTube video URL to extract short clips
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get job details
+      description: Returns a job and its clips
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobWithClips"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteJob
+      tags: [jobs]
+      summary: Delete a job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /clips/{clipId}/download:
+    get:
+      operationId: downloadClip
+      tags: [jobs]
+      summary: Download a clip file
+      parameters:
+        - name: clipId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Video file stream
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +138,94 @@ components:
           type: string
       required:
         - status
-
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    CreateJobBody:
+      type: object
+      properties:
+        youtubeUrl:
+          type: string
+          description: YouTube video URL to process
+        clipCount:
+          type: integer
+          description: Number of clips to generate (1-10)
+          default: 3
+      required:
+        - youtubeUrl
+    Job:
+      type: object
+      properties:
+        id:
+          type: integer
+        youtubeUrl:
+          type: string
+        videoTitle:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, downloading, transcribing, analyzing, rendering, completed, failed]
+        errorMessage:
+          type: ["string", "null"]
+        clipCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - youtubeUrl
+        - status
+        - clipCount
+        - createdAt
+        - updatedAt
+    Clip:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        title:
+          type: string
+        startSeconds:
+          type: number
+        endSeconds:
+          type: number
+        durationSeconds:
+          type: number
+        filePath:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, rendering, completed, failed]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - jobId
+        - title
+        - startSeconds
+        - endSeconds
+        - durationSeconds
+        - status
+        - createdAt
+    JobWithClips:
+      allOf:
+        - $ref: "#/components/schemas/Job"
+        - type: object
+          properties:
+            clips:
+              type: array
+              items:
+                $ref: "#/components/schemas/Clip"
+          required:
+            - clips
