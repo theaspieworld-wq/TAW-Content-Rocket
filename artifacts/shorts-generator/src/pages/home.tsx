@@ -81,11 +81,11 @@ function getStatusProgress(status: string) {
 function getStatusColor(status: string) {
   switch(status) {
     case 'pending': return 'bg-muted text-muted-foreground';
-    case 'downloading': return 'bg-blue-500/20 text-blue-500 border-blue-500/30';
-    case 'transcribing': return 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30';
-    case 'analyzing': return 'bg-purple-500/20 text-purple-500 border-purple-500/30';
-    case 'rendering': return 'bg-amber-500/20 text-amber-500 border-amber-500/30';
-    case 'completed': return 'bg-green-500/20 text-green-500 border-green-500/30';
+    case 'downloading': return 'bg-[#9b4dca]/20 text-[#9b4dca] border-[#9b4dca]/30';
+    case 'transcribing': return 'bg-[#9b4dca]/20 text-[#9b4dca] border-[#9b4dca]/30';
+    case 'analyzing': return 'bg-[#f21178]/20 text-[#f21178] border-[#f21178]/30';
+    case 'rendering': return 'bg-[#f21178]/20 text-[#f21178] border-[#f21178]/30';
+    case 'completed': return 'bg-[#00c896]/20 text-[#00c896] border-[#00c896]/30';
     case 'failed': return 'bg-destructive/20 text-destructive border-destructive/30';
     default: return 'bg-muted text-muted-foreground border-transparent';
   }
@@ -298,9 +298,9 @@ export default function Home() {
         <div className="p-5 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
-              <Scissors className="w-5 h-5 text-primary" />
+              <Scissors className="w-5 h-5 text-[#f21178]" />
             </div>
-            <h1 className="font-bold text-lg tracking-tight">Studio Shorts</h1>
+            <h1 className="font-bold text-lg tracking-tight">TAW Studio</h1>
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -341,7 +341,7 @@ export default function Home() {
                       onClick={() => setSelectedJobId(job.id)}
                       className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
                         selectedJobId === job.id 
-                          ? 'bg-primary/5 border-primary/30 shadow-[inset_0_0_20px_rgba(234,88,12,0.05)]' 
+                          ? 'bg-primary/5 border-primary/30 shadow-[inset_0_0_20px_rgba(242,17,120,0.05)]' 
                           : 'bg-card/30 border-transparent hover:bg-muted/40 hover:border-border/50'
                       } group`}
                     >
@@ -450,7 +450,7 @@ export default function Home() {
                     </div>
                   ) : outros && outros.length > 0 ? (
                     outros.map(outro => (
-                      <div key={outro.id} className={`p-3 rounded-lg border bg-card/30 transition-all ${outro.isDefault ? 'border-primary/40 shadow-[0_0_15px_rgba(234,88,12,0.05)]' : 'border-border/50'} relative group`}>
+                      <div key={outro.id} className={`p-3 rounded-lg border bg-card/30 transition-all ${outro.isDefault ? 'border-primary/40 shadow-[0_0_15px_rgba(242,17,120,0.05)]' : 'border-border/50'} relative group`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -588,7 +588,8 @@ export default function Home() {
                   type="submit" 
                   size="lg"
                   disabled={createJob.isPending}
-                  className="h-14 px-8 text-base shadow-[0_4px_14px_0_rgba(234,88,12,0.2)] hover:shadow-[0_6px_20px_rgba(234,88,12,0.3)] hover:-translate-y-0.5 transition-all rounded-xl font-semibold active:translate-y-0 shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #fd9601, #f21178)' }}
+                  className="h-14 px-8 text-base shadow-[0_4px_14px_0_rgba(242,17,120,0.2)] hover:shadow-[0_6px_20px_rgba(242,17,120,0.3)] hover:-translate-y-0.5 transition-all rounded-xl font-semibold active:translate-y-0 shrink-0 text-white border-0"
                 >
                   {createJob.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Scissors className="w-5 h-5 mr-2" />}
                   {createJob.isPending ? "Starting..." : "Extract Clips"}
@@ -684,7 +685,7 @@ export default function Home() {
                       <span className="text-foreground">Current Phase</span>
                       <span className="text-primary font-mono">{getStatusLabel(jobWithClips.status)}...</span>
                     </div>
-                    <Progress value={getStatusProgress(jobWithClips.status)} className="h-2.5 relative z-10 bg-muted/50 overflow-hidden" indicatorClassName="bg-primary shadow-[0_0_10px_rgba(234,88,12,0.5)] transition-all duration-1000" />
+                    <Progress value={getStatusProgress(jobWithClips.status)} className="h-2.5 relative z-10 bg-muted/50 overflow-hidden" indicatorClassName="bg-gradient-to-r from-[#f21178] to-[#9b4dca] shadow-[0_0_10px_rgba(242,17,120,0.5)] transition-all duration-1000" />
                     <p className="text-xs text-muted-foreground mt-4 relative z-10 flex items-center gap-2">
                       <Loader2 className="w-3 h-3 animate-spin text-primary/70" />
                       This process involves downloading, AI analysis, transcription, and rendering.

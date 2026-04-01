@@ -85,7 +85,7 @@
   --popover-foreground: 240 10% 4%;
   --popover-border: 240 6% 90%;
   
-  --primary: 20 100% 55%;
+  --primary: 333 90% 51%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 5% 96%;
   --secondary-foreground: 240 6% 10%;
@@ -96,18 +96,18 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
   --input: 240 6% 90%;
-  --ring: 20 100% 55%;
+  --ring: 333 90% 51%;
 
   --sidebar: 240 5% 96%;
   --sidebar-foreground: 240 6% 10%;
   --sidebar-border: 240 6% 90%;
-  --sidebar-primary: 20 100% 55%;
+  --sidebar-primary: 333 90% 51%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 240 5% 90%;
   --sidebar-accent-foreground: 240 6% 10%;
-  --sidebar-ring: 20 100% 55%;
+  --sidebar-ring: 333 90% 51%;
 
-  --chart-1: 20 100% 55%;
+  --chart-1: 333 90% 51%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
@@ -146,7 +146,7 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 240 6% 8%;
+  --background: 240 6% 5%;
   --foreground: 0 0% 98%;
   --border: 240 5% 18%;
   --card: 240 6% 10%;
@@ -156,7 +156,7 @@
   --popover-foreground: 0 0% 98%;
   --popover-border: 240 5% 18%;
   
-  --primary: 20 100% 55%;
+  --primary: 333 90% 51%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 5% 15%;
   --secondary-foreground: 0 0% 98%;
@@ -167,18 +167,18 @@
   --destructive: 0 62% 30%;
   --destructive-foreground: 0 0% 98%;
   --input: 240 5% 18%;
-  --ring: 20 100% 55%;
+  --ring: 333 90% 51%;
 
-  --sidebar: 240 6% 10%;
+  --sidebar: 240 6% 7%;
   --sidebar-foreground: 0 0% 98%;
   --sidebar-border: 240 5% 18%;
-  --sidebar-primary: 20 100% 55%;
+  --sidebar-primary: 333 90% 51%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 240 5% 18%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 20 100% 55%;
+  --sidebar-ring: 333 90% 51%;
 
-  --chart-1: 20 100% 55%;
+  --chart-1: 333 90% 51%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
