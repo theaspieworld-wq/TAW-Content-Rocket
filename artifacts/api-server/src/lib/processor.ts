@@ -10,6 +10,12 @@ import { logger } from "./logger";
 
 const execFileAsync = promisify(execFile);
 
+// Use the locally-downloaded yt-dlp binary (kept up-to-date) preferring it
+// over the older system/Nix version to stay compatible with YouTube changes.
+const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
+  ? "/home/runner/workspace/bin/yt-dlp"
+  : "yt-dlp";
+
 const CLIPS_DIR = path.join(process.cwd(), "clips");
 fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
@@ -38,7 +44,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const infoArgs = ["--print", "%(title)s", "--no-playlist", youtubeUrl];
   let title = "Untitled Video";
   try {
-    const { stdout } = await execFileAsync("yt-dlp", infoArgs, { timeout: 30000 });
+    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000 });
     title = stdout.trim().split("\n")[0] || title;
   } catch (e) {
     logger.warn({ e }, "Could not fetch video title");
@@ -47,13 +53,14 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const videoPath = path.join(outputDir, "video.mp4");
   const dlArgs = [
     "--no-playlist",
-    "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best[height<=720]/best",
+    // android_vr client returns formats without requiring PO tokens or SABR streaming
+    "--extractor-args", "youtube:player_client=android_vr",
+    "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
     "--merge-output-format", "mp4",
     "-o", videoPath,
-    "--limit-rate", "5M",
     youtubeUrl,
   ];
-  await execFileAsync("yt-dlp", dlArgs, { timeout: 300000 });
+  await execFileAsync(YTDLP, dlArgs, { timeout: 300000 });
 
   if (!fs.existsSync(videoPath)) {
     throw new Error("Video download failed — output file not found");
