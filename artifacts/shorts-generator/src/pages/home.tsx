@@ -345,9 +345,13 @@ export default function Home() {
                           : 'bg-card/30 border-transparent hover:bg-muted/40 hover:border-border/50'
                       } group`}
                     >
-                      <div className="flex justify-between items-start mb-1.5">
-                        <span className="font-medium text-sm truncate pr-2 text-foreground/90">
-                          {job.videoTitle || job.youtubeUrl}
+                      <div className="flex justify-between items-start mb-1.5 gap-1">
+                        <span className="font-medium text-sm min-w-0 flex-1 text-foreground/90 leading-snug">
+                          {job.videoTitle ? (
+                            job.videoTitle
+                          ) : (
+                            <span className="text-[11px] font-mono text-muted-foreground break-all">{job.youtubeUrl}</span>
+                          )}
                         </span>
                         <Button 
                           variant="ghost" 
