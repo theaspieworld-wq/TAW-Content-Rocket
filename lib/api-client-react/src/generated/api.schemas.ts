@@ -14,14 +14,9 @@ export interface ErrorResponse {
 }
 
 export interface CreateJobBody {
-  /** YouTube video URL to process */
   youtubeUrl: string;
-  /** Number of clips to generate (1-10) */
   clipCount?: number;
-  /**
-   * ID of the outro clip to append/prepend
-   * @nullable
-   */
+  /** @nullable */
   outroId?: number | null;
 }
 
@@ -48,6 +43,8 @@ export interface Job {
   clipCount: number;
   /** @nullable */
   outroId?: number | null;
+  /** Whether AI content has been generated for this job */
+  hasContent: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,9 +75,26 @@ export type JobWithClips = Job & {
   clips: Clip[];
 };
 
-/**
- * Where the outro appears relative to the main clip
- */
+export interface NewsletterEmail {
+  /** Email subject line */
+  subject: string;
+  /** HTML email body for pasting into a CRM */
+  body: string;
+}
+
+export interface GeneratedContent {
+  videoTitle: string;
+  thumbnailUrl: string;
+  youtubeUrl: string;
+  /** Full blog post in markdown format with H1, H2, TLDR */
+  blogPost: string;
+  /** 5 posts for X/Threads, each max 280 chars */
+  threadPosts: string[];
+  /** Article for Facebook, Quora, and LinkedIn with video link */
+  socialArticle: string;
+  newsletterEmail: NewsletterEmail;
+}
+
 export type OutroPosition = (typeof OutroPosition)[keyof typeof OutroPosition];
 
 export const OutroPosition = {
@@ -93,17 +107,10 @@ export interface Outro {
   name: string;
   filePath: string;
   isDefault: boolean;
-  /** Where the outro appears relative to the main clip */
   position: OutroPosition;
-  /**
-   * Call-to-action text to overlay on the outro
-   * @nullable
-   */
+  /** @nullable */
   ctaText?: string | null;
-  /**
-   * When (in seconds into the outro) the CTA text appears
-   * @nullable
-   */
+  /** @nullable */
   ctaStartSeconds?: number | null;
   createdAt: string;
 }

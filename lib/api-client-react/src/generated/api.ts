@@ -19,6 +19,7 @@ import type {
 import type {
   CreateJobBody,
   ErrorResponse,
+  GeneratedContent,
   HealthStatus,
   Job,
   JobWithClips,
@@ -421,6 +422,177 @@ export const useDeleteJob = <
 };
 
 /**
+ * @summary Get AI-generated content for a completed job
+ */
+export const getGetJobContentUrl = (id: number) => {
+  return `/api/jobs/${id}/content`;
+};
+
+export const getJobContent = async (
+  id: number,
+  options?: RequestInit,
+): Promise<GeneratedContent> => {
+  return customFetch<GeneratedContent>(getGetJobContentUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetJobContentQueryKey = (id: number) => {
+  return [`/api/jobs/${id}/content`] as const;
+};
+
+export const getGetJobContentQueryOptions = <
+  TData = Awaited<ReturnType<typeof getJobContent>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getJobContent>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetJobContentQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobContent>>> = ({
+    signal,
+  }) => getJobContent(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getJobContent>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetJobContentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getJobContent>>
+>;
+export type GetJobContentQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get AI-generated content for a completed job
+ */
+
+export function useGetJobContent<
+  TData = Awaited<ReturnType<typeof getJobContent>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getJobContent>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetJobContentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Regenerate content for a job using stored transcript
+ */
+export const getRegenerateJobContentUrl = (id: number) => {
+  return `/api/jobs/${id}/content`;
+};
+
+export const regenerateJobContent = async (
+  id: number,
+  options?: RequestInit,
+): Promise<GeneratedContent> => {
+  return customFetch<GeneratedContent>(getRegenerateJobContentUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRegenerateJobContentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateJobContent>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerateJobContent>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["regenerateJobContent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerateJobContent>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return regenerateJobContent(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateJobContentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof regenerateJobContent>>
+>;
+
+export type RegenerateJobContentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Regenerate content for a job using stored transcript
+ */
+export const useRegenerateJobContent = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateJobContent>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof regenerateJobContent>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRegenerateJobContentMutationOptions(options));
+};
+
+/**
  * @summary Download a clip file
  */
 export const getDownloadClipUrl = (clipId: number) => {
@@ -581,7 +753,7 @@ export function useListOutros<
 }
 
 /**
- * @summary Update outro metadata (name, CTA, position, default)
+ * @summary Update outro metadata
  */
 export const getUpdateOutroUrl = (id: number) => {
   return `/api/outros/${id}`;
@@ -645,7 +817,7 @@ export type UpdateOutroMutationBody = BodyType<UpdateOutroBody>;
 export type UpdateOutroMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Update outro metadata (name, CTA, position, default)
+ * @summary Update outro metadata
  */
 export const useUpdateOutro = <
   TError = ErrorType<ErrorResponse>,

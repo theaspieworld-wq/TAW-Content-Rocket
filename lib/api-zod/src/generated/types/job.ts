@@ -18,6 +18,8 @@ export interface Job {
   clipCount: number;
   /** @nullable */
   outroId?: number | null;
+  /** Whether AI content has been generated for this job */
+  hasContent: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

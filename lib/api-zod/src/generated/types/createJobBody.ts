@@ -7,13 +7,8 @@
  */
 
 export interface CreateJobBody {
-  /** YouTube video URL to process */
   youtubeUrl: string;
-  /** Number of clips to generate (1-10) */
   clipCount?: number;
-  /**
-   * ID of the outro clip to append/prepend
-   * @nullable
-   */
+  /** @nullable */
   outroId?: number | null;
 }

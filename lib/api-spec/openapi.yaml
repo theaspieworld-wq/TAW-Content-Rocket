@@ -106,6 +106,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /jobs/{id}/content:
+    get:
+      operationId: getJobContent
+      tags: [jobs]
+      summary: Get AI-generated content for a completed job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Generated content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedContent"
+        "404":
+          description: Job not found or content not yet generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: regenerateJobContent
+      tags: [jobs]
+      summary: Regenerate content for a job using stored transcript
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Regenerated content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedContent"
+        "400":
+          description: Job not completed or transcript not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /clips/{clipId}/download:
     get:
       operationId: downloadClip
@@ -145,7 +198,7 @@ paths:
     patch:
       operationId: updateOutro
       tags: [outros]
-      summary: Update outro metadata (name, CTA, position, default)
+      summary: Update outro metadata
       parameters:
         - name: id
           in: path
@@ -235,14 +288,11 @@ components:
       properties:
         youtubeUrl:
           type: string
-          description: YouTube video URL to process
         clipCount:
           type: integer
-          description: Number of clips to generate (1-10)
           default: 3
         outroId:
           type: ["integer", "null"]
-          description: ID of the outro clip to append/prepend
       required:
         - youtubeUrl
     Job:
@@ -263,6 +313,9 @@ components:
           type: integer
         outroId:
           type: ["integer", "null"]
+        hasContent:
+          type: boolean
+          description: Whether AI content has been generated for this job
         createdAt:
           type: string
           format: date-time
@@ -274,6 +327,7 @@ components:
         - youtubeUrl
         - status
         - clipCount
+        - hasContent
         - createdAt
         - updatedAt
     Clip:
@@ -319,6 +373,48 @@ components:
                 $ref: "#/components/schemas/Clip"
           required:
             - clips
+    NewsletterEmail:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: Email subject line
+        body:
+          type: string
+          description: HTML email body for pasting into a CRM
+      required:
+        - subject
+        - body
+    GeneratedContent:
+      type: object
+      properties:
+        videoTitle:
+          type: string
+        thumbnailUrl:
+          type: string
+        youtubeUrl:
+          type: string
+        blogPost:
+          type: string
+          description: Full blog post in markdown format with H1, H2, TLDR
+        threadPosts:
+          type: array
+          items:
+            type: string
+          description: 5 posts for X/Threads, each max 280 chars
+        socialArticle:
+          type: string
+          description: Article for Facebook, Quora, and LinkedIn with video link
+        newsletterEmail:
+          $ref: "#/components/schemas/NewsletterEmail"
+      required:
+        - videoTitle
+        - thumbnailUrl
+        - youtubeUrl
+        - blogPost
+        - threadPosts
+        - socialArticle
+        - newsletterEmail
     Outro:
       type: object
       properties:
@@ -333,13 +429,10 @@ components:
         position:
           type: string
           enum: [beginning, end]
-          description: Where the outro appears relative to the main clip
         ctaText:
           type: ["string", "null"]
-          description: Call-to-action text to overlay on the outro
         ctaStartSeconds:
           type: ["number", "null"]
-          description: When (in seconds into the outro) the CTA text appears
         createdAt:
           type: string
           format: date-time

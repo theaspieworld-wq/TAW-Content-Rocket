@@ -32,6 +32,21 @@ interface ClipSegment {
   reasoning: string;
 }
 
+interface NewsletterEmail {
+  subject: string;
+  body: string;
+}
+
+export interface GeneratedContent {
+  videoTitle: string;
+  thumbnailUrl: string;
+  youtubeUrl: string;
+  blogPost: string;
+  threadPosts: string[];
+  socialArticle: string;
+  newsletterEmail: NewsletterEmail;
+}
+
 async function updateJobStatus(jobId: number, status: string, extra?: { videoTitle?: string; errorMessage?: string }): Promise<void> {
   await db.update(jobsTable).set({
     status,
@@ -340,6 +355,119 @@ async function concatenateClipWithOutro(
   ], { timeout: 300000 });
 }
 
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /youtu\.be\/([^?&/#]+)/,
+    /[?&]v=([^&/#]+)/,
+    /youtube\.com\/embed\/([^?&/#]+)/,
+    /youtube\.com\/shorts\/([^?&/#]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+function getThumbnailUrl(youtubeUrl: string): string {
+  const videoId = extractVideoId(youtubeUrl);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : "";
+}
+
+function buildNewsletterHtml(params: {
+  videoTitle: string;
+  thumbnailUrl: string;
+  youtubeUrl: string;
+  greeting: string;
+  takeaways: string[];
+  closing: string;
+}): string {
+  const { videoTitle, thumbnailUrl, youtubeUrl, greeting, takeaways, closing } = params;
+  const items = takeaways.map((t) => `<li style="margin-bottom:8px">${t}</li>`).join("");
+  return [
+    `<div style="max-width:600px;margin:0 auto;font-family:Arial,'Helvetica Neue',sans-serif;color:#1a1a1a;line-height:1.7">`,
+    `<img src="${thumbnailUrl}" alt="${videoTitle}" style="width:100%;height:auto;border-radius:8px;margin-bottom:24px;display:block" />`,
+    `<h1 style="font-size:22px;font-weight:700;margin:0 0 20px;color:#0d0d0d">${videoTitle}</h1>`,
+    `<p>Hi [First Name],</p>`,
+    `<p>${greeting}</p>`,
+    `<h2 style="font-size:17px;font-weight:700;margin:24px 0 10px;color:#0d0d0d">Key Takeaways</h2>`,
+    `<ul style="padding-left:20px;margin:0 0 24px">${items}</ul>`,
+    `<p>${closing}</p>`,
+    `<a href="${youtubeUrl}" style="display:inline-block;background:#f21178;color:#ffffff;padding:13px 30px;text-decoration:none;border-radius:6px;font-weight:700;font-size:15px;margin:8px 0 28px">Watch the Full Video</a>`,
+    `<p style="color:#666;font-size:14px;border-top:1px solid #eee;padding-top:20px;margin-top:8px">Best,<br>The TAW Media Team</p>`,
+    `</div>`,
+  ].join("");
+}
+
+export async function generateContent(
+  youtubeUrl: string,
+  videoTitle: string,
+  transcript: TranscriptSegment[],
+): Promise<GeneratedContent> {
+  const thumbnailUrl = getThumbnailUrl(youtubeUrl);
+  const transcriptText = transcript.map((s) => s.text).join(" ").slice(0, 10000);
+
+  const prompt = `You are a professional content creator for TAW Media. Based on this YouTube video transcript, generate content for four formats.
+
+VIDEO TITLE: ${videoTitle}
+VIDEO URL: ${youtubeUrl}
+
+TRANSCRIPT:
+${transcriptText}
+
+Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
+
+{
+  "blogPost": "Full markdown blog post. Structure: # [H1 title], ## TLDR (2-3 sentence summary), ## Introduction, ## [3-4 H2 content sections based on the transcript themes], ## Conclusion. Each section should be substantive. Target 700-900 words.",
+  "threadPosts": [
+    "Post 1: Hook — the single most compelling insight. Max 280 chars.",
+    "Post 2: Key insight from the video. Max 280 chars.",
+    "Post 3: Another insight or tactical tip. Max 280 chars.",
+    "Post 4: Practical action step the viewer can use immediately. Max 280 chars.",
+    "Post 5: Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Max 280 chars."
+  ],
+  "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. 4-5 paragraphs. Open with a strong statement or question. Deliver real value from the transcript. End the final paragraph with: Watch the full video here: ${youtubeUrl}",
+  "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
+  "newsletterGreeting": "Opening paragraph after 'Hi [First Name],' — 2-3 sentences that explain what this video covers and why it matters to the reader.",
+  "newsletterTakeaways": ["Key takeaway 1", "Key takeaway 2", "Key takeaway 3"],
+  "newsletterClosing": "One paragraph closing that builds anticipation for the video and encourages clicking the button below."
+}`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+    max_completion_tokens: 4000,
+  });
+
+  const rawContent = response.choices[0]?.message?.content ?? "{}";
+  const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("AI returned no valid JSON for content generation");
+
+  const g = JSON.parse(jsonMatch[0]);
+
+  const newsletterHtml = buildNewsletterHtml({
+    videoTitle,
+    thumbnailUrl,
+    youtubeUrl,
+    greeting: g.newsletterGreeting ?? "",
+    takeaways: Array.isArray(g.newsletterTakeaways) ? g.newsletterTakeaways : [],
+    closing: g.newsletterClosing ?? "",
+  });
+
+  return {
+    videoTitle,
+    thumbnailUrl,
+    youtubeUrl,
+    blogPost: g.blogPost ?? "",
+    threadPosts: Array.isArray(g.threadPosts) ? g.threadPosts : [],
+    socialArticle: g.socialArticle ?? "",
+    newsletterEmail: {
+      subject: g.newsletterSubject ?? "",
+      body: newsletterHtml,
+    },
+  };
+}
+
 export async function processJob(jobId: number): Promise<void> {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `job_${jobId}_`));
 
@@ -370,6 +498,8 @@ export async function processJob(jobId: number): Promise<void> {
     await updateJobStatus(jobId, "transcribing");
     const audioPath = await extractAudio(videoPath, tempDir);
     const transcript = await transcribeAudio(audioPath);
+    // Persist transcript so content can be regenerated later without re-downloading
+    await db.update(jobsTable).set({ transcript: JSON.stringify(transcript) }).where(eq(jobsTable.id, jobId));
 
     // Step 3: AI clip selection
     await updateJobStatus(jobId, "analyzing");
@@ -390,7 +520,16 @@ export async function processJob(jobId: number): Promise<void> {
       }))
     ).returning();
 
-    // Step 4: Render clips
+    // Step 4: Generate written content (non-fatal — job completes even if this fails)
+    try {
+      const content = await generateContent(job.youtubeUrl, title, transcript);
+      await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
+      logger.info({ jobId }, "Content generation completed");
+    } catch (contentErr) {
+      logger.warn({ jobId, err: contentErr }, "Content generation failed — rendering will continue");
+    }
+
+    // Step 5: Render clips
     await updateJobStatus(jobId, "rendering");
 
     // Pre-render outro (with CTA) if needed — do once, reuse for all clips

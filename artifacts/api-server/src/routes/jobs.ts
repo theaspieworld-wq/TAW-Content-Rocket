@@ -9,7 +9,7 @@ import {
   DeleteJobParams,
   DownloadClipParams,
 } from "@workspace/api-zod";
-import { processJob } from "../lib/processor";
+import { processJob, generateContent } from "../lib/processor";
 
 const router: IRouter = Router();
 
@@ -22,6 +22,7 @@ function jobToJson(j: typeof jobsTable.$inferSelect) {
     errorMessage: j.errorMessage ?? null,
     clipCount: j.clipCount,
     outroId: j.outroId ?? null,
+    hasContent: j.generatedContent != null,
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
   };
@@ -47,7 +48,6 @@ router.post("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
-  // Validate outroId if provided
   if (outroId != null) {
     const [outro] = await db.select().from(outrosTable).where(eq(outrosTable.id, outroId));
     if (!outro) {
@@ -113,6 +113,54 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+router.get("/jobs/:id/content", async (req, res): Promise<void> => {
+  const params = GetJobParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  if (!job.generatedContent) {
+    res.status(404).json({ error: "Content not yet generated for this job" });
+    return;
+  }
+
+  res.json(JSON.parse(job.generatedContent));
+});
+
+router.post("/jobs/:id/content", async (req, res): Promise<void> => {
+  const params = GetJobParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  if (!job.transcript) {
+    res.status(400).json({ error: "Transcript not available — please process a new job to generate content" });
+    return;
+  }
+
+  const transcript = JSON.parse(job.transcript);
+  const videoTitle = job.videoTitle ?? "Untitled Video";
+
+  const content = await generateContent(job.youtubeUrl, videoTitle, transcript);
+  await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, job.id));
+
+  res.json(content);
 });
 
 router.get("/clips/:clipId/download", async (req, res): Promise<void> => {

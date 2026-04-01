@@ -12,10 +12,13 @@ import {
   useUpdateOutro,
   useDeleteOutro,
   useSetDefaultOutro,
+  useGetJobContent,
+  useRegenerateJobContent,
   getGetJobQueryKey,
   getListJobsQueryKey,
   getHealthCheckQueryKey,
-  getListOutrosQueryKey
+  getListOutrosQueryKey,
+  getGetJobContentQueryKey,
 } from "@workspace/api-client-react";
 import { formatDistanceToNow } from "date-fns";
 import { 
@@ -33,7 +36,15 @@ import {
   Settings,
   Star,
   Film,
-  Edit2
+  Edit2,
+  FileText,
+  Copy,
+  Check,
+  RefreshCw,
+  Mail,
+  AtSign,
+  Globe,
+  BookOpen,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -99,6 +110,7 @@ export default function Home() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -142,6 +154,52 @@ export default function Home() {
   const updateOutro = useUpdateOutro();
   const deleteOutro = useDeleteOutro();
   const setDefaultOutro = useSetDefaultOutro();
+  const regenerateContent = useRegenerateJobContent();
+
+  const { data: jobContent, isLoading: isContentLoading } = useGetJobContent(
+    selectedJobId as number,
+    {
+      query: {
+        enabled: selectedJobId !== null && jobWithClips?.status === "completed" && jobWithClips?.hasContent === true,
+        queryKey: getGetJobContentQueryKey(selectedJobId as number),
+      },
+    }
+  );
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    });
+  };
+
+  const handleRegenerateContent = () => {
+    if (!selectedJobId) return;
+    regenerateContent.mutate({ id: selectedJobId }, {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetJobContentQueryKey(selectedJobId), data);
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        toast({ title: "Content Regenerated", description: "All content has been refreshed." });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Could not regenerate content. Transcript may not be available.", variant: "destructive" });
+      },
+    });
+  };
+
+  const handleGenerateContent = () => {
+    if (!selectedJobId) return;
+    regenerateContent.mutate({ id: selectedJobId }, {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetJobContentQueryKey(selectedJobId), data);
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        toast({ title: "Content Generated", description: "Blog post, thread, social article and newsletter are ready." });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Could not generate content. This job may have been processed before content generation was supported.", variant: "destructive" });
+      },
+    });
+  };
 
   const defaultOutro = outros?.find(o => o.isDefault);
 
@@ -709,6 +767,212 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {jobWithClips.status === 'completed' && (
+                <div className="mt-12">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
+                      <FileText className="w-5 h-5 text-primary" />
+                      Generated Content
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {jobWithClips.hasContent && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRegenerateContent}
+                          disabled={regenerateContent.isPending}
+                          className="h-8 text-xs gap-1.5 border-border/60"
+                        >
+                          {regenerateContent.isPending
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <RefreshCw className="w-3.5 h-3.5" />}
+                          Regenerate
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {!jobWithClips.hasContent ? (
+                    <div className="rounded-xl border border-dashed border-border bg-card/20 p-10 flex flex-col items-center text-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-primary/70" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm mb-1">Content not generated</p>
+                        <p className="text-xs text-muted-foreground max-w-xs">This job was processed before content generation was added, or content generation failed. You can try to generate it now using the stored transcript.</p>
+                      </div>
+                      <Button
+                        onClick={handleGenerateContent}
+                        disabled={regenerateContent.isPending}
+                        style={{ background: 'linear-gradient(135deg, #fd9601, #f21178)' }}
+                        className="text-white border-0 shadow-sm hover:shadow-md transition-all gap-2 font-semibold"
+                      >
+                        {regenerateContent.isPending
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <FileText className="w-4 h-4" />}
+                        {regenerateContent.isPending ? "Generating..." : "Generate Content"}
+                      </Button>
+                    </div>
+                  ) : isContentLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-7 h-7 animate-spin text-primary/40" />
+                    </div>
+                  ) : jobContent ? (
+                    <Tabs defaultValue="blog" className="w-full">
+                      <TabsList className="bg-muted/50 border border-border/50 mb-6 h-10">
+                        <TabsTrigger value="blog" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                          <BookOpen className="w-3.5 h-3.5" /> Blog Post
+                        </TabsTrigger>
+                        <TabsTrigger value="thread" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                          <AtSign className="w-3.5 h-3.5" /> Thread
+                        </TabsTrigger>
+                        <TabsTrigger value="social" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                          <Globe className="w-3.5 h-3.5" /> Social Article
+                        </TabsTrigger>
+                        <TabsTrigger value="newsletter" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                          <Mail className="w-3.5 h-3.5" /> Newsletter
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="blog" className="m-0">
+                        <div className="rounded-xl border border-border bg-card overflow-hidden">
+                          {jobContent.thumbnailUrl && (
+                            <img
+                              src={jobContent.thumbnailUrl}
+                              alt={jobContent.videoTitle}
+                              className="w-full h-48 object-cover border-b border-border"
+                            />
+                          )}
+                          <div className="p-6">
+                            <div className="flex items-center justify-between mb-4">
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Markdown Blog Post</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1.5 border-border/60"
+                                onClick={() => copyToClipboard(jobContent.blogPost, "blog")}
+                              >
+                                {copiedKey === "blog" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                                {copiedKey === "blog" ? "Copied!" : "Copy Markdown"}
+                              </Button>
+                            </div>
+                            <pre className="text-sm leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 max-h-80 overflow-y-auto text-foreground/80 border border-border/40">
+                              {jobContent.blogPost}
+                            </pre>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="thread" className="m-0">
+                        <div className="rounded-xl border border-border bg-card p-6">
+                          <div className="flex items-center justify-between mb-5">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">X / Threads Posts</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1.5 border-border/60"
+                              onClick={() => copyToClipboard(jobContent.threadPosts.join("\n\n---\n\n"), "thread-all")}
+                            >
+                              {copiedKey === "thread-all" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                              {copiedKey === "thread-all" ? "Copied!" : "Copy All"}
+                            </Button>
+                          </div>
+                          <div className="space-y-3">
+                            {jobContent.threadPosts.map((post, i) => (
+                              <div key={i} className="bg-muted/30 rounded-lg p-4 border border-border/40 group relative">
+                                <div className="flex items-start gap-3">
+                                  <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
+                                    {i + 1}
+                                  </span>
+                                  <p className="text-sm leading-relaxed flex-1 text-foreground/85">{post}</p>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => copyToClipboard(post, `thread-${i}`)}
+                                  >
+                                    {copiedKey === `thread-${i}` ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+                                  </Button>
+                                </div>
+                                <div className="flex justify-end mt-2">
+                                  <span className={`text-[10px] font-mono ${post.length > 260 ? 'text-orange-500' : 'text-muted-foreground/50'}`}>
+                                    {post.length} / 280
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="social" className="m-0">
+                        <div className="rounded-xl border border-border bg-card p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Facebook / Quora / LinkedIn</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1.5 border-border/60"
+                              onClick={() => copyToClipboard(jobContent.socialArticle, "social")}
+                            >
+                              {copiedKey === "social" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                              {copiedKey === "social" ? "Copied!" : "Copy Article"}
+                            </Button>
+                          </div>
+                          <div className="bg-muted/30 rounded-lg p-5 border border-border/40">
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{jobContent.socialArticle}</p>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="newsletter" className="m-0">
+                        <div className="rounded-xl border border-border bg-card p-6">
+                          <div className="mb-5">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Email Subject Line</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1.5 border-border/60"
+                                onClick={() => copyToClipboard(jobContent.newsletterEmail.subject, "subject")}
+                              >
+                                {copiedKey === "subject" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                                {copiedKey === "subject" ? "Copied!" : "Copy"}
+                              </Button>
+                            </div>
+                            <div className="bg-muted/30 rounded-lg px-4 py-3 border border-border/40">
+                              <p className="text-sm font-semibold text-foreground">{jobContent.newsletterEmail.subject}</p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">HTML Email Body (paste into CRM)</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1.5 border-border/60"
+                                onClick={() => copyToClipboard(jobContent.newsletterEmail.body, "newsletter")}
+                              >
+                                {copiedKey === "newsletter" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                                {copiedKey === "newsletter" ? "Copied!" : "Copy HTML"}
+                              </Button>
+                            </div>
+                            <div className="rounded-lg border border-border/40 overflow-hidden">
+                              <div className="bg-muted/60 border-b border-border/40 px-4 py-2 text-[10px] font-mono text-muted-foreground">Preview</div>
+                              <div
+                                className="p-6 bg-white/[0.03]"
+                                dangerouslySetInnerHTML={{ __html: jobContent.newsletterEmail.body }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  ) : null}
+                </div>
+              )}
 
               {jobWithClips.clips && jobWithClips.clips.length > 0 && (
                 <div>

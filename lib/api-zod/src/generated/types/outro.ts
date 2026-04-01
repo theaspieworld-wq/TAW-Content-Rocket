@@ -12,17 +12,10 @@ export interface Outro {
   name: string;
   filePath: string;
   isDefault: boolean;
-  /** Where the outro appears relative to the main clip */
   position: OutroPosition;
-  /**
-   * Call-to-action text to overlay on the outro
-   * @nullable
-   */
+  /** @nullable */
   ctaText?: string | null;
-  /**
-   * When (in seconds into the outro) the CTA text appears
-   * @nullable
-   */
+  /** @nullable */
   ctaStartSeconds?: number | null;
   createdAt: Date;
 }

@@ -33,6 +33,9 @@ export const ListJobsResponseItem = zod.object({
   errorMessage: zod.string().nullish(),
   clipCount: zod.number(),
   outroId: zod.number().nullish(),
+  hasContent: zod
+    .boolean()
+    .describe("Whether AI content has been generated for this job"),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -44,15 +47,9 @@ export const ListJobsResponse = zod.array(ListJobsResponseItem);
 export const createJobBodyClipCountDefault = 3;
 
 export const CreateJobBody = zod.object({
-  youtubeUrl: zod.string().describe("YouTube video URL to process"),
-  clipCount: zod
-    .number()
-    .default(createJobBodyClipCountDefault)
-    .describe("Number of clips to generate (1-10)"),
-  outroId: zod
-    .number()
-    .nullish()
-    .describe("ID of the outro clip to append\/prepend"),
+  youtubeUrl: zod.string(),
+  clipCount: zod.number().default(createJobBodyClipCountDefault),
+  outroId: zod.number().nullish(),
 });
 
 /**
@@ -79,6 +76,9 @@ export const GetJobResponse = zod
     errorMessage: zod.string().nullish(),
     clipCount: zod.number(),
     outroId: zod.number().nullish(),
+    hasContent: zod
+      .boolean()
+      .describe("Whether AI content has been generated for this job"),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -108,6 +108,58 @@ export const DeleteJobParams = zod.object({
 });
 
 /**
+ * @summary Get AI-generated content for a completed job
+ */
+export const GetJobContentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetJobContentResponse = zod.object({
+  videoTitle: zod.string(),
+  thumbnailUrl: zod.string(),
+  youtubeUrl: zod.string(),
+  blogPost: zod
+    .string()
+    .describe("Full blog post in markdown format with H1, H2, TLDR"),
+  threadPosts: zod
+    .array(zod.string())
+    .describe("5 posts for X\/Threads, each max 280 chars"),
+  socialArticle: zod
+    .string()
+    .describe("Article for Facebook, Quora, and LinkedIn with video link"),
+  newsletterEmail: zod.object({
+    subject: zod.string().describe("Email subject line"),
+    body: zod.string().describe("HTML email body for pasting into a CRM"),
+  }),
+});
+
+/**
+ * @summary Regenerate content for a job using stored transcript
+ */
+export const RegenerateJobContentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RegenerateJobContentResponse = zod.object({
+  videoTitle: zod.string(),
+  thumbnailUrl: zod.string(),
+  youtubeUrl: zod.string(),
+  blogPost: zod
+    .string()
+    .describe("Full blog post in markdown format with H1, H2, TLDR"),
+  threadPosts: zod
+    .array(zod.string())
+    .describe("5 posts for X\/Threads, each max 280 chars"),
+  socialArticle: zod
+    .string()
+    .describe("Article for Facebook, Quora, and LinkedIn with video link"),
+  newsletterEmail: zod.object({
+    subject: zod.string().describe("Email subject line"),
+    body: zod.string().describe("HTML email body for pasting into a CRM"),
+  }),
+});
+
+/**
  * @summary Download a clip file
  */
 export const DownloadClipParams = zod.object({
@@ -122,23 +174,15 @@ export const ListOutrosResponseItem = zod.object({
   name: zod.string(),
   filePath: zod.string(),
   isDefault: zod.boolean(),
-  position: zod
-    .enum(["beginning", "end"])
-    .describe("Where the outro appears relative to the main clip"),
-  ctaText: zod
-    .string()
-    .nullish()
-    .describe("Call-to-action text to overlay on the outro"),
-  ctaStartSeconds: zod
-    .number()
-    .nullish()
-    .describe("When (in seconds into the outro) the CTA text appears"),
+  position: zod.enum(["beginning", "end"]),
+  ctaText: zod.string().nullish(),
+  ctaStartSeconds: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListOutrosResponse = zod.array(ListOutrosResponseItem);
 
 /**
- * @summary Update outro metadata (name, CTA, position, default)
+ * @summary Update outro metadata
  */
 export const UpdateOutroParams = zod.object({
   id: zod.coerce.number(),
@@ -157,17 +201,9 @@ export const UpdateOutroResponse = zod.object({
   name: zod.string(),
   filePath: zod.string(),
   isDefault: zod.boolean(),
-  position: zod
-    .enum(["beginning", "end"])
-    .describe("Where the outro appears relative to the main clip"),
-  ctaText: zod
-    .string()
-    .nullish()
-    .describe("Call-to-action text to overlay on the outro"),
-  ctaStartSeconds: zod
-    .number()
-    .nullish()
-    .describe("When (in seconds into the outro) the CTA text appears"),
+  position: zod.enum(["beginning", "end"]),
+  ctaText: zod.string().nullish(),
+  ctaStartSeconds: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -190,16 +226,8 @@ export const SetDefaultOutroResponse = zod.object({
   name: zod.string(),
   filePath: zod.string(),
   isDefault: zod.boolean(),
-  position: zod
-    .enum(["beginning", "end"])
-    .describe("Where the outro appears relative to the main clip"),
-  ctaText: zod
-    .string()
-    .nullish()
-    .describe("Call-to-action text to overlay on the outro"),
-  ctaStartSeconds: zod
-    .number()
-    .nullish()
-    .describe("When (in seconds into the outro) the CTA text appears"),
+  position: zod.enum(["beginning", "end"]),
+  ctaText: zod.string().nullish(),
+  ctaStartSeconds: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });

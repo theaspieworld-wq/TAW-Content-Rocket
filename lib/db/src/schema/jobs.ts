@@ -25,6 +25,8 @@ export const jobsTable = pgTable("jobs", {
   errorMessage: text("error_message"),
   clipCount: integer("clip_count").notNull().default(3),
   outroId: integer("outro_id").references(() => outrosTable.id, { onDelete: "set null" }),
+  transcript: text("transcript"),
+  generatedContent: text("generated_content"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

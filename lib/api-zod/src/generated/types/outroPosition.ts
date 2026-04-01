@@ -6,9 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Where the outro appears relative to the main clip
- */
 export type OutroPosition = (typeof OutroPosition)[keyof typeof OutroPosition];
 
 export const OutroPosition = {
