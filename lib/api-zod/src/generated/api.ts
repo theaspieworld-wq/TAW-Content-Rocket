@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,7 +15,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Returns all video processing jobs
  * @summary List all jobs
  */
 export const ListJobsResponseItem = zod.object({
@@ -34,13 +32,13 @@ export const ListJobsResponseItem = zod.object({
   ]),
   errorMessage: zod.string().nullish(),
   clipCount: zod.number(),
+  outroId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
 export const ListJobsResponse = zod.array(ListJobsResponseItem);
 
 /**
- * Starts processing a YouTube video URL to extract short clips
  * @summary Create a new processing job
  */
 export const createJobBodyClipCountDefault = 3;
@@ -51,10 +49,13 @@ export const CreateJobBody = zod.object({
     .number()
     .default(createJobBodyClipCountDefault)
     .describe("Number of clips to generate (1-10)"),
+  outroId: zod
+    .number()
+    .nullish()
+    .describe("ID of the outro clip to append\/prepend"),
 });
 
 /**
- * Returns a job and its clips
  * @summary Get job details
  */
 export const GetJobParams = zod.object({
@@ -77,6 +78,7 @@ export const GetJobResponse = zod
     ]),
     errorMessage: zod.string().nullish(),
     clipCount: zod.number(),
+    outroId: zod.number().nullish(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -110,4 +112,94 @@ export const DeleteJobParams = zod.object({
  */
 export const DownloadClipParams = zod.object({
   clipId: zod.coerce.number(),
+});
+
+/**
+ * @summary List all uploaded outro clips
+ */
+export const ListOutrosResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  isDefault: zod.boolean(),
+  position: zod
+    .enum(["beginning", "end"])
+    .describe("Where the outro appears relative to the main clip"),
+  ctaText: zod
+    .string()
+    .nullish()
+    .describe("Call-to-action text to overlay on the outro"),
+  ctaStartSeconds: zod
+    .number()
+    .nullish()
+    .describe("When (in seconds into the outro) the CTA text appears"),
+  createdAt: zod.coerce.date(),
+});
+export const ListOutrosResponse = zod.array(ListOutrosResponseItem);
+
+/**
+ * @summary Update outro metadata (name, CTA, position, default)
+ */
+export const UpdateOutroParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateOutroBody = zod.object({
+  name: zod.string().optional(),
+  position: zod.enum(["beginning", "end"]).optional(),
+  ctaText: zod.string().nullish(),
+  ctaStartSeconds: zod.number().nullish(),
+  isDefault: zod.boolean().optional(),
+});
+
+export const UpdateOutroResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  isDefault: zod.boolean(),
+  position: zod
+    .enum(["beginning", "end"])
+    .describe("Where the outro appears relative to the main clip"),
+  ctaText: zod
+    .string()
+    .nullish()
+    .describe("Call-to-action text to overlay on the outro"),
+  ctaStartSeconds: zod
+    .number()
+    .nullish()
+    .describe("When (in seconds into the outro) the CTA text appears"),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete an outro
+ */
+export const DeleteOutroParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Set an outro as the default
+ */
+export const SetDefaultOutroParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SetDefaultOutroResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  isDefault: zod.boolean(),
+  position: zod
+    .enum(["beginning", "end"])
+    .describe("Where the outro appears relative to the main clip"),
+  ctaText: zod
+    .string()
+    .nullish()
+    .describe("Call-to-action text to overlay on the outro"),
+  ctaStartSeconds: zod
+    .number()
+    .nullish()
+    .describe("When (in seconds into the outro) the CTA text appears"),
+  createdAt: zod.coerce.date(),
 });

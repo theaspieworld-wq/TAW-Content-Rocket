@@ -14,3 +14,7 @@ export * from "./healthStatus";
 export * from "./job";
 export * from "./jobStatus";
 export * from "./jobWithClips";
+export * from "./outro";
+export * from "./outroPosition";
+export * from "./updateOutroBody";
+export * from "./updateOutroBodyPosition";

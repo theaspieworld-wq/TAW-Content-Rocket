@@ -16,6 +16,8 @@ export interface Job {
   /** @nullable */
   errorMessage?: string | null;
   clipCount: number;
+  /** @nullable */
+  outroId?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

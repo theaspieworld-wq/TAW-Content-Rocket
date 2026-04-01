@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import path from "path";
 import fs from "fs";
-import { db, jobsTable, clipsTable } from "@workspace/db";
+import { db, jobsTable, clipsTable, outrosTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   CreateJobBody,
@@ -13,19 +13,23 @@ import { processJob } from "../lib/processor";
 
 const router: IRouter = Router();
 
-router.get("/jobs", async (_req, res): Promise<void> => {
-  const jobs = await db.select().from(jobsTable).orderBy(jobsTable.createdAt);
-
-  res.json(jobs.map((j) => ({
+function jobToJson(j: typeof jobsTable.$inferSelect) {
+  return {
     id: j.id,
     youtubeUrl: j.youtubeUrl,
     videoTitle: j.videoTitle ?? null,
     status: j.status,
     errorMessage: j.errorMessage ?? null,
     clipCount: j.clipCount,
+    outroId: j.outroId ?? null,
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
-  })));
+  };
+}
+
+router.get("/jobs", async (_req, res): Promise<void> => {
+  const jobs = await db.select().from(jobsTable).orderBy(jobsTable.createdAt);
+  res.json(jobs.map(jobToJson));
 });
 
 router.post("/jobs", async (req, res): Promise<void> => {
@@ -35,7 +39,7 @@ router.post("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
-  const { youtubeUrl, clipCount } = parsed.data;
+  const { youtubeUrl, clipCount, outroId } = parsed.data;
   const count = clipCount ?? 3;
 
   if (count < 1 || count > 10) {
@@ -43,25 +47,25 @@ router.post("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
+  // Validate outroId if provided
+  if (outroId != null) {
+    const [outro] = await db.select().from(outrosTable).where(eq(outrosTable.id, outroId));
+    if (!outro) {
+      res.status(400).json({ error: "Specified outro not found" });
+      return;
+    }
+  }
+
   const [job] = await db.insert(jobsTable).values({
     youtubeUrl,
     clipCount: count,
     status: "pending",
+    outroId: outroId ?? null,
   }).returning();
 
-  // Kick off processing in background (fire and forget)
   processJob(job.id).catch(() => {});
 
-  res.status(201).json({
-    id: job.id,
-    youtubeUrl: job.youtubeUrl,
-    videoTitle: job.videoTitle ?? null,
-    status: job.status,
-    errorMessage: job.errorMessage ?? null,
-    clipCount: job.clipCount,
-    createdAt: job.createdAt.toISOString(),
-    updatedAt: job.updatedAt.toISOString(),
-  });
+  res.status(201).json(jobToJson(job));
 });
 
 router.get("/jobs/:id", async (req, res): Promise<void> => {
@@ -80,14 +84,7 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
   const clips = await db.select().from(clipsTable).where(eq(clipsTable.jobId, job.id));
 
   res.json({
-    id: job.id,
-    youtubeUrl: job.youtubeUrl,
-    videoTitle: job.videoTitle ?? null,
-    status: job.status,
-    errorMessage: job.errorMessage ?? null,
-    clipCount: job.clipCount,
-    createdAt: job.createdAt.toISOString(),
-    updatedAt: job.updatedAt.toISOString(),
+    ...jobToJson(job),
     clips: clips.map((c) => ({
       id: c.id,
       jobId: c.jobId,
@@ -103,7 +100,7 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/jobs/:id", async (req, res): Promise<void> => {
-  const params = DeleteJobParams.safeParse(req.params);
+  const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;

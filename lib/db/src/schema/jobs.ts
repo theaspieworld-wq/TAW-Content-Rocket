@@ -2,6 +2,21 @@ import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export const outrosTable = pgTable("outros", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  filePath: text("file_path").notNull(),
+  isDefault: text("is_default").notNull().default("false"),
+  position: text("position").notNull().default("end"),
+  ctaText: text("cta_text"),
+  ctaStartSeconds: text("cta_start_seconds"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertOutroSchema = createInsertSchema(outrosTable).omit({ id: true, createdAt: true });
+export type InsertOutro = z.infer<typeof insertOutroSchema>;
+export type Outro = typeof outrosTable.$inferSelect;
+
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
   youtubeUrl: text("youtube_url").notNull(),
@@ -9,6 +24,7 @@ export const jobsTable = pgTable("jobs", {
   status: text("status").notNull().default("pending"),
   errorMessage: text("error_message"),
   clipCount: integer("clip_count").notNull().default(3),
+  outroId: integer("outro_id").references(() => outrosTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

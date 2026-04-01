@@ -11,13 +11,14 @@ tags:
     description: Health operations
   - name: jobs
     description: Video processing jobs
+  - name: outros
+    description: Outro clip management
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -30,7 +31,6 @@ paths:
       operationId: listJobs
       tags: [jobs]
       summary: List all jobs
-      description: Returns all video processing jobs
       responses:
         "200":
           description: List of jobs
@@ -44,7 +44,6 @@ paths:
       operationId: createJob
       tags: [jobs]
       summary: Create a new processing job
-      description: Starts processing a YouTube video URL to extract short clips
       requestBody:
         required: true
         content:
@@ -69,7 +68,6 @@ paths:
       operationId: getJob
       tags: [jobs]
       summary: Get job details
-      description: Returns a job and its clips
       parameters:
         - name: id
           in: path
@@ -129,6 +127,93 @@ paths:
                 format: binary
         "404":
           description: Not found
+  /outros:
+    get:
+      operationId: listOutros
+      tags: [outros]
+      summary: List all uploaded outro clips
+      responses:
+        "200":
+          description: List of outros
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Outro"
+  /outros/{id}:
+    patch:
+      operationId: updateOutro
+      tags: [outros]
+      summary: Update outro metadata (name, CTA, position, default)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOutroBody"
+      responses:
+        "200":
+          description: Updated outro
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Outro"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteOutro
+      tags: [outros]
+      summary: Delete an outro
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /outros/{id}/set-default:
+    post:
+      operationId: setDefaultOutro
+      tags: [outros]
+      summary: Set an outro as the default
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated outro
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Outro"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -155,6 +240,9 @@ components:
           type: integer
           description: Number of clips to generate (1-10)
           default: 3
+        outroId:
+          type: ["integer", "null"]
+          description: ID of the outro clip to append/prepend
       required:
         - youtubeUrl
     Job:
@@ -173,6 +261,8 @@ components:
           type: ["string", "null"]
         clipCount:
           type: integer
+        outroId:
+          type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
@@ -229,3 +319,48 @@ components:
                 $ref: "#/components/schemas/Clip"
           required:
             - clips
+    Outro:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        filePath:
+          type: string
+        isDefault:
+          type: boolean
+        position:
+          type: string
+          enum: [beginning, end]
+          description: Where the outro appears relative to the main clip
+        ctaText:
+          type: ["string", "null"]
+          description: Call-to-action text to overlay on the outro
+        ctaStartSeconds:
+          type: ["number", "null"]
+          description: When (in seconds into the outro) the CTA text appears
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - filePath
+        - isDefault
+        - position
+        - createdAt
+    UpdateOutroBody:
+      type: object
+      properties:
+        name:
+          type: string
+        position:
+          type: string
+          enum: [beginning, end]
+        ctaText:
+          type: ["string", "null"]
+        ctaStartSeconds:
+          type: ["number", "null"]
+        isDefault:
+          type: boolean

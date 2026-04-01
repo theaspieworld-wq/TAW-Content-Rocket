@@ -3,7 +3,7 @@ import { promisify } from "util";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { db, jobsTable, clipsTable } from "@workspace/db";
+import { db, jobsTable, clipsTable, outrosTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
@@ -11,8 +11,6 @@ import { logger } from "./logger";
 const execFileAsync = promisify(execFile);
 
 const CLIPS_DIR = path.join(process.cwd(), "clips");
-
-// Ensure clips directory exists
 fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
 interface TranscriptSegment {
@@ -37,13 +35,7 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
 }
 
 async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
-  // Get video info first
-  const infoArgs = [
-    "--print", "%(title)s",
-    "--no-playlist",
-    youtubeUrl
-  ];
-
+  const infoArgs = ["--print", "%(title)s", "--no-playlist", youtubeUrl];
   let title = "Untitled Video";
   try {
     const { stdout } = await execFileAsync("yt-dlp", infoArgs, { timeout: 30000 });
@@ -53,36 +45,26 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   }
 
   const videoPath = path.join(outputDir, "video.mp4");
-
-  // Download video - prefer a reasonable quality to keep file sizes manageable
   const dlArgs = [
     "--no-playlist",
     "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best[height<=720]/best",
     "--merge-output-format", "mp4",
     "-o", videoPath,
     "--limit-rate", "5M",
-    youtubeUrl
+    youtubeUrl,
   ];
-
   await execFileAsync("yt-dlp", dlArgs, { timeout: 300000 });
 
   if (!fs.existsSync(videoPath)) {
     throw new Error("Video download failed — output file not found");
   }
-
   return { videoPath, title };
 }
 
 async function extractAudio(videoPath: string, outputDir: string): Promise<string> {
   const audioPath = path.join(outputDir, "audio.mp3");
   await execFileAsync("ffmpeg", [
-    "-i", videoPath,
-    "-vn",
-    "-ar", "16000",
-    "-ac", "1",
-    "-b:a", "64k",
-    audioPath,
-    "-y"
+    "-i", videoPath, "-vn", "-ar", "16000", "-ac", "1", "-b:a", "64k", audioPath, "-y",
   ], { timeout: 120000 });
   return audioPath;
 }
@@ -90,7 +72,6 @@ async function extractAudio(videoPath: string, outputDir: string): Promise<strin
 async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> {
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
-
   const response = await openai.audio.transcriptions.create({
     model: "gpt-4o-mini-transcribe",
     file: audioFile,
@@ -99,16 +80,9 @@ async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> 
   } as Parameters<typeof openai.audio.transcriptions.create>[0]);
 
   const result = response as unknown as { segments?: { start: number; end: number; text: string }[]; text?: string };
-
   if (result.segments && result.segments.length > 0) {
-    return result.segments.map((s) => ({
-      start: s.start,
-      end: s.end,
-      text: s.text,
-    }));
+    return result.segments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
   }
-
-  // Fallback: return as single segment if no timestamps
   const fullText = result.text || (response as unknown as string);
   return [{ start: 0, end: 60, text: typeof fullText === "string" ? fullText : "" }];
 }
@@ -118,32 +92,32 @@ async function selectBestClips(transcript: TranscriptSegment[], clipCount: numbe
     .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s]: ${s.text}`)
     .join("\n");
 
-  const prompt = `You are an expert short-form video editor. Analyze this video transcript and select the ${clipCount} best segments for short-form social media videos (Reels, TikTok, YouTube Shorts).
+  const prompt = `You are an expert short-form video editor. Analyze this transcript and select the ${clipCount} best segments for short-form social media videos.
 
 TRANSCRIPT (with timestamps):
 ${transcriptText}
 
 VIDEO DURATION: ${videoDuration.toFixed(0)} seconds
 
-Requirements for each clip:
-- Duration: 15 to 60 seconds
-- Must be self-contained and make sense without context
-- Should have high engagement potential: interesting, funny, insightful, emotional, or surprising
-- Start and end at natural speech breaks (complete sentences)
+Requirements:
+- Duration: 15 to 60 seconds each
+- Self-contained, makes sense without context
+- High engagement potential: interesting, funny, insightful, emotional, or surprising
+- Start and end at natural speech breaks
 - Prefer segments with clear narrative arc, key insight, or strong hook
-- Avoid intros/outros, filler content, or incomplete thoughts
+- Avoid intros/outros, filler, or incomplete thoughts
 
-Return ONLY a valid JSON array with exactly ${clipCount} clips in this format:
+Return ONLY a valid JSON array with exactly ${clipCount} clips:
 [
   {
     "title": "ENGAGING TITLE IN ALL CAPS (5-8 words)",
     "startSeconds": 12.5,
     "endSeconds": 45.0,
-    "reasoning": "Why this segment works well as a short"
+    "reasoning": "Why this segment works well"
   }
 ]
 
-Important: Titles should be punchy, hook-oriented, ALL CAPS, max 8 words. Only return the JSON array, no other text.`;
+Titles must be ALL CAPS, max 8 words, punchy and hook-oriented. Return only the JSON array.`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-5-mini",
@@ -152,131 +126,191 @@ Important: Titles should be punchy, hook-oriented, ALL CAPS, max 8 words. Only r
   });
 
   const content = response.choices[0]?.message?.content || "[]";
-
-  // Extract JSON from response
   const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    throw new Error("AI did not return valid clip selections");
-  }
-
-  const clips: ClipSegment[] = JSON.parse(jsonMatch[0]);
-  return clips;
+  if (!jsonMatch) throw new Error("AI did not return valid clip selections");
+  return JSON.parse(jsonMatch[0]);
 }
 
 async function getVideoDuration(videoPath: string): Promise<number> {
   const { stdout } = await execFileAsync("ffprobe", [
-    "-v", "quiet",
-    "-print_format", "json",
-    "-show_format",
-    videoPath
+    "-v", "quiet", "-print_format", "json", "-show_format", videoPath,
   ], { timeout: 30000 });
-
   const info = JSON.parse(stdout);
   return parseFloat(info.format?.duration || "0");
 }
 
-async function renderClip(
+function escapeFfmpegText(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/:/g, "\\:")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
+    .replace(/,/g, "\\,");
+}
+
+async function renderMainClip(
   videoPath: string,
   clipId: number,
   title: string,
   startSeconds: number,
   endSeconds: number,
-  transcript: TranscriptSegment[]
-): Promise<string> {
-  const outputPath = path.join(CLIPS_DIR, `clip_${clipId}.mp4`);
-
-  // Filter transcript segments for this clip window
-  const clipSegments = transcript.filter(
-    (s) => s.end > startSeconds && s.start < endSeconds
-  );
-
-  // Build drawtext filters for captions
+  transcript: TranscriptSegment[],
+  outputPath: string,
+): Promise<void> {
+  const clipSegments = transcript.filter((s) => s.end > startSeconds && s.start < endSeconds);
   const captionFilters: string[] = [];
 
-  if (clipSegments.length > 0) {
-    for (const seg of clipSegments) {
-      const segStart = Math.max(0, seg.start - startSeconds);
-      const segEnd = Math.min(endSeconds - startSeconds, seg.end - startSeconds);
+  for (const seg of clipSegments) {
+    const segStart = Math.max(0, seg.start - startSeconds);
+    const segEnd = Math.min(endSeconds - startSeconds, seg.end - startSeconds);
+    if (segEnd <= segStart) continue;
 
-      if (segEnd <= segStart) continue;
-
-      // Split text into chunks of ~35 chars for readability
-      const words = seg.text.trim().toUpperCase().split(" ");
-      const lines: string[] = [];
-      let currentLine = "";
-      for (const word of words) {
-        if ((currentLine + " " + word).trim().length > 35) {
-          if (currentLine) lines.push(currentLine.trim());
-          currentLine = word;
-        } else {
-          currentLine = (currentLine + " " + word).trim();
-        }
+    const words = seg.text.trim().toUpperCase().split(" ");
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      if ((currentLine + " " + word).trim().length > 35) {
+        if (currentLine) lines.push(currentLine.trim());
+        currentLine = word;
+      } else {
+        currentLine = (currentLine + " " + word).trim();
       }
-      if (currentLine) lines.push(currentLine.trim());
-
-      const captionText = lines.join("\\n");
-      // Escape special chars for ffmpeg drawtext
-      const escaped = captionText
-        .replace(/'/g, "\\'")
-        .replace(/:/g, "\\:")
-        .replace(/\[/g, "\\[")
-        .replace(/\]/g, "\\]");
-
-      captionFilters.push(
-        `drawtext=text='${escaped}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=28:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='between(t,${segStart.toFixed(2)},${segEnd.toFixed(2)})':borderw=2:bordercolor=black@0.7`
-      );
     }
+    if (currentLine) lines.push(currentLine.trim());
+
+    const captionText = escapeFfmpegText(lines.join("\\n"));
+    captionFilters.push(
+      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=28:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='between(t,${segStart.toFixed(2)},${segEnd.toFixed(2)})':borderw=2:bordercolor=black@0.7`
+    );
   }
 
-  // Title bar filter: white background bar at top with black text
-  const titleText = title.toUpperCase()
-    .replace(/'/g, "\\'")
-    .replace(/:/g, "\\:")
-    .replace(/\[/g, "\\[")
-    .replace(/\]/g, "\\]");
-
-  const titleFilter = [
+  const titleText = escapeFfmpegText(title.toUpperCase());
+  const allFilters = [
     `drawbox=x=0:y=0:w=iw:h=80:color=white:t=fill`,
-    `drawtext=text='${titleText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=26:fontcolor=black:x=(w-text_w)/2:y=25:box=0`
-  ];
+    `drawtext=text='${titleText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=26:fontcolor=black:x=(w-text_w)/2:y=25:box=0`,
+    ...captionFilters,
+  ].join(",");
 
-  const allFilters = [...titleFilter, ...captionFilters].join(",");
-
-  const duration = endSeconds - startSeconds;
-  const args = [
+  await execFileAsync("ffmpeg", [
     "-ss", startSeconds.toString(),
     "-i", videoPath,
-    "-t", duration.toString(),
+    "-t", (endSeconds - startSeconds).toString(),
     "-vf", allFilters,
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "23",
-    "-c:a", "aac",
-    "-b:a", "128k",
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
-    outputPath,
-    "-y"
-  ];
+    outputPath, "-y",
+  ], { timeout: 300000 });
+}
 
-  await execFileAsync("ffmpeg", args, { timeout: 300000 });
-  return outputPath;
+async function prepareOutroWithCta(
+  outroFilePath: string,
+  ctaText: string | null,
+  ctaStartSeconds: number | null,
+  outputPath: string,
+): Promise<void> {
+  if (!ctaText || ctaText.trim() === "") {
+    // No CTA — just re-encode the outro to match specs
+    await execFileAsync("ffmpeg", [
+      "-i", outroFilePath,
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 120000 });
+    return;
+  }
+
+  const startSec = ctaStartSeconds ?? 0;
+  const outroText = escapeFfmpegText(ctaText.toUpperCase());
+
+  const ctaFilter = `drawtext=text='${outroText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=30:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='gte(t,${startSec.toFixed(2)})':borderw=3:bordercolor=black@0.8`;
+
+  await execFileAsync("ffmpeg", [
+    "-i", outroFilePath,
+    "-vf", ctaFilter,
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart",
+    outputPath, "-y",
+  ], { timeout: 120000 });
+}
+
+async function concatenateClipWithOutro(
+  mainClipPath: string,
+  outroPath: string,
+  position: string,
+  finalOutputPath: string,
+  tempDir: string,
+): Promise<void> {
+  // Get dimensions of main clip to scale outro to match
+  const { stdout } = await execFileAsync("ffprobe", [
+    "-v", "quiet", "-print_format", "json", "-show_streams",
+    "-select_streams", "v:0", mainClipPath,
+  ], { timeout: 30000 });
+
+  const info = JSON.parse(stdout);
+  const stream = info.streams?.[0];
+  const width = stream?.width || 1280;
+  const height = stream?.height || 720;
+
+  // Scale outro to match main clip dimensions
+  const scaledOutroPath = path.join(tempDir, "outro_scaled.mp4");
+  await execFileAsync("ffmpeg", [
+    "-i", outroPath,
+    "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart",
+    scaledOutroPath, "-y",
+  ], { timeout: 120000 });
+
+  // Create concat list
+  const concatListPath = path.join(tempDir, "concat_list.txt");
+  let concatContent: string;
+  if (position === "beginning") {
+    concatContent = `file '${scaledOutroPath}'\nfile '${mainClipPath}'\n`;
+  } else {
+    concatContent = `file '${mainClipPath}'\nfile '${scaledOutroPath}'\n`;
+  }
+  fs.writeFileSync(concatListPath, concatContent);
+
+  await execFileAsync("ffmpeg", [
+    "-f", "concat",
+    "-safe", "0",
+    "-i", concatListPath,
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart",
+    finalOutputPath, "-y",
+  ], { timeout: 300000 });
 }
 
 export async function processJob(jobId: number): Promise<void> {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `job_${jobId}_`));
 
   try {
-    // Get job details
     const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
     if (!job) throw new Error(`Job ${jobId} not found`);
 
     logger.info({ jobId }, "Starting video processing");
 
+    // Load outro if set
+    let outro: typeof outrosTable.$inferSelect | null = null;
+    if (job.outroId) {
+      const [found] = await db.select().from(outrosTable).where(eq(outrosTable.id, job.outroId));
+      if (found && fs.existsSync(found.filePath)) {
+        outro = found;
+      } else {
+        logger.warn({ jobId, outroId: job.outroId }, "Outro not found or file missing, skipping");
+      }
+    }
+
     // Step 1: Download
     await updateJobStatus(jobId, "downloading");
     const { videoPath, title } = await downloadVideo(job.youtubeUrl, tempDir);
     await updateJobStatus(jobId, "downloading", { videoTitle: title });
-
     const videoDuration = await getVideoDuration(videoPath);
 
     // Step 2: Extract audio and transcribe
@@ -288,7 +322,6 @@ export async function processJob(jobId: number): Promise<void> {
     await updateJobStatus(jobId, "analyzing");
     const clipSegments = await selectBestClips(transcript, job.clipCount, videoDuration);
 
-    // Insert clip records
     const insertedClips = await db.insert(clipsTable).values(
       clipSegments.map((seg) => ({
         jobId,
@@ -303,22 +336,50 @@ export async function processJob(jobId: number): Promise<void> {
     // Step 4: Render clips
     await updateJobStatus(jobId, "rendering");
 
+    // Pre-render outro (with CTA) if needed — do once, reuse for all clips
+    let processedOutroPath: string | null = null;
+    if (outro) {
+      processedOutroPath = path.join(tempDir, "outro_cta.mp4");
+      await prepareOutroWithCta(
+        outro.filePath,
+        outro.ctaText ?? null,
+        outro.ctaStartSeconds ? parseFloat(outro.ctaStartSeconds) : null,
+        processedOutroPath,
+      );
+    }
+
     for (const clip of insertedClips) {
       try {
         await db.update(clipsTable).set({ status: "rendering" }).where(eq(clipsTable.id, clip.id));
 
-        const outputPath = await renderClip(
+        const mainClipPath = path.join(tempDir, `main_clip_${clip.id}.mp4`);
+        await renderMainClip(
           videoPath,
           clip.id,
           clip.title,
           parseFloat(clip.startSeconds),
           parseFloat(clip.endSeconds),
-          transcript
+          transcript,
+          mainClipPath,
         );
+
+        const finalPath = path.join(CLIPS_DIR, `clip_${clip.id}.mp4`);
+
+        if (processedOutroPath && outro) {
+          await concatenateClipWithOutro(
+            mainClipPath,
+            processedOutroPath,
+            outro.position,
+            finalPath,
+            tempDir,
+          );
+        } else {
+          fs.copyFileSync(mainClipPath, finalPath);
+        }
 
         await db.update(clipsTable).set({
           status: "completed",
-          filePath: outputPath,
+          filePath: finalPath,
         }).where(eq(clipsTable.id, clip.id));
 
         logger.info({ clipId: clip.id }, "Clip rendered successfully");
@@ -336,7 +397,6 @@ export async function processJob(jobId: number): Promise<void> {
       errorMessage: err instanceof Error ? err.message : String(err),
     });
   } finally {
-    // Clean up temp dir
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch (e) {

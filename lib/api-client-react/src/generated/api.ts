@@ -22,6 +22,8 @@ import type {
   HealthStatus,
   Job,
   JobWithClips,
+  Outro,
+  UpdateOutroBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -34,7 +36,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -110,7 +111,6 @@ export function useHealthCheck<
 }
 
 /**
- * Returns all video processing jobs
  * @summary List all jobs
  */
 export const getListJobsUrl = () => {
@@ -176,7 +176,6 @@ export function useListJobs<
 }
 
 /**
- * Starts processing a YouTube video URL to extract short clips
  * @summary Create a new processing job
  */
 export const getCreateJobUrl = () => {
@@ -263,7 +262,6 @@ export const useCreateJob = <
 };
 
 /**
- * Returns a job and its clips
  * @summary Get job details
  */
 export const getGetJobUrl = (id: number) => {
@@ -508,3 +506,331 @@ export function useDownloadClip<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all uploaded outro clips
+ */
+export const getListOutrosUrl = () => {
+  return `/api/outros`;
+};
+
+export const listOutros = async (options?: RequestInit): Promise<Outro[]> => {
+  return customFetch<Outro[]>(getListOutrosUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOutrosQueryKey = () => {
+  return [`/api/outros`] as const;
+};
+
+export const getListOutrosQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOutros>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOutros>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListOutrosQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listOutros>>> = ({
+    signal,
+  }) => listOutros({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOutros>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOutrosQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOutros>>
+>;
+export type ListOutrosQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all uploaded outro clips
+ */
+
+export function useListOutros<
+  TData = Awaited<ReturnType<typeof listOutros>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOutros>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOutrosQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update outro metadata (name, CTA, position, default)
+ */
+export const getUpdateOutroUrl = (id: number) => {
+  return `/api/outros/${id}`;
+};
+
+export const updateOutro = async (
+  id: number,
+  updateOutroBody: UpdateOutroBody,
+  options?: RequestInit,
+): Promise<Outro> => {
+  return customFetch<Outro>(getUpdateOutroUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateOutroBody),
+  });
+};
+
+export const getUpdateOutroMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOutro>>,
+    TError,
+    { id: number; data: BodyType<UpdateOutroBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOutro>>,
+  TError,
+  { id: number; data: BodyType<UpdateOutroBody> },
+  TContext
+> => {
+  const mutationKey = ["updateOutro"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOutro>>,
+    { id: number; data: BodyType<UpdateOutroBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateOutro(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOutroMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOutro>>
+>;
+export type UpdateOutroMutationBody = BodyType<UpdateOutroBody>;
+export type UpdateOutroMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update outro metadata (name, CTA, position, default)
+ */
+export const useUpdateOutro = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOutro>>,
+    TError,
+    { id: number; data: BodyType<UpdateOutroBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOutro>>,
+  TError,
+  { id: number; data: BodyType<UpdateOutroBody> },
+  TContext
+> => {
+  return useMutation(getUpdateOutroMutationOptions(options));
+};
+
+/**
+ * @summary Delete an outro
+ */
+export const getDeleteOutroUrl = (id: number) => {
+  return `/api/outros/${id}`;
+};
+
+export const deleteOutro = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteOutroUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOutroMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOutro>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOutro>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteOutro"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOutro>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteOutro(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOutroMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOutro>>
+>;
+
+export type DeleteOutroMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete an outro
+ */
+export const useDeleteOutro = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOutro>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOutro>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteOutroMutationOptions(options));
+};
+
+/**
+ * @summary Set an outro as the default
+ */
+export const getSetDefaultOutroUrl = (id: number) => {
+  return `/api/outros/${id}/set-default`;
+};
+
+export const setDefaultOutro = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Outro> => {
+  return customFetch<Outro>(getSetDefaultOutroUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSetDefaultOutroMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDefaultOutro>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setDefaultOutro>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["setDefaultOutro"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setDefaultOutro>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return setDefaultOutro(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetDefaultOutroMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setDefaultOutro>>
+>;
+
+export type SetDefaultOutroMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set an outro as the default
+ */
+export const useSetDefaultOutro = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDefaultOutro>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setDefaultOutro>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getSetDefaultOutroMutationOptions(options));
+};

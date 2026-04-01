@@ -18,6 +18,11 @@ export interface CreateJobBody {
   youtubeUrl: string;
   /** Number of clips to generate (1-10) */
   clipCount?: number;
+  /**
+   * ID of the outro clip to append/prepend
+   * @nullable
+   */
+  outroId?: number | null;
 }
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
@@ -41,6 +46,8 @@ export interface Job {
   /** @nullable */
   errorMessage?: string | null;
   clipCount: number;
+  /** @nullable */
+  outroId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,3 +77,51 @@ export interface Clip {
 export type JobWithClips = Job & {
   clips: Clip[];
 };
+
+/**
+ * Where the outro appears relative to the main clip
+ */
+export type OutroPosition = (typeof OutroPosition)[keyof typeof OutroPosition];
+
+export const OutroPosition = {
+  beginning: "beginning",
+  end: "end",
+} as const;
+
+export interface Outro {
+  id: number;
+  name: string;
+  filePath: string;
+  isDefault: boolean;
+  /** Where the outro appears relative to the main clip */
+  position: OutroPosition;
+  /**
+   * Call-to-action text to overlay on the outro
+   * @nullable
+   */
+  ctaText?: string | null;
+  /**
+   * When (in seconds into the outro) the CTA text appears
+   * @nullable
+   */
+  ctaStartSeconds?: number | null;
+  createdAt: string;
+}
+
+export type UpdateOutroBodyPosition =
+  (typeof UpdateOutroBodyPosition)[keyof typeof UpdateOutroBodyPosition];
+
+export const UpdateOutroBodyPosition = {
+  beginning: "beginning",
+  end: "end",
+} as const;
+
+export interface UpdateOutroBody {
+  name?: string;
+  position?: UpdateOutroBodyPosition;
+  /** @nullable */
+  ctaText?: string | null;
+  /** @nullable */
+  ctaStartSeconds?: number | null;
+  isDefault?: boolean;
+}
