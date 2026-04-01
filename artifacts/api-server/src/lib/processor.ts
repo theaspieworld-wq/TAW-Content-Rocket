@@ -94,6 +94,18 @@ async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> 
   return [{ start: 0, end: 60, text: typeof fullText === "string" ? fullText : "" }];
 }
 
+function makeFallbackClips(clipCount: number, videoDuration: number): ClipSegment[] {
+  // Evenly space clips across the video as a last resort
+  const clipDuration = Math.min(30, Math.floor(videoDuration / (clipCount + 1)));
+  const step = videoDuration / (clipCount + 1);
+  return Array.from({ length: clipCount }, (_, i) => ({
+    title: `HIGHLIGHT CLIP ${i + 1}`,
+    startSeconds: Math.max(0, step * (i + 1) - clipDuration / 2),
+    endSeconds: Math.min(videoDuration, step * (i + 1) + clipDuration / 2),
+    reasoning: "Fallback evenly-spaced clip",
+  }));
+}
+
 async function selectBestClips(transcript: TranscriptSegment[], clipCount: number, videoDuration: number): Promise<ClipSegment[]> {
   const transcriptText = transcript
     .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s]: ${s.text}`)
@@ -124,18 +136,42 @@ Return ONLY a valid JSON array with exactly ${clipCount} clips:
   }
 ]
 
-Titles must be ALL CAPS, max 8 words, punchy and hook-oriented. Return only the JSON array.`;
+Titles must be ALL CAPS, max 8 words, punchy and hook-oriented. Return ONLY the raw JSON array — no markdown, no explanation.`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
-    max_completion_tokens: 2000,
-    messages: [{ role: "user", content: prompt }],
-  });
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 2000,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-  const content = response.choices[0]?.message?.content || "[]";
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) throw new Error("AI did not return valid clip selections");
-  return JSON.parse(jsonMatch[0]);
+    const content = response.choices[0]?.message?.content || "";
+    logger.info({ jobId: "unknown", aiResponse: content.slice(0, 300) }, "AI clip selection response");
+
+    // Try to extract a JSON array from anywhere in the response
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      const parsed = JSON.parse(arrayMatch[0]) as ClipSegment[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+
+    // Try extracting from an object with a "clips" key
+    const objMatch = content.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      const obj = JSON.parse(objMatch[0]) as { clips?: ClipSegment[] };
+      if (Array.isArray(obj.clips) && obj.clips.length > 0) {
+        return obj.clips;
+      }
+    }
+
+    logger.warn({ content: content.slice(0, 200) }, "AI returned no clips, using fallback");
+  } catch (e) {
+    logger.warn({ e }, "AI clip selection failed, using fallback");
+  }
+
+  return makeFallbackClips(clipCount, videoDuration);
 }
 
 async function getVideoDuration(videoPath: string): Promise<number> {
@@ -328,6 +364,10 @@ export async function processJob(jobId: number): Promise<void> {
     // Step 3: AI clip selection
     await updateJobStatus(jobId, "analyzing");
     const clipSegments = await selectBestClips(transcript, job.clipCount, videoDuration);
+
+    if (clipSegments.length === 0) {
+      throw new Error("No clip segments were selected — the video may be too short or have no audio");
+    }
 
     const insertedClips = await db.insert(clipsTable).values(
       clipSegments.map((seg) => ({
