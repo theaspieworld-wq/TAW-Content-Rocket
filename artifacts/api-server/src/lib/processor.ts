@@ -79,19 +79,21 @@ async function extractAudio(videoPath: string, outputDir: string): Promise<strin
 async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> {
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
+  // verbose_json is required to get segment-level timestamps for captions
   const response = await openai.audio.transcriptions.create({
     model: "gpt-4o-mini-transcribe",
     file: audioFile,
-    response_format: "json",
+    response_format: "verbose_json",
     timestamp_granularities: ["segment"],
   } as Parameters<typeof openai.audio.transcriptions.create>[0]);
 
-  const result = response as unknown as { segments?: { start: number; end: number; text: string }[]; text?: string };
+  const result = response as unknown as { segments?: { start: number; end: number; text: string }[]; text?: string; duration?: number };
   if (result.segments && result.segments.length > 0) {
     return result.segments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
   }
   const fullText = result.text || (response as unknown as string);
-  return [{ start: 0, end: 60, text: typeof fullText === "string" ? fullText : "" }];
+  const duration = result.duration ?? 60;
+  return [{ start: 0, end: duration, text: typeof fullText === "string" ? fullText : "" }];
 }
 
 function makeFallbackClips(clipCount: number, videoDuration: number): ClipSegment[] {
@@ -209,11 +211,12 @@ async function renderMainClip(
     const segEnd = Math.min(endSeconds - startSeconds, seg.end - startSeconds);
     if (segEnd <= segStart) continue;
 
+    // Wrap caption lines — narrower limit for portrait 9:16 frame
     const words = seg.text.trim().toUpperCase().split(" ");
     const lines: string[] = [];
     let currentLine = "";
     for (const word of words) {
-      if ((currentLine + " " + word).trim().length > 35) {
+      if ((currentLine + " " + word).trim().length > 22) {
         if (currentLine) lines.push(currentLine.trim());
         currentLine = word;
       } else {
@@ -223,15 +226,22 @@ async function renderMainClip(
     if (currentLine) lines.push(currentLine.trim());
 
     const captionText = escapeFfmpegText(lines.join("\\n"));
+    // fontsize=52 for 1080x1920, positioned 140px from bottom with strong shadow
     captionFilters.push(
-      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=28:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='between(t,${segStart.toFixed(2)},${segEnd.toFixed(2)})':borderw=2:bordercolor=black@0.7`
+      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=h-th-140:enable='between(t,${segStart.toFixed(2)},${segEnd.toFixed(2)})':borderw=4:bordercolor=black@0.85:line_spacing=8`
     );
   }
 
   const titleText = escapeFfmpegText(title.toUpperCase());
   const allFilters = [
-    `drawbox=x=0:y=0:w=iw:h=80:color=white:t=fill`,
-    `drawtext=text='${titleText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=26:fontcolor=black:x=(w-text_w)/2:y=25:box=0`,
+    // 1. Centre-crop landscape to 9:16 portrait, then scale to 1080x1920
+    "crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0",
+    "scale=1080:1920",
+    // 2. White title bar at top — 130px tall to give visual breathing room
+    "drawbox=x=0:y=0:w=iw:h=130:color=white:t=fill",
+    // 3. Title text — centred in the bar, 35px from the top edge
+    `drawtext=text='${titleText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=48:fontcolor=black:x=(w-text_w)/2:y=42:box=0`,
+    // 4. Timed caption overlays
     ...captionFilters,
   ].join(",");
 

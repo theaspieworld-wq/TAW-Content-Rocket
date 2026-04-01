@@ -133,7 +133,7 @@ router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
     return;
   }
 
-  const filename = `clip_${clip.id}_${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`;
+  const filename = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`;
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Content-Type", "video/mp4");
 
