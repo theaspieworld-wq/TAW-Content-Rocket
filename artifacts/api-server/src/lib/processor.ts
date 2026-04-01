@@ -79,9 +79,9 @@ async function extractAudio(videoPath: string, outputDir: string): Promise<strin
 async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> {
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
-  // verbose_json is required to get segment-level timestamps for captions
+  // whisper-1 supports verbose_json which returns segment-level timestamps for captions
   const response = await openai.audio.transcriptions.create({
-    model: "gpt-4o-mini-transcribe",
+    model: "whisper-1",
     file: audioFile,
     response_format: "verbose_json",
     timestamp_granularities: ["segment"],
