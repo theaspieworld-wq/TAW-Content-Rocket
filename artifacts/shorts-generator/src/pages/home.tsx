@@ -774,18 +774,8 @@ export default function Home() {
                 </div>
 
                 {jobWithClips.status !== 'completed' && jobWithClips.status !== 'failed' && (
-                  <div className="mt-8 bg-card border border-border rounded-xl p-6 shadow-sm relative overflow-hidden">
-                    <div className="absolute inset-0 bg-primary/[0.02] animate-pulse pointer-events-none" />
-                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-                    <div className="flex justify-between text-sm font-medium mb-3 relative z-10">
-                      <span className="text-foreground">Current Phase</span>
-                      <span className="text-primary font-mono">{getStatusLabel(jobWithClips.status)}...</span>
-                    </div>
-                    <Progress value={getStatusProgress(jobWithClips.status)} className="h-2.5 relative z-10 bg-muted/50 overflow-hidden" indicatorClassName="bg-gradient-to-r from-[#f21178] to-[#9b4dca] shadow-[0_0_10px_rgba(242,17,120,0.5)] transition-all duration-1000" />
-                    <p className="text-xs text-muted-foreground mt-4 relative z-10 flex items-center gap-2">
-                      <Loader2 className="w-3 h-3 animate-spin text-primary/70" />
-                      This process involves downloading, AI analysis, transcription, and rendering.
-                    </p>
+                  <div className="mt-8">
+                    <Progress value={getStatusProgress(jobWithClips.status)} className="h-1.5 bg-muted/50 overflow-hidden" indicatorClassName="bg-gradient-to-r from-[#fd9601] to-[#f21178] shadow-[0_0_10px_rgba(242,17,120,0.4)] transition-all duration-1000" />
                   </div>
                 )}
 
