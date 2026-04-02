@@ -219,9 +219,11 @@ export default function Home() {
   });
 
   // Update default outro selection when loaded
-  if (defaultOutro && form.getValues("outroId") === "none" && !form.formState.isDirty) {
-    form.setValue("outroId", String(defaultOutro.id));
-  }
+  useEffect(() => {
+    if (defaultOutro && form.getValues("outroId") === "none" && !form.formState.isDirty) {
+      form.setValue("outroId", String(defaultOutro.id));
+    }
+  }, [defaultOutro?.id]);
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const payload = {
@@ -871,7 +873,7 @@ export default function Home() {
                                 {copiedKey === "blog" ? "Copied!" : "Copy HTML"}
                               </Button>
                             </div>
-                            {jobContent.blogPost.trim().startsWith('<') ? (
+                            {/<(h[1-6]|p|strong|em|ul|li)\b/i.test(jobContent.blogPost) ? (
                               <div className="bg-muted/30 rounded-lg p-5 border border-border/40 max-h-96 overflow-y-auto prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h1:text-xl prose-h2:text-base prose-h2:mt-5 prose-p:text-foreground/85 prose-p:leading-relaxed prose-li:text-foreground/85 prose-strong:text-foreground"
                                 dangerouslySetInnerHTML={{ __html: jobContent.blogPost }}
                               />
