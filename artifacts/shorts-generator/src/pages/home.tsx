@@ -45,6 +45,9 @@ import {
   AtSign,
   Globe,
   BookOpen,
+  Menu,
+  X,
+  MessageSquareQuote,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -108,6 +111,7 @@ function getStatusLabel(status: string) {
 
 export default function Home() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -351,25 +355,33 @@ export default function Home() {
 
   return (
     <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30 selection:text-primary-foreground">
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className="w-80 border-r border-border bg-card/40 flex flex-col z-10 relative shrink-0">
-        <div className="p-5 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
-              <Scissors className="w-5 h-5 text-[#f21178]" />
-            </div>
-            <h1 className="font-bold text-lg tracking-tight">TAW Studio</h1>
+      <div className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex fixed md:static inset-y-0 left-0 z-40 md:z-10 w-80 border-r border-border bg-card/95 md:bg-card/40 flex-col shrink-0`}>
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <img src="/taw-logo.png" alt="TAW Media" className="h-12 w-auto object-contain" />
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted/50 border border-border">
+                  <Activity className={`w-3.5 h-3.5 ${isHealthy ? 'text-green-500' : 'text-muted-foreground'}`} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p className="text-xs">{isHealthy ? 'API Connected' : 'Connecting...'}</p>
+              </TooltipContent>
+            </Tooltip>
+            <Button variant="ghost" size="icon" className="h-7 w-7 md:hidden" onClick={() => setSidebarOpen(false)}>
+              <X className="w-4 h-4" />
+            </Button>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted/50 border border-border">
-                <Activity className={`w-3.5 h-3.5 ${isHealthy ? 'text-green-500' : 'text-muted-foreground'}`} />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p className="text-xs">{isHealthy ? 'API Connected' : 'Connecting...'}</p>
-            </TooltipContent>
-          </Tooltip>
         </div>
         
         <Tabs defaultValue="projects" className="flex-1 flex flex-col">
@@ -601,16 +613,24 @@ export default function Home() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative z-0 bg-background/50">
-        <div className="p-6 border-b border-border bg-card/20 backdrop-blur-md sticky top-0 z-20">
+      <div className="flex-1 flex flex-col relative z-0 bg-background/50 min-w-0">
+        {/* Mobile top bar */}
+        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card/40 sticky top-0 z-20">
+          <img src="/taw-logo.png" alt="TAW Media" className="h-9 w-auto object-contain" />
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSidebarOpen(true)}>
+            <Menu className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 max-w-4xl mx-auto w-full">
-              <div className="flex gap-4 items-start w-full">
+              <div className="flex flex-col sm:flex-row gap-3 items-start w-full">
                 <FormField
                   control={form.control}
                   name="youtubeUrl"
                   render={({ field }) => (
-                    <FormItem className="flex-1">
+                    <FormItem className="flex-1 w-full sm:w-auto">
                       <FormControl>
                         <div className="relative group">
                           <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
@@ -651,7 +671,7 @@ export default function Home() {
                   size="lg"
                   disabled={createJob.isPending}
                   style={{ background: 'linear-gradient(135deg, #fd9601, #f21178)' }}
-                  className="h-14 px-8 text-base shadow-[0_4px_14px_0_rgba(242,17,120,0.2)] hover:shadow-[0_6px_20px_rgba(242,17,120,0.3)] hover:-translate-y-0.5 transition-all rounded-xl font-semibold active:translate-y-0 shrink-0 text-white border-0"
+                  className="h-14 px-8 text-base shadow-[0_4px_14px_0_rgba(242,17,120,0.2)] hover:shadow-[0_6px_20px_rgba(242,17,120,0.3)] hover:-translate-y-0.5 transition-all rounded-xl font-semibold active:translate-y-0 shrink-0 text-white border-0 w-full sm:w-auto"
                 >
                   {createJob.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Scissors className="w-5 h-5 mr-2" />}
                   {createJob.isPending ? "Starting..." : "Extract Clips"}
@@ -820,18 +840,21 @@ export default function Home() {
                     </div>
                   ) : jobContent ? (
                     <Tabs defaultValue="blog" className="w-full">
-                      <TabsList className="bg-muted/50 border border-border/50 mb-6 h-10">
+                      <TabsList className="bg-muted/50 border border-border/50 mb-6 h-10 flex flex-wrap gap-0.5">
                         <TabsTrigger value="blog" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
-                          <BookOpen className="w-3.5 h-3.5" /> Blog Post
+                          <BookOpen className="w-3.5 h-3.5" /> Blog
                         </TabsTrigger>
                         <TabsTrigger value="thread" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
                           <AtSign className="w-3.5 h-3.5" /> Thread
                         </TabsTrigger>
                         <TabsTrigger value="social" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
-                          <Globe className="w-3.5 h-3.5" /> Social Article
+                          <Globe className="w-3.5 h-3.5" /> Social
                         </TabsTrigger>
                         <TabsTrigger value="newsletter" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
                           <Mail className="w-3.5 h-3.5" /> Newsletter
+                        </TabsTrigger>
+                        <TabsTrigger value="quotes" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                          <MessageSquareQuote className="w-3.5 h-3.5" /> Quotes
                         </TabsTrigger>
                       </TabsList>
 
@@ -967,6 +990,63 @@ export default function Home() {
                               />
                             </div>
                           </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="quotes" className="m-0">
+                        <div className="rounded-xl border border-border bg-card p-6">
+                          <div className="flex items-center justify-between mb-5">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Social Media Quote Cards</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1.5 border-border/60"
+                              onClick={() => {
+                                if (!jobContent.quotes?.length) return;
+                                const csv = ["Quote", ...jobContent.quotes].map((q, i) =>
+                                  i === 0 ? `"${q}"` : `"${q.replace(/"/g, '""')}"`
+                                ).join("\n");
+                                const blob = new Blob([csv], { type: "text/csv" });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `quotes-${jobWithClips.id}.csv`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                            >
+                              <Download className="w-3 h-3" /> Export CSV
+                            </Button>
+                          </div>
+                          {jobContent.quotes && jobContent.quotes.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {jobContent.quotes.map((quote, i) => (
+                                <div
+                                  key={i}
+                                  className="relative rounded-xl p-5 border border-border/60 bg-gradient-to-br from-card to-muted/20 group"
+                                >
+                                  <MessageSquareQuote className="w-6 h-6 text-[#f21178]/30 mb-3" />
+                                  <p className="text-sm leading-relaxed text-foreground font-medium">{quote}</p>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="absolute top-3 right-3 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => copyToClipboard(quote, `quote-${i}`)}
+                                  >
+                                    {copiedKey === `quote-${i}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                                  </Button>
+                                  <div className="mt-4 pt-3 border-t border-border/30 flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full" style={{ background: i % 2 === 0 ? '#f21178' : '#fd9601' }} />
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Quote {i + 1}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-10 text-muted-foreground text-sm">
+                              No quotes available. Regenerate content to include quotes.
+                            </div>
+                          )}
                         </div>
                       </TabsContent>
                     </Tabs>

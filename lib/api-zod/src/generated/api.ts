@@ -131,6 +131,11 @@ export const GetJobContentResponse = zod.object({
     subject: zod.string().describe("Email subject line"),
     body: zod.string().describe("HTML email body for pasting into a CRM"),
   }),
+  quotes: zod
+    .array(zod.string())
+    .describe(
+      "4 powerful quotes from the transcript for use on social media quote cards",
+    ),
 });
 
 /**
@@ -157,6 +162,11 @@ export const RegenerateJobContentResponse = zod.object({
     subject: zod.string().describe("Email subject line"),
     body: zod.string().describe("HTML email body for pasting into a CRM"),
   }),
+  quotes: zod
+    .array(zod.string())
+    .describe(
+      "4 powerful quotes from the transcript for use on social media quote cards",
+    ),
 });
 
 /**

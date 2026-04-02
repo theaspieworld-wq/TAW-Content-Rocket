@@ -225,6 +225,8 @@ function escapeFfmpegText(text: string): string {
     .replace(/,/g, "\\,");
 }
 
+const LOGO_PATH = path.join(process.cwd(), "src", "assets", "taw-logo.png");
+
 async function renderMainClip(
   videoPath: string,
   clipId: number,
@@ -259,35 +261,64 @@ async function renderMainClip(
     const captionText = escapeFfmpegText(lines.join("\\n"));
     // Escape commas inside between() so they aren't parsed as filter separators
     const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
-    // fontsize=52 for 1080x1920, positioned 140px from bottom with strong shadow
+    // Bottom-third captions: y=h-th-200 keeps them well within the 9:16 safe area
     captionFilters.push(
-      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=h-th-140:enable=${enableExpr}:borderw=4:bordercolor=black@0.85:line_spacing=8`
+      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=h-th-200:enable=${enableExpr}:borderw=4:bordercolor=black@0.85:line_spacing=8`
     );
   }
 
-  const titleText = escapeFfmpegText(title.toUpperCase());
-  const allFilters = [
-    // 1. Centre-crop landscape to 9:16 portrait, then scale to 1080x1920
-    "crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0",
-    "scale=1080:1920",
-    // 2. White title bar at top — 130px tall to give visual breathing room
-    "drawbox=x=0:y=0:w=iw:h=130:color=white:t=fill",
-    // 3. Title text — centred in the bar, 35px from the top edge
-    `drawtext=text='${titleText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=48:fontcolor=black:x=(w-text_w)/2:y=42:box=0`,
-    // 4. Timed caption overlays
-    ...captionFilters,
-  ].join(",");
+  // Use filter_complex so we can overlay the logo PNG (with alpha) on top of the video.
+  // Chain: crop → scale 1080×1920 → overlay logo centred at top → captions
+  const logoExists = fs.existsSync(LOGO_PATH);
+  let filterComplex: string;
 
-  await execFileAsync("ffmpeg", [
-    "-ss", startSeconds.toString(),
-    "-i", videoPath,
-    "-t", (endSeconds - startSeconds).toString(),
-    "-vf", allFilters,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-    "-c:a", "aac", "-b:a", "128k",
-    "-movflags", "+faststart",
-    outputPath, "-y",
-  ], { timeout: 300000 });
+  if (logoExists) {
+    if (captionFilters.length > 0) {
+      filterComplex = [
+        `[0:v]crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0,scale=1080:1920[bg]`,
+        `[1:v]scale=280:-1[logo]`,
+        `[bg][logo]overlay=x=(W-w)/2:y=30[base]`,
+        `[base]${captionFilters.join(",")}[v]`,
+      ].join(";");
+    } else {
+      filterComplex = [
+        `[0:v]crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0,scale=1080:1920[bg]`,
+        `[1:v]scale=280:-1[logo]`,
+        `[bg][logo]overlay=x=(W-w)/2:y=30[v]`,
+      ].join(";");
+    }
+
+    await execFileAsync("ffmpeg", [
+      "-ss", startSeconds.toString(),
+      "-i", videoPath,
+      "-loop", "1", "-i", LOGO_PATH,
+      "-t", (endSeconds - startSeconds).toString(),
+      "-filter_complex", filterComplex,
+      "-map", "[v]",
+      "-map", "0:a",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 300000 });
+  } else {
+    // Fallback: no logo, just crop/scale + captions via -vf
+    const allFilters = [
+      "crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0",
+      "scale=1080:1920",
+      ...captionFilters,
+    ].join(",");
+    await execFileAsync("ffmpeg", [
+      "-ss", startSeconds.toString(),
+      "-i", videoPath,
+      "-t", (endSeconds - startSeconds).toString(),
+      "-vf", allFilters,
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 300000 });
+  }
 }
 
 async function prepareOutroWithCta(
@@ -448,7 +479,13 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
   "newsletterGreeting": "Opening paragraph after 'Hi [First Name],' — 2-3 sentences that explain what this video covers and why it matters to the reader.",
   "newsletterTakeaways": ["Key takeaway 1", "Key takeaway 2", "Key takeaway 3"],
-  "newsletterClosing": "One paragraph closing that builds anticipation for the video and encourages clicking the button below."
+  "newsletterClosing": "One paragraph closing that builds anticipation for the video and encourages clicking the button below.",
+  "quotes": [
+    "Powerful verbatim or near-verbatim quote from the transcript. Max 200 chars. No attribution needed.",
+    "Second quote — different theme or insight. Max 200 chars.",
+    "Third quote — emotionally resonant or thought-provoking. Max 200 chars.",
+    "Fourth quote — actionable or memorable. Max 200 chars."
+  ]
 }`;
 
   const response = await openai.chat.completions.create({
@@ -483,6 +520,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       subject: g.newsletterSubject ?? "",
       body: newsletterHtml,
     },
+    quotes: Array.isArray(g.quotes) ? g.quotes.slice(0, 4) : [],
   };
 }
 

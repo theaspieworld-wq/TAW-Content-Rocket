@@ -407,6 +407,11 @@ components:
           description: Article for Facebook, Quora, and LinkedIn with video link
         newsletterEmail:
           $ref: "#/components/schemas/NewsletterEmail"
+        quotes:
+          type: array
+          items:
+            type: string
+          description: 4 powerful quotes from the transcript for use on social media quote cards
       required:
         - videoTitle
         - thumbnailUrl
@@ -415,6 +420,7 @@ components:
         - threadPosts
         - socialArticle
         - newsletterEmail
+        - quotes
     Outro:
       type: object
       properties:

@@ -93,6 +93,8 @@ export interface GeneratedContent {
   /** Article for Facebook, Quora, and LinkedIn with video link */
   socialArticle: string;
   newsletterEmail: NewsletterEmail;
+  /** 4 powerful quotes from the transcript for use on social media quote cards */
+  quotes: string[];
 }
 
 export type OutroPosition = (typeof OutroPosition)[keyof typeof OutroPosition];
