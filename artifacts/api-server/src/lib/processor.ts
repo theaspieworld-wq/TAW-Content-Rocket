@@ -694,7 +694,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     "Practical action step the viewer can use immediately. Start directly with the content, no label or preamble. Max 280 chars.",
     "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Start directly with the content, no label or preamble. Max 280 chars."
   ],
-  "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. 4-5 paragraphs. Open with a strong statement or question. Deliver real value from the transcript. End the final paragraph with: Watch the full video here: ${youtubeUrl}",
+  "socialArticle": "Long-form professional article for Facebook, Quora, and LinkedIn. 8-10 substantial paragraphs totalling 700-1000 words. STRUCTURE: Open with a bold statement or provocative question that hooks the reader instantly. Follow with 2-3 paragraphs of context that establish why this topic matters. Then write 4-5 body paragraphs that each explore a distinct insight, argument, or takeaway from the video transcript — each paragraph should be meaty (3-5 sentences) with specific detail, not generic statements. Write a conclusion paragraph that synthesises the key ideas and motivates the reader to act. End that final paragraph with: Watch the full video here: ${youtubeUrl}. Write in a confident, conversational tone that works on social media.",
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
   "newsletterGreeting": "Opening paragraph after 'Hi [First Name],' — 2-3 sentences that explain what this video covers and why it matters to the reader.",
   "newsletterTakeaways": ["Key takeaway 1", "Key takeaway 2", "Key takeaway 3"],
@@ -710,7 +710,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
-    max_completion_tokens: 4000,
+    max_completion_tokens: 6000,
   });
 
   const rawContent = response.choices[0]?.message?.content ?? "{}";
