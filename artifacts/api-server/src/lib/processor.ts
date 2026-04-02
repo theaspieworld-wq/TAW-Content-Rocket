@@ -273,17 +273,34 @@ async function renderMainClip(
   transcript: TranscriptSegment[],
   outputPath: string,
 ): Promise<void> {
-  const clipSegments = transcript.filter((s) => s.end > startSeconds && s.start < endSeconds);
   const captionFilters: string[] = [];
   const captionFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+  const clipDuration = endSeconds - startSeconds;
 
-  for (const seg of clipSegments) {
-    const segStart = Math.max(0, seg.start - startSeconds);
-    const segEnd = Math.min(endSeconds - startSeconds, seg.end - startSeconds);
+  // Convert transcript segments to clip-relative time and remove any that fall outside the clip
+  const rawSegments = transcript
+    .filter((s) => s.end > startSeconds && s.start < endSeconds)
+    .map((s) => ({
+      segStart: Math.max(0, s.start - startSeconds),
+      segEnd: Math.min(clipDuration, s.end - startSeconds),
+      text: s.text,
+    }))
+    .filter((s) => s.segEnd > s.segStart)
+    .sort((a, b) => a.segStart - b.segStart);
+
+  // Enforce non-overlapping windows: if two segments overlap, trim the earlier one's end
+  // so at most ONE caption is ever visible at a time.
+  for (let i = 0; i < rawSegments.length - 1; i++) {
+    if (rawSegments[i].segEnd > rawSegments[i + 1].segStart) {
+      rawSegments[i].segEnd = rawSegments[i + 1].segStart;
+    }
+  }
+
+  for (const { segStart, segEnd, text } of rawSegments) {
     if (segEnd <= segStart) continue;
 
     // ALL CAPS captions, word-wrapped at ~30 chars per line for 1080px portrait frame
-    const words = seg.text.trim().toUpperCase().split(/\s+/).filter(Boolean);
+    const words = text.trim().toUpperCase().split(/\s+/).filter(Boolean);
     const lines: string[] = [];
     let currentLine = "";
     for (const word of words) {
@@ -299,7 +316,7 @@ async function renderMainClip(
     const captionText = escapeFfmpegText(lines.join("\\n"));
     // Escape commas inside between() so they aren't parsed as filter separators
     const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
-    // Bottom-third captions: positioned 180px from bottom so they sit fully in the safe area
+    // Bottom-third captions: 180px from the bottom of the 1920px frame
     captionFilters.push(
       `drawtext=text='${captionText}':fontfile=${captionFont}:fontsize=56:fontcolor=white:x=(w-text_w)/2:y=h-th-180:enable=${enableExpr}:borderw=5:bordercolor=black@0.9:line_spacing=12`
     );
