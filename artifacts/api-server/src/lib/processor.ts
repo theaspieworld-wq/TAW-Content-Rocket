@@ -467,7 +467,7 @@ ${transcriptText}
 Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
 
 {
-  "blogPost": "Full HTML blog post ready to paste into any CMS or blog editor. Use proper HTML tags: <h1> for the title, <h2> for section headings, <p> for paragraphs, <strong> for bold emphasis, <em> for italics, <ul>/<li> for lists. Structure: <h1>[Title]</h1>, <h2>Introduction</h2>, <h2>[3-4 thematic section headings from the transcript]</h2>, <h2>Conclusion</h2>, <h2>TL;DR</h2> (2-3 sentence summary — always at the very end). No inline styles. Target 700-900 words.",
+  "blogPost": "Full HTML blog post ready to paste into any CMS. Use these tags only: <h1> for the title, <h2> for section headings, <p> for paragraphs, <strong> for bold. Follow this exact structure: (1) <h1>[Engaging, descriptive title]</h1>. (2) 1-2 opening <p> paragraphs — hook the reader and introduce the topic, no heading above them. (3) 4-5 themed sections, each starting with <h2>[Descriptive section heading]</h2> followed by 1-2 <p> paragraphs of substantive content. Do NOT use 'Introduction' or 'Conclusion' as headings — let the content flow naturally. (4) End with exactly this: <p><strong>TL;DR:</strong> [2-3 sentence summary of the whole post]</p>. No inline styles. No extra wrappers. Target 700-900 words.",
   "threadPosts": [
     "Hook — the single most compelling insight from the video. Start with the insight itself, no label or preamble. Max 280 chars.",
     "Key insight from the video. Start directly with the content, no label or preamble. Max 280 chars.",
