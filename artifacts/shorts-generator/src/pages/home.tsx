@@ -960,9 +960,9 @@ export default function Home() {
                               </Button>
                             </div>
                             <div className="rounded-lg border border-border/40 overflow-hidden">
-                              <div className="bg-muted/60 border-b border-border/40 px-4 py-2 text-[10px] font-mono text-muted-foreground">Preview</div>
+                              <div className="bg-muted/60 border-b border-border/40 px-4 py-2 text-[10px] font-mono text-muted-foreground">Preview (as seen in email client)</div>
                               <div
-                                className="p-6 bg-white/[0.03]"
+                                className="bg-white"
                                 dangerouslySetInnerHTML={{ __html: jobContent.newsletterEmail.body }}
                               />
                             </div>

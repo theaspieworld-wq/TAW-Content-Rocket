@@ -218,7 +218,7 @@ async function getVideoDuration(videoPath: string): Promise<number> {
 function escapeFfmpegText(text: string): string {
   return text
     .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
+    .replace(/'/g, "")        // Remove apostrophes — they break ffmpeg single-quote escaping
     .replace(/:/g, "\\:")
     .replace(/\[/g, "\\[")
     .replace(/\]/g, "\\]")
@@ -257,9 +257,11 @@ async function renderMainClip(
     if (currentLine) lines.push(currentLine.trim());
 
     const captionText = escapeFfmpegText(lines.join("\\n"));
+    // Escape commas inside between() so they aren't parsed as filter separators
+    const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
     // fontsize=52 for 1080x1920, positioned 140px from bottom with strong shadow
     captionFilters.push(
-      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=h-th-140:enable='between(t,${segStart.toFixed(2)},${segEnd.toFixed(2)})':borderw=4:bordercolor=black@0.85:line_spacing=8`
+      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=h-th-140:enable=${enableExpr}:borderw=4:bordercolor=black@0.85:line_spacing=8`
     );
   }
 
