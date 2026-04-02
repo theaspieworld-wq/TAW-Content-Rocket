@@ -481,12 +481,12 @@ async function renderQuoteImages(
       const filename = `quote_img_${jobId}_${i}.jpg`;
       const outputPath = path.join(CLIPS_DIR, filename);
 
-      // Word-wrap the quote at ~26 chars per line for 1080px frame at fontsize 48
+      // Word-wrap at ~30 chars per line — wider wrap = fewer lines = larger font
       const words = quotes[i].replace(/[^\w\s'.,!?-]/g, "").toUpperCase().split(/\s+/).filter(Boolean);
       const lines: string[] = [];
       let currentLine = "";
       for (const word of words) {
-        if ((currentLine + " " + word).trim().length > 26) {
+        if ((currentLine + " " + word).trim().length > 30) {
           if (currentLine) lines.push(currentLine.trim());
           currentLine = word;
         } else {
@@ -495,12 +495,24 @@ async function renderQuoteImages(
       }
       if (currentLine) lines.push(currentLine.trim());
 
+      const nLines = lines.length;
+      // Dark box: bottom half of the 1080×1080 frame — gives ample vertical room
+      const darkY = 540;
+      const darkH = 540;
+      const padV = 24; // vertical padding inside the dark band (top + bottom)
+      const lineSpacing = 10;
+      const availH = darkH - padV * 2;
+
+      // Pick the largest font size where all lines still fit within the available height
+      // Total text height = nLines * fontSize + (nLines - 1) * lineSpacing
+      // We solve for fontSize: fontSize = (availH - (nLines-1)*lineSpacing) / nLines
+      const fontSize = Math.max(24, Math.min(42, Math.floor((availH - (nLines - 1) * lineSpacing) / nLines)));
+
+      // Compute exact y start position in pixels (no reliance on ffmpeg's 'th' variable)
+      const textHeight = nLines * fontSize + (nLines - 1) * lineSpacing;
+      const textY = darkY + padV + Math.floor((availH - textHeight) / 2);
+
       const quoteText = escapeFfmpegText(lines.join("\\n"));
-      // Dark overlay covers the bottom 40% of the 1080×1080 frame: y=648, h=432
-      // Center text vertically within that dark band
-      const darkY = 648;
-      const darkH = 432;
-      const textY = `${darkY}+((${darkH}-th)/2)`;
 
       await execFileAsync("ffmpeg", [
         "-ss", timestamp.toFixed(2),
@@ -509,10 +521,10 @@ async function renderQuoteImages(
         "-vf", [
           // 1:1 square crop — 1080×1080
           "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080",
-          // Semi-transparent dark box in the bottom 40%
-          `drawbox=x=0:y=${darkY}:w=iw:h=${darkH}:color=black@0.75:t=fill`,
-          // Quote text ALL CAPS centred in the dark area, white Poppins Bold
-          `drawtext=fontfile=${fontFile}:text='${quoteText}':fontcolor=white:fontsize=46:x=(w-text_w)/2:y=${textY}:line_spacing=14:borderw=3:bordercolor=black@0.55`,
+          // Semi-transparent dark box covering the bottom half
+          `drawbox=x=0:y=${darkY}:w=iw:h=${darkH}:color=black@0.78:t=fill`,
+          // Quote text ALL CAPS — font size chosen to fit all lines inside the dark band
+          `drawtext=fontfile=${fontFile}:text='${quoteText}':fontcolor=white:fontsize=${fontSize}:x=(w-text_w)/2:y=${textY}:line_spacing=${lineSpacing}:borderw=3:bordercolor=black@0.55`,
         ].join(","),
         "-q:v", "2",
         outputPath, "-y",
