@@ -412,6 +412,11 @@ components:
           items:
             type: string
           description: 4 powerful quotes from the transcript for use on social media quote cards
+        quoteImages:
+          type: array
+          items:
+            type: string
+          description: Filenames of 4:5 quote card images (1080x1350) with quote text overlaid — fetch via GET /api/images/{filename}
       required:
         - videoTitle
         - thumbnailUrl
@@ -421,6 +426,7 @@ components:
         - socialArticle
         - newsletterEmail
         - quotes
+        - quoteImages
     Outro:
       type: object
       properties:

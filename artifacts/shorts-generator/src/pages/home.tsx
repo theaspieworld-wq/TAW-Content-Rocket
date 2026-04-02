@@ -996,59 +996,93 @@ export default function Home() {
                       </TabsContent>
 
                       <TabsContent value="quotes" className="m-0">
-                        <div className="rounded-xl border border-border bg-card p-6">
-                          <div className="flex items-center justify-between mb-5">
-                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Social Media Quote Cards</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs gap-1.5 border-border/60"
-                              onClick={() => {
-                                if (!jobContent.quotes?.length) return;
-                                const csv = ["Quote", ...jobContent.quotes].map((q, i) =>
-                                  i === 0 ? `"${q}"` : `"${q.replace(/"/g, '""')}"`
-                                ).join("\n");
-                                const blob = new Blob([csv], { type: "text/csv" });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = `quotes-${jobWithClips.id}.csv`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              }}
-                            >
-                              <Download className="w-3 h-3" /> Export CSV
-                            </Button>
-                          </div>
-                          {jobContent.quotes && jobContent.quotes.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              {jobContent.quotes.map((quote, i) => (
-                                <div
-                                  key={i}
-                                  className="relative rounded-xl p-5 border border-border/60 bg-gradient-to-br from-card to-muted/20 group"
-                                >
-                                  <MessageSquareQuote className="w-6 h-6 text-[#f21178]/30 mb-3" />
-                                  <p className="text-sm leading-relaxed text-foreground font-medium">{quote}</p>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="absolute top-3 right-3 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => copyToClipboard(quote, `quote-${i}`)}
-                                  >
-                                    {copiedKey === `quote-${i}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                  </Button>
-                                  <div className="mt-4 pt-3 border-t border-border/30 flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full" style={{ background: i % 2 === 0 ? '#f21178' : '#fd9601' }} />
-                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Quote {i + 1}</span>
+                        <div className="rounded-xl border border-border bg-card p-6 space-y-6">
+                          {/* Quote card images — 4:5 portrait frames with quote text burned in */}
+                          {jobContent.quoteImages && jobContent.quoteImages.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-4">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Quote Card Images</span>
+                                <span className="text-[10px] text-muted-foreground">4:5 · 1080×1350px · Ready to post</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                {jobContent.quoteImages.map((filename, i) => (
+                                  <div key={i} className="relative group rounded-xl overflow-hidden border border-border/40" style={{ aspectRatio: '4/5' }}>
+                                    <img
+                                      src={`/api/images/${filename}`}
+                                      alt={`Quote card ${i + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end justify-between p-2 opacity-0 group-hover:opacity-100">
+                                      <span className="text-[10px] font-semibold text-white uppercase tracking-widest">Quote {i + 1}</span>
+                                      <a
+                                        href={`/api/images/${filename}`}
+                                        download={`quote-card-${i + 1}.jpg`}
+                                        className="inline-flex items-center gap-1 bg-white/90 text-black text-[10px] font-semibold rounded px-2 py-1"
+                                      >
+                                        <Download className="w-2.5 h-2.5" /> Save
+                                      </a>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-10 text-muted-foreground text-sm">
-                              No quotes available. Regenerate content to include quotes.
+                                ))}
+                              </div>
                             </div>
                           )}
+
+                          {/* Quote text cards with copy + CSV export */}
+                          <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Quote Text</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1.5 border-border/60"
+                                onClick={() => {
+                                  if (!jobContent.quotes?.length) return;
+                                  const csv = ["Quote", ...jobContent.quotes].map((q, i) =>
+                                    i === 0 ? `"${q}"` : `"${q.replace(/"/g, '""')}"`
+                                  ).join("\n");
+                                  const blob = new Blob([csv], { type: "text/csv" });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = `quotes-${jobWithClips.id}.csv`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                }}
+                              >
+                                <Download className="w-3 h-3" /> Export CSV
+                              </Button>
+                            </div>
+                            {jobContent.quotes && jobContent.quotes.length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {jobContent.quotes.map((quote, i) => (
+                                  <div
+                                    key={i}
+                                    className="relative rounded-xl p-5 border border-border/60 bg-gradient-to-br from-card to-muted/20 group"
+                                  >
+                                    <MessageSquareQuote className="w-6 h-6 text-[#f21178]/30 mb-3" />
+                                    <p className="text-sm leading-relaxed text-foreground font-medium">{quote}</p>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="absolute top-3 right-3 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => copyToClipboard(quote, `quote-${i}`)}
+                                    >
+                                      {copiedKey === `quote-${i}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                                    </Button>
+                                    <div className="mt-4 pt-3 border-t border-border/30 flex items-center gap-1.5">
+                                      <div className="w-2 h-2 rounded-full" style={{ background: i % 2 === 0 ? '#f21178' : '#fd9601' }} />
+                                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Quote {i + 1}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-10 text-muted-foreground text-sm">
+                                No quotes available. Regenerate content to include quotes.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </TabsContent>
                     </Tabs>

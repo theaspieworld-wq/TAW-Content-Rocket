@@ -158,9 +158,39 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
   const videoTitle = job.videoTitle ?? "Untitled Video";
 
   const content = await generateContent(job.youtubeUrl, videoTitle, transcript);
+
+  // Preserve existing quote images (video no longer available to re-render)
+  if (job.generatedContent) {
+    try {
+      const existing = JSON.parse(job.generatedContent);
+      if (Array.isArray(existing.quoteImages) && existing.quoteImages.length > 0) {
+        content.quoteImages = existing.quoteImages;
+      }
+    } catch (_) {}
+  }
+
   await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, job.id));
 
   res.json(content);
+});
+
+const CLIPS_DIR = path.join(process.cwd(), "clips");
+
+router.get("/images/:filename", (req, res): void => {
+  const { filename } = req.params;
+  // Reject any path traversal or non-image filenames
+  if (!/^[\w\-]+\.(jpg|jpeg|png)$/i.test(filename)) {
+    res.status(400).json({ error: "Invalid filename" });
+    return;
+  }
+  const filePath = path.join(CLIPS_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: "Image not found" });
+    return;
+  }
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  fs.createReadStream(filePath).pipe(res);
 });
 
 router.get("/clips/:clipId/download", async (req, res): Promise<void> => {

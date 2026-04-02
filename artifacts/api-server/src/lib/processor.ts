@@ -45,6 +45,8 @@ export interface GeneratedContent {
   threadPosts: string[];
   socialArticle: string;
   newsletterEmail: NewsletterEmail;
+  quotes: string[];
+  quoteImages: string[];
 }
 
 async function updateJobStatus(jobId: number, status: string, extra?: { videoTitle?: string; errorMessage?: string }): Promise<void> {
@@ -94,26 +96,33 @@ async function extractAudio(videoPath: string, outputDir: string): Promise<strin
 async function transcribeAudio(audioPath: string, videoDuration: number): Promise<TranscriptSegment[]> {
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
-  // gpt-4o-mini-transcribe only supports 'json' format — no per-segment timestamps
-  // We estimate timing by spreading words evenly across the video duration
+
+  // whisper-1 with verbose_json returns real per-segment timestamps — much better caption sync
   const response = await openai.audio.transcriptions.create({
-    model: "gpt-4o-mini-transcribe",
+    model: "whisper-1",
     file: audioFile,
-    response_format: "json",
+    response_format: "verbose_json",
   } as Parameters<typeof openai.audio.transcriptions.create>[0]);
 
-  const rawText: string =
-    typeof response === "string"
-      ? response
-      : ((response as unknown as { text?: string }).text ?? "");
+  const resp = response as unknown as {
+    text?: string;
+    segments?: Array<{ start: number; end: number; text: string }>;
+  };
 
-  if (!rawText.trim()) return [];
+  // Use real segment timestamps when available
+  if (Array.isArray(resp.segments) && resp.segments.length > 0) {
+    return resp.segments
+      .filter((s) => s.text?.trim())
+      .map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
+  }
 
-  const words = rawText.trim().split(/\s+/);
+  // Fallback: distribute words evenly if segments are missing
+  const rawText = (resp.text ?? "").trim();
+  if (!rawText) return [];
+
+  const words = rawText.split(/\s+/);
   const totalWords = words.length;
   const duration = Math.max(1, videoDuration);
-
-  // Group words into ~4-second caption chunks based on even word distribution
   const wordsPerSec = totalWords / duration;
   const chunkSize = Math.max(5, Math.round(wordsPerSec * 4));
 
@@ -128,8 +137,8 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
 }
 
 function makeFallbackClips(clipCount: number, videoDuration: number): ClipSegment[] {
-  // Evenly space clips across the video as a last resort
-  const clipDuration = Math.min(30, Math.floor(videoDuration / (clipCount + 1)));
+  // Evenly space clips across the video as a last resort; target ~90s each
+  const clipDuration = Math.min(90, Math.floor(videoDuration / (clipCount + 1)));
   const step = videoDuration / (clipCount + 1);
   return Array.from({ length: clipCount }, (_, i) => ({
     title: `HIGHLIGHT CLIP ${i + 1}`,
@@ -144,7 +153,7 @@ async function selectBestClips(transcript: TranscriptSegment[], clipCount: numbe
     .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s]: ${s.text}`)
     .join("\n");
 
-  const prompt = `You are an expert short-form video editor. Analyze this transcript and select the ${clipCount} best segments for short-form social media videos.
+  const prompt = `You are an expert short-form video editor. Analyze this transcript and select the ${clipCount} best segments for standalone social media clips.
 
 TRANSCRIPT (with timestamps):
 ${transcriptText}
@@ -152,12 +161,12 @@ ${transcriptText}
 VIDEO DURATION: ${videoDuration.toFixed(0)} seconds
 
 Requirements:
-- Duration: 15 to 60 seconds each
-- Self-contained, makes sense without context
+- Duration: 60 to 120 seconds each — clips MUST be at least 1 minute long so they stand alone as complete content
+- Self-contained: viewer must understand the clip with zero context from the rest of the video
 - High engagement potential: interesting, funny, insightful, emotional, or surprising
-- Start and end at natural speech breaks
-- Prefer segments with clear narrative arc, key insight, or strong hook
-- Avoid intros/outros, filler, or incomplete thoughts
+- Start and end at natural speech breaks — never cut mid-sentence
+- Prefer segments with a clear narrative arc: setup → development → payoff
+- Avoid intros/outros, filler, incomplete thoughts, or clips shorter than 60 seconds
 
 Return ONLY a valid JSON array with exactly ${clipCount} clips:
 [
@@ -226,6 +235,8 @@ function escapeFfmpegText(text: string): string {
 }
 
 const LOGO_PATH = path.join(process.cwd(), "src", "assets", "taw-logo.png");
+const POPPINS_BOLD_PATH = path.join(process.cwd(), "src", "assets", "fonts", "Poppins-Bold.ttf");
+const DEJAVU_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
 async function renderMainClip(
   videoPath: string,
@@ -238,18 +249,19 @@ async function renderMainClip(
 ): Promise<void> {
   const clipSegments = transcript.filter((s) => s.end > startSeconds && s.start < endSeconds);
   const captionFilters: string[] = [];
+  const captionFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
 
   for (const seg of clipSegments) {
     const segStart = Math.max(0, seg.start - startSeconds);
     const segEnd = Math.min(endSeconds - startSeconds, seg.end - startSeconds);
     if (segEnd <= segStart) continue;
 
-    // Wrap caption lines — narrower limit for portrait 9:16 frame
-    const words = seg.text.trim().toUpperCase().split(" ");
+    // ALL CAPS captions, word-wrapped at ~30 chars per line for 1080px portrait frame
+    const words = seg.text.trim().toUpperCase().split(/\s+/).filter(Boolean);
     const lines: string[] = [];
     let currentLine = "";
     for (const word of words) {
-      if ((currentLine + " " + word).trim().length > 22) {
+      if ((currentLine + " " + word).trim().length > 30) {
         if (currentLine) lines.push(currentLine.trim());
         currentLine = word;
       } else {
@@ -261,9 +273,9 @@ async function renderMainClip(
     const captionText = escapeFfmpegText(lines.join("\\n"));
     // Escape commas inside between() so they aren't parsed as filter separators
     const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
-    // Bottom-third captions: y=h-th-200 keeps them well within the 9:16 safe area
+    // Bottom-third captions: positioned 180px from bottom so they sit fully in the safe area
     captionFilters.push(
-      `drawtext=text='${captionText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=52:fontcolor=white:x=(w-text_w)/2:y=h-th-200:enable=${enableExpr}:borderw=4:bordercolor=black@0.85:line_spacing=8`
+      `drawtext=text='${captionText}':fontfile=${captionFont}:fontsize=56:fontcolor=white:x=(w-text_w)/2:y=h-th-180:enable=${enableExpr}:borderw=5:bordercolor=black@0.9:line_spacing=12`
     );
   }
 
@@ -324,6 +336,69 @@ async function renderMainClip(
       outputPath, "-y",
     ], { timeout: 300000 });
   }
+}
+
+async function renderQuoteImages(
+  videoPath: string,
+  jobId: number,
+  clips: Array<{ startSeconds: number; endSeconds: number }>,
+  quotes: string[],
+): Promise<string[]> {
+  const imageFilenames: string[] = [];
+  const fontFile = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+
+  for (let i = 0; i < Math.min(quotes.length, 4); i++) {
+    try {
+      const clip = clips[i % Math.max(1, clips.length)];
+      // Pick a frame from 40% through the clip — typically mid-speech with speaker visible
+      const timestamp = clip.startSeconds + (clip.endSeconds - clip.startSeconds) * 0.4;
+
+      const filename = `quote_img_${jobId}_${i}.jpg`;
+      const outputPath = path.join(CLIPS_DIR, filename);
+
+      // Word-wrap the quote at ~26 chars per line for 1080px frame at fontsize 48
+      const words = quotes[i].replace(/[^\w\s'.,!?-]/g, "").toUpperCase().split(/\s+/).filter(Boolean);
+      const lines: string[] = [];
+      let currentLine = "";
+      for (const word of words) {
+        if ((currentLine + " " + word).trim().length > 26) {
+          if (currentLine) lines.push(currentLine.trim());
+          currentLine = word;
+        } else {
+          currentLine = (currentLine + " " + word).trim();
+        }
+      }
+      if (currentLine) lines.push(currentLine.trim());
+
+      const quoteText = escapeFfmpegText(lines.join("\\n"));
+      // Center text vertically in the dark overlay area (y=720 to bottom = 630px)
+      // Use ffmpeg's th variable to auto-center: y = 720 + (630 - th) / 2
+      const textY = "720+((630-th)/2)";
+
+      await execFileAsync("ffmpeg", [
+        "-ss", timestamp.toFixed(2),
+        "-i", videoPath,
+        "-vframes", "1",
+        "-vf", [
+          // 4:5 portrait crop — 1080×1350
+          "scale=1080:1350:force_original_aspect_ratio=increase,crop=1080:1350",
+          // Semi-transparent dark gradient at the bottom for quote readability
+          "drawbox=x=0:y=720:w=iw:h=630:color=black@0.72:t=fill",
+          // Quote text centred in the dark area, white Poppins Bold
+          `drawtext=fontfile=${fontFile}:text='${quoteText}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=${textY}:line_spacing=14:borderw=3:bordercolor=black@0.55`,
+        ].join(","),
+        "-q:v", "2",
+        outputPath, "-y",
+      ], { timeout: 60000 });
+
+      imageFilenames.push(filename);
+      logger.info({ jobId, quoteIndex: i, filename }, "Quote image rendered");
+    } catch (err) {
+      logger.warn({ jobId, quoteIndex: i, err }, "Failed to render quote image — skipping");
+    }
+  }
+
+  return imageFilenames;
 }
 
 async function prepareOutroWithCta(
@@ -526,6 +601,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       body: newsletterHtml,
     },
     quotes: Array.isArray(g.quotes) ? g.quotes.slice(0, 4) : [],
+    quoteImages: [],
   };
 }
 
@@ -584,8 +660,11 @@ export async function processJob(jobId: number): Promise<void> {
     // Step 4: Generate written content (non-fatal — job completes even if this fails)
     try {
       const content = await generateContent(job.youtubeUrl, title, transcript);
+      // Render 4:5 quote images — one per quote, frame taken from the matching clip
+      const quoteImages = await renderQuoteImages(videoPath, jobId, clipSegments, content.quotes);
+      content.quoteImages = quoteImages;
       await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
-      logger.info({ jobId }, "Content generation completed");
+      logger.info({ jobId, quoteImages: quoteImages.length }, "Content and quote images completed");
     } catch (contentErr) {
       logger.warn({ jobId, err: contentErr }, "Content generation failed — rendering will continue");
     }

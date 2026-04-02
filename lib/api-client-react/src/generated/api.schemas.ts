@@ -95,6 +95,8 @@ export interface GeneratedContent {
   newsletterEmail: NewsletterEmail;
   /** 4 powerful quotes from the transcript for use on social media quote cards */
   quotes: string[];
+  /** Filenames of 4:5 quote card images (1080x1350) — fetch via GET /api/images/{filename} */
+  quoteImages: string[];
 }
 
 export type OutroPosition = (typeof OutroPosition)[keyof typeof OutroPosition];
