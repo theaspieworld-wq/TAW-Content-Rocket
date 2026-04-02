@@ -397,126 +397,69 @@ async function renderMainClip(
   }
 }
 
-async function renderSquareClip(
+function formatSrtTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.round((seconds % 1) * 1000);
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
+}
+
+function transcriptToSrt(transcript: TranscriptSegment[]): string {
+  // Sort and de-overlap then write as SRT
+  const segs = [...transcript].sort((a, b) => a.start - b.start);
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (segs[i].end > segs[i + 1].start) segs[i] = { ...segs[i], end: segs[i + 1].start };
+  }
+  return segs
+    .filter((s) => s.end > s.start && s.text.trim())
+    .map((seg, i) => {
+      const words = seg.text.trim().toUpperCase().split(/\s+/).filter(Boolean);
+      const lines: string[] = [];
+      let cur = "";
+      for (const w of words) {
+        if ((cur + " " + w).trim().length > 30) { if (cur) lines.push(cur.trim()); cur = w; }
+        else cur = (cur + " " + w).trim();
+      }
+      if (cur) lines.push(cur.trim());
+      return `${i + 1}\n${formatSrtTime(seg.start)} --> ${formatSrtTime(seg.end)}\n${lines.join("\n")}`;
+    })
+    .join("\n\n") + "\n";
+}
+
+async function renderFullFacebookVideo(
   videoPath: string,
-  clipId: number,
-  title: string,
-  startSeconds: number,
-  endSeconds: number,
+  jobId: number,
   transcript: TranscriptSegment[],
   outputPath: string,
 ): Promise<void> {
   const squareCrop = "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080";
-  const clipDuration = endSeconds - startSeconds;
   const captionFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+  const fontDir = path.dirname(captionFont);
 
-  // Build non-overlapping caption segments (same logic as renderMainClip)
-  const rawSegments = transcript
-    .filter((s) => s.end > startSeconds && s.start < endSeconds)
-    .map((s) => ({
-      segStart: Math.max(0, s.start - startSeconds),
-      segEnd: Math.min(clipDuration, s.end - startSeconds),
-      text: s.text,
-    }))
-    .filter((s) => s.segEnd > s.segStart)
-    .sort((a, b) => a.segStart - b.segStart);
+  // Write SRT subtitle file (captions ALL CAPS, word-wrapped at ~30 chars)
+  const srtPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.srt`);
+  fs.writeFileSync(srtPath, transcriptToSrt(transcript), "utf8");
 
-  for (let i = 0; i < rawSegments.length - 1; i++) {
-    if (rawSegments[i].segEnd > rawSegments[i + 1].segStart) {
-      rawSegments[i].segEnd = rawSegments[i + 1].segStart;
-    }
-  }
+  // ASS override: white Poppins Bold, black outline, bottom-centre, 60px margin from bottom
+  const forceStyle = "FontName=Poppins Bold,Fontsize=22,PrimaryColour=&H00FFFFFF,Bold=1,Outline=3,OutlineColour=&H00000000,BackColour=&H40000000,Alignment=2,MarginV=60";
 
-  const captionFilters: string[] = [];
-  for (const { segStart, segEnd, text } of rawSegments) {
-    if (segEnd <= segStart) continue;
-    const words = text.trim().toUpperCase().split(/\s+/).filter(Boolean);
-    const lines: string[] = [];
-    let currentLine = "";
-    for (const word of words) {
-      if ((currentLine + " " + word).trim().length > 28) {
-        if (currentLine) lines.push(currentLine.trim());
-        currentLine = word;
-      } else {
-        currentLine = (currentLine + " " + word).trim();
-      }
-    }
-    if (currentLine) lines.push(currentLine.trim());
-    const captionText = escapeFfmpegText(lines.join("\\n"));
-    const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
-    captionFilters.push(
-      `drawtext=text='${captionText}':fontfile=${captionFont}:fontsize=48:fontcolor=white:x=(w-text_w)/2:y=h-th-80:enable=${enableExpr}:borderw=4:bordercolor=black@0.9:line_spacing=10`
-    );
-  }
+  const vf = [
+    squareCrop,
+    `subtitles=${srtPath}:fontsdir=${fontDir}:force_style='${forceStyle}'`,
+  ].join(",");
 
-  const hasLogo = fs.existsSync(LOGO_PATH);
-  const hasCaptions = captionFilters.length > 0;
-
-  if (hasLogo && hasCaptions) {
-    const captionChain = captionFilters.join(",");
-    const filterComplex = [
-      `[0:v]${squareCrop}[bg]`,
-      `[1:v]scale=200:-1[logo]`,
-      `[bg][logo]overlay=x=(W-w)/2:y=20[base]`,
-      `[base]${captionChain}[v]`,
-    ].join(";");
+  try {
     await execFileAsync("ffmpeg", [
-      "-ss", startSeconds.toString(),
       "-i", videoPath,
-      "-loop", "1", "-i", LOGO_PATH,
-      "-t", clipDuration.toString(),
-      "-filter_complex", filterComplex,
-      "-map", "[v]", "-map", "0:a",
+      "-vf", vf,
       "-c:v", "libx264", "-preset", "fast", "-crf", "23",
       "-c:a", "aac", "-b:a", "128k",
-      "-metadata", `title=${title}`,
       "-movflags", "+faststart",
       outputPath, "-y",
-    ], { timeout: 300000 });
-  } else if (hasCaptions) {
-    const allFilters = [squareCrop, ...captionFilters].join(",");
-    await execFileAsync("ffmpeg", [
-      "-ss", startSeconds.toString(),
-      "-i", videoPath,
-      "-t", clipDuration.toString(),
-      "-vf", allFilters,
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-c:a", "aac", "-b:a", "128k",
-      "-metadata", `title=${title}`,
-      "-movflags", "+faststart",
-      outputPath, "-y",
-    ], { timeout: 300000 });
-  } else if (hasLogo) {
-    const filterComplex = [
-      `[0:v]${squareCrop}[bg]`,
-      `[1:v]scale=200:-1[logo]`,
-      `[bg][logo]overlay=x=(W-w)/2:y=20[v]`,
-    ].join(";");
-    await execFileAsync("ffmpeg", [
-      "-ss", startSeconds.toString(),
-      "-i", videoPath,
-      "-loop", "1", "-i", LOGO_PATH,
-      "-t", clipDuration.toString(),
-      "-filter_complex", filterComplex,
-      "-map", "[v]", "-map", "0:a",
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-c:a", "aac", "-b:a", "128k",
-      "-metadata", `title=${title}`,
-      "-movflags", "+faststart",
-      outputPath, "-y",
-    ], { timeout: 300000 });
-  } else {
-    await execFileAsync("ffmpeg", [
-      "-ss", startSeconds.toString(),
-      "-i", videoPath,
-      "-t", clipDuration.toString(),
-      "-vf", squareCrop,
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-c:a", "aac", "-b:a", "128k",
-      "-metadata", `title=${title}`,
-      "-movflags", "+faststart",
-      outputPath, "-y",
-    ], { timeout: 300000 });
+    ], { timeout: 3600000 }); // 1-hour timeout for long full-video renders
+  } finally {
+    try { fs.unlinkSync(srtPath); } catch (_) {}
   }
 }
 
@@ -897,23 +840,6 @@ export async function processJob(jobId: number): Promise<void> {
           fs.copyFileSync(mainClipPath, finalPath);
         }
 
-        // Render 1:1 square version for Facebook (non-fatal)
-        try {
-          const squarePath = path.join(CLIPS_DIR, `clip_${clip.id}_square.mp4`);
-          await renderSquareClip(
-            videoPath,
-            clip.id,
-            clip.title,
-            parseFloat(clip.startSeconds),
-            parseFloat(clip.endSeconds),
-            transcript,
-            squarePath,
-          );
-          logger.info({ clipId: clip.id }, "Square clip rendered successfully");
-        } catch (sqErr) {
-          logger.warn({ clipId: clip.id, err: sqErr }, "Square clip render failed — skipping");
-        }
-
         await db.update(clipsTable).set({
           status: "completed",
           filePath: finalPath,
@@ -924,6 +850,16 @@ export async function processJob(jobId: number): Promise<void> {
         logger.error({ clipId: clip.id, err: clipErr }, "Failed to render clip");
         await db.update(clipsTable).set({ status: "failed" }).where(eq(clipsTable.id, clip.id));
       }
+    }
+
+    // Step 6: Render full Facebook 1:1 video (non-fatal — runs after clips so it doesn't block them)
+    try {
+      const facebookPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.mp4`);
+      logger.info({ jobId }, "Starting full Facebook 1:1 video render");
+      await renderFullFacebookVideo(videoPath, jobId, transcript, facebookPath);
+      logger.info({ jobId }, "Full Facebook 1:1 video rendered successfully");
+    } catch (fbErr) {
+      logger.warn({ jobId, err: fbErr }, "Full Facebook video render failed — skipping");
     }
 
     await updateJobStatus(jobId, "completed");

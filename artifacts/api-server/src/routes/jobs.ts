@@ -12,8 +12,10 @@ import {
 import { processJob, generateContent } from "../lib/processor";
 
 const router: IRouter = Router();
+const CLIPS_DIR = path.join(process.cwd(), "clips");
 
 function jobToJson(j: typeof jobsTable.$inferSelect) {
+  const facebookPath = path.join(CLIPS_DIR, `job_${j.id}_facebook.mp4`);
   return {
     id: j.id,
     youtubeUrl: j.youtubeUrl,
@@ -23,6 +25,7 @@ function jobToJson(j: typeof jobsTable.$inferSelect) {
     clipCount: j.clipCount,
     outroId: j.outroId ?? null,
     hasContent: j.generatedContent != null,
+    hasFacebookVideo: fs.existsSync(facebookPath),
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
   };
@@ -174,8 +177,6 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
   res.json(content);
 });
 
-const CLIPS_DIR = path.join(process.cwd(), "clips");
-
 router.get("/images/:filename", (req, res): void => {
   const { filename } = req.params;
   // Reject any path traversal or non-image filenames
@@ -219,30 +220,33 @@ router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
   stream.pipe(res);
 });
 
-router.get("/clips/:clipId/download-square", async (req, res): Promise<void> => {
-  const params = DownloadClipParams.safeParse(req.params);
+router.get("/jobs/:id/download-facebook", async (req, res): Promise<void> => {
+  const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [clip] = await db.select().from(clipsTable).where(eq(clipsTable.id, params.data.clipId));
-  if (!clip) {
-    res.status(404).json({ error: "Clip not found" });
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
     return;
   }
 
-  const squarePath = path.join(CLIPS_DIR, `clip_${clip.id}_square.mp4`);
-  if (!fs.existsSync(squarePath)) {
-    res.status(404).json({ error: "Square clip not ready yet — process a new job to generate it" });
+  const facebookPath = path.join(CLIPS_DIR, `job_${job.id}_facebook.mp4`);
+  if (!fs.existsSync(facebookPath)) {
+    res.status(404).json({ error: "Facebook video not ready yet — it renders after all clips are complete" });
     return;
   }
 
-  const filename = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_square.mp4`;
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  const safeTitle = (job.videoTitle ?? `job_${job.id}`)
+    .replace(/[^a-z0-9]/gi, "_")
+    .toLowerCase()
+    .slice(0, 60);
+  res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}_facebook_1x1.mp4"`);
   res.setHeader("Content-Type", "video/mp4");
 
-  fs.createReadStream(squarePath).pipe(res);
+  fs.createReadStream(facebookPath).pipe(res);
 });
 
 export default router;
