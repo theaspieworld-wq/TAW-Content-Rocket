@@ -267,22 +267,26 @@ async function renderMainClip(
     );
   }
 
-  // Use filter_complex so we can overlay the logo PNG (with alpha) on top of the video.
-  // Chain: crop → scale 1080×1920 → overlay logo centred at top → captions
+  // Portrait crop strategy: scale so the video fills 1080×1920 (centre-crop).
+  // This works for any input aspect ratio — landscape, square, or portrait.
+  // scale forces the shortest side to fill the target, then crop trims the excess
+  // from the centre so the speaker stays in frame.
+  const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
+
   const logoExists = fs.existsSync(LOGO_PATH);
   let filterComplex: string;
 
   if (logoExists) {
     if (captionFilters.length > 0) {
       filterComplex = [
-        `[0:v]crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0,scale=1080:1920[bg]`,
+        `[0:v]${portraitCrop}[bg]`,
         `[1:v]scale=280:-1[logo]`,
         `[bg][logo]overlay=x=(W-w)/2:y=30[base]`,
         `[base]${captionFilters.join(",")}[v]`,
       ].join(";");
     } else {
       filterComplex = [
-        `[0:v]crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0,scale=1080:1920[bg]`,
+        `[0:v]${portraitCrop}[bg]`,
         `[1:v]scale=280:-1[logo]`,
         `[bg][logo]overlay=x=(W-w)/2:y=30[v]`,
       ].join(";");
@@ -298,14 +302,14 @@ async function renderMainClip(
       "-map", "0:a",
       "-c:v", "libx264", "-preset", "fast", "-crf", "23",
       "-c:a", "aac", "-b:a", "128k",
+      "-metadata", `title=${title}`,
       "-movflags", "+faststart",
       outputPath, "-y",
     ], { timeout: 300000 });
   } else {
-    // Fallback: no logo, just crop/scale + captions via -vf
+    // Fallback: no logo, just portrait crop/scale + captions via -vf
     const allFilters = [
-      "crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0",
-      "scale=1080:1920",
+      portraitCrop,
       ...captionFilters,
     ].join(",");
     await execFileAsync("ffmpeg", [
@@ -315,6 +319,7 @@ async function renderMainClip(
       "-vf", allFilters,
       "-c:v", "libx264", "-preset", "fast", "-crf", "23",
       "-c:a", "aac", "-b:a", "128k",
+      "-metadata", `title=${title}`,
       "-movflags", "+faststart",
       outputPath, "-y",
     ], { timeout: 300000 });
