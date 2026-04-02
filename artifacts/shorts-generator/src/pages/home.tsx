@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -170,6 +170,22 @@ export default function Home() {
     }
   );
 
+  // Auto-generate content when a completed job has no content yet
+  useEffect(() => {
+    if (
+      jobWithClips?.status === "completed" &&
+      jobWithClips?.hasContent === false &&
+      !regenerateContent.isPending
+    ) {
+      regenerateContent.mutate({ id: jobWithClips.id }, {
+        onSuccess: (data) => {
+          queryClient.setQueryData(getGetJobContentQueryKey(jobWithClips.id), data);
+          queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        },
+      });
+    }
+  }, [jobWithClips?.id, jobWithClips?.status, jobWithClips?.hasContent]);
+
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopiedKey(key);
@@ -187,20 +203,6 @@ export default function Home() {
       },
       onError: () => {
         toast({ title: "Error", description: "Could not regenerate content. Transcript may not be available.", variant: "destructive" });
-      },
-    });
-  };
-
-  const handleGenerateContent = () => {
-    if (!selectedJobId) return;
-    regenerateContent.mutate({ id: selectedJobId }, {
-      onSuccess: (data) => {
-        queryClient.setQueryData(getGetJobContentQueryKey(selectedJobId), data);
-        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
-        toast({ title: "Content Generated", description: "Blog post, thread, social article and newsletter are ready." });
-      },
-      onError: () => {
-        toast({ title: "Error", description: "Could not generate content. This job may have been processed before content generation was supported.", variant: "destructive" });
       },
     });
   };
@@ -815,24 +817,11 @@ export default function Home() {
 
                   {!jobWithClips.hasContent ? (
                     <div className="rounded-xl border border-dashed border-border bg-card/20 p-10 flex flex-col items-center text-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-primary/70" />
-                      </div>
+                      <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
                       <div>
-                        <p className="font-semibold text-sm mb-1">Content not generated</p>
-                        <p className="text-xs text-muted-foreground max-w-xs">This job was processed before content generation was added, or content generation failed. You can try to generate it now using the stored transcript.</p>
+                        <p className="font-semibold text-sm mb-1">Generating content...</p>
+                        <p className="text-xs text-muted-foreground max-w-xs">Analysing the transcript to create your blog post, thread, social content, newsletter and quotes.</p>
                       </div>
-                      <Button
-                        onClick={handleGenerateContent}
-                        disabled={regenerateContent.isPending}
-                        style={{ background: 'linear-gradient(135deg, #fd9601, #f21178)' }}
-                        className="text-white border-0 shadow-sm hover:shadow-md transition-all gap-2 font-semibold"
-                      >
-                        {regenerateContent.isPending
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <FileText className="w-4 h-4" />}
-                        {regenerateContent.isPending ? "Generating..." : "Generate Content"}
-                      </Button>
                     </div>
                   ) : isContentLoading ? (
                     <div className="flex items-center justify-center py-16">
