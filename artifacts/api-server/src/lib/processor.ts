@@ -97,9 +97,31 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
 
-  // gpt-4o-mini-transcribe is the model available via the Replit AI proxy.
-  // It only supports "json" format (no per-segment timestamps), so we estimate
-  // timing by distributing words evenly across the clip duration.
+  // First, try verbose_json which returns real per-segment timestamps (best caption sync).
+  // If the proxy doesn't support that format for this model, fall back gracefully.
+  try {
+    const vResponse = await openai.audio.transcriptions.create({
+      model: "gpt-4o-mini-transcribe",
+      file: audioFile,
+      response_format: "verbose_json",
+    } as Parameters<typeof openai.audio.transcriptions.create>[0]);
+
+    const vResp = vResponse as unknown as {
+      text?: string;
+      segments?: Array<{ start: number; end: number; text: string }>;
+    };
+
+    if (Array.isArray(vResp.segments) && vResp.segments.length > 0) {
+      logger.info("Transcription using real timestamps (verbose_json)");
+      return vResp.segments
+        .filter((s) => s.text?.trim())
+        .map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
+    }
+  } catch (verboseErr) {
+    logger.warn({ verboseErr }, "verbose_json not available — falling back to json + estimation");
+  }
+
+  // Fallback: plain json gives only raw text, so we estimate timing from sentence structure.
   const response = await openai.audio.transcriptions.create({
     model: "gpt-4o-mini-transcribe",
     file: audioFile,
@@ -113,13 +135,12 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
 
   if (!rawText.trim()) return [];
 
-  // Split on sentence boundaries first to get more natural caption chunks,
-  // then trim each sentence to a max of ~4 seconds of speech.
+  // Split on sentence/clause boundaries for natural caption breaks,
+  // then assign duration proportional to character count per segment.
   const sentences = rawText
     .trim()
     .split(/(?<=[.!?])\s+/)
     .flatMap((s) => {
-      // If a sentence is very long, split it further on commas / conjunctions
       if (s.length > 120) {
         return s.split(/,\s+|\s+(?:and|but|so|because|that|which|who)\s+/i).filter(Boolean);
       }
@@ -134,8 +155,7 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
   const segments: TranscriptSegment[] = [];
   let elapsed = 0;
   for (const sentence of sentences) {
-    const fraction = sentence.length / totalChars;
-    const segDuration = fraction * duration;
+    const segDuration = (sentence.length / totalChars) * duration;
     segments.push({ start: elapsed, end: elapsed + segDuration, text: sentence });
     elapsed += segDuration;
   }
