@@ -368,7 +368,13 @@ export default function Home() {
       {/* Sidebar */}
       <div className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex fixed md:static inset-y-0 left-0 z-40 md:z-10 w-80 border-r border-border bg-card/95 md:bg-card/40 flex-col shrink-0`}>
         <div className="p-4 border-b border-border flex items-center justify-between">
-          <img src="/taw-logo.png" alt="TAW Media" className="h-12 w-auto object-contain" />
+          <div className="flex items-center gap-3">
+            <img src="/taw-logo.png" alt="TAW Media" className="h-12 w-auto object-contain" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">TAW Media</span>
+              <span className="text-sm font-bold text-foreground">Content Rocket</span>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -618,7 +624,13 @@ export default function Home() {
       <div className="flex-1 flex flex-col relative z-0 bg-background/50 min-w-0">
         {/* Mobile top bar */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card/40 sticky top-0 z-20">
-          <img src="/taw-logo.png" alt="TAW Media" className="h-9 w-auto object-contain" />
+          <div className="flex items-center gap-2.5">
+            <img src="/taw-logo.png" alt="TAW Media" className="h-9 w-auto object-contain" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">TAW Media</span>
+              <span className="text-xs font-bold text-foreground">Content Rocket</span>
+            </div>
+          </div>
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </Button>
