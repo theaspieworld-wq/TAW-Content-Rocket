@@ -91,24 +91,40 @@ async function extractAudio(videoPath: string, outputDir: string): Promise<strin
   return audioPath;
 }
 
-async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> {
+async function transcribeAudio(audioPath: string, videoDuration: number): Promise<TranscriptSegment[]> {
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
-  // whisper-1 supports verbose_json which returns segment-level timestamps for captions
+  // gpt-4o-mini-transcribe only supports 'json' format — no per-segment timestamps
+  // We estimate timing by spreading words evenly across the video duration
   const response = await openai.audio.transcriptions.create({
-    model: "whisper-1",
+    model: "gpt-4o-mini-transcribe",
     file: audioFile,
-    response_format: "verbose_json",
-    timestamp_granularities: ["segment"],
+    response_format: "json",
   } as Parameters<typeof openai.audio.transcriptions.create>[0]);
 
-  const result = response as unknown as { segments?: { start: number; end: number; text: string }[]; text?: string; duration?: number };
-  if (result.segments && result.segments.length > 0) {
-    return result.segments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
+  const rawText: string =
+    typeof response === "string"
+      ? response
+      : ((response as unknown as { text?: string }).text ?? "");
+
+  if (!rawText.trim()) return [];
+
+  const words = rawText.trim().split(/\s+/);
+  const totalWords = words.length;
+  const duration = Math.max(1, videoDuration);
+
+  // Group words into ~4-second caption chunks based on even word distribution
+  const wordsPerSec = totalWords / duration;
+  const chunkSize = Math.max(5, Math.round(wordsPerSec * 4));
+
+  const segments: TranscriptSegment[] = [];
+  for (let i = 0; i < totalWords; i += chunkSize) {
+    const chunk = words.slice(i, Math.min(i + chunkSize, totalWords));
+    const start = (i / totalWords) * duration;
+    const end = (Math.min(i + chunkSize, totalWords) / totalWords) * duration;
+    segments.push({ start, end, text: chunk.join(" ") });
   }
-  const fullText = result.text || (response as unknown as string);
-  const duration = result.duration ?? 60;
-  return [{ start: 0, end: duration, text: typeof fullText === "string" ? fullText : "" }];
+  return segments;
 }
 
 function makeFallbackClips(clipCount: number, videoDuration: number): ClipSegment[] {
@@ -434,7 +450,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
 }`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
     max_completion_tokens: 4000,
   });
@@ -497,7 +513,7 @@ export async function processJob(jobId: number): Promise<void> {
     // Step 2: Extract audio and transcribe
     await updateJobStatus(jobId, "transcribing");
     const audioPath = await extractAudio(videoPath, tempDir);
-    const transcript = await transcribeAudio(audioPath);
+    const transcript = await transcribeAudio(audioPath, videoDuration);
     // Persist transcript so content can be regenerated later without re-downloading
     await db.update(jobsTable).set({ transcript: JSON.stringify(transcript) }).where(eq(jobsTable.id, jobId));
 
