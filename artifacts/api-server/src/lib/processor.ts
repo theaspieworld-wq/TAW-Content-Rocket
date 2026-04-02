@@ -467,13 +467,13 @@ ${transcriptText}
 Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
 
 {
-  "blogPost": "Full markdown blog post. Structure: # [H1 title], ## TLDR (2-3 sentence summary), ## Introduction, ## [3-4 H2 content sections based on the transcript themes], ## Conclusion. Each section should be substantive. Target 700-900 words.",
+  "blogPost": "Full HTML blog post ready to paste into any CMS or blog editor. Use proper HTML tags: <h1> for the title, <h2> for section headings, <p> for paragraphs, <strong> for bold emphasis, <em> for italics, <ul>/<li> for lists. Structure: <h1>[Title]</h1>, <h2>Introduction</h2>, <h2>[3-4 thematic section headings from the transcript]</h2>, <h2>Conclusion</h2>, <h2>TL;DR</h2> (2-3 sentence summary — always at the very end). No inline styles. Target 700-900 words.",
   "threadPosts": [
-    "Post 1: Hook — the single most compelling insight. Max 280 chars.",
-    "Post 2: Key insight from the video. Max 280 chars.",
-    "Post 3: Another insight or tactical tip. Max 280 chars.",
-    "Post 4: Practical action step the viewer can use immediately. Max 280 chars.",
-    "Post 5: Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Max 280 chars."
+    "Hook — the single most compelling insight from the video. Start with the insight itself, no label or preamble. Max 280 chars.",
+    "Key insight from the video. Start directly with the content, no label or preamble. Max 280 chars.",
+    "Another insight or tactical tip. Start directly with the content, no label or preamble. Max 280 chars.",
+    "Practical action step the viewer can use immediately. Start directly with the content, no label or preamble. Max 280 chars.",
+    "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Start directly with the content, no label or preamble. Max 280 chars."
   ],
   "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. 4-5 paragraphs. Open with a strong statement or question. Deliver real value from the transcript. End the final paragraph with: Watch the full video here: ${youtubeUrl}",
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",

@@ -858,7 +858,7 @@ export default function Home() {
                           )}
                           <div className="p-6">
                             <div className="flex items-center justify-between mb-4">
-                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Markdown Blog Post</span>
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">HTML Blog Post</span>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -866,12 +866,18 @@ export default function Home() {
                                 onClick={() => copyToClipboard(jobContent.blogPost, "blog")}
                               >
                                 {copiedKey === "blog" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                {copiedKey === "blog" ? "Copied!" : "Copy Markdown"}
+                                {copiedKey === "blog" ? "Copied!" : "Copy HTML"}
                               </Button>
                             </div>
-                            <pre className="text-sm leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 max-h-80 overflow-y-auto text-foreground/80 border border-border/40">
-                              {jobContent.blogPost}
-                            </pre>
+                            {jobContent.blogPost.trim().startsWith('<') ? (
+                              <div className="bg-muted/30 rounded-lg p-5 border border-border/40 max-h-96 overflow-y-auto prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h1:text-xl prose-h2:text-base prose-h2:mt-5 prose-p:text-foreground/85 prose-p:leading-relaxed prose-li:text-foreground/85 prose-strong:text-foreground"
+                                dangerouslySetInnerHTML={{ __html: jobContent.blogPost }}
+                              />
+                            ) : (
+                              <pre className="text-sm leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 max-h-96 overflow-y-auto text-foreground/80 border border-border/40">
+                                {jobContent.blogPost}
+                              </pre>
+                            )}
                           </div>
                         </div>
                       </TabsContent>
@@ -884,36 +890,39 @@ export default function Home() {
                               variant="outline"
                               size="sm"
                               className="h-7 text-xs gap-1.5 border-border/60"
-                              onClick={() => copyToClipboard(jobContent.threadPosts.join("\n\n---\n\n"), "thread-all")}
+                              onClick={() => copyToClipboard(jobContent.threadPosts.map(p => p.replace(/^Post\s+\d+\s*:\s*/i, "").trim()).join("\n\n---\n\n"), "thread-all")}
                             >
                               {copiedKey === "thread-all" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                               {copiedKey === "thread-all" ? "Copied!" : "Copy All"}
                             </Button>
                           </div>
                           <div className="space-y-3">
-                            {jobContent.threadPosts.map((post, i) => (
+                            {jobContent.threadPosts.map((post, i) => {
+                              const cleanPost = post.replace(/^Post\s+\d+\s*:\s*/i, "").trim();
+                              return (
                               <div key={i} className="bg-muted/30 rounded-lg p-4 border border-border/40 group relative">
                                 <div className="flex items-start gap-3">
                                   <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
                                     {i + 1}
                                   </span>
-                                  <p className="text-sm leading-relaxed flex-1 text-foreground/85">{post}</p>
+                                  <p className="text-sm leading-relaxed flex-1 text-foreground/85">{cleanPost}</p>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => copyToClipboard(post, `thread-${i}`)}
+                                    onClick={() => copyToClipboard(cleanPost, `thread-${i}`)}
                                   >
                                     {copiedKey === `thread-${i}` ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
                                   </Button>
                                 </div>
                                 <div className="flex justify-end mt-2">
-                                  <span className={`text-[10px] font-mono ${post.length > 260 ? 'text-orange-500' : 'text-muted-foreground/50'}`}>
-                                    {post.length} / 280
+                                  <span className={`text-[10px] font-mono ${cleanPost.length > 260 ? 'text-orange-500' : 'text-muted-foreground/50'}`}>
+                                    {cleanPost.length} / 280
                                   </span>
                                 </div>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       </TabsContent>
