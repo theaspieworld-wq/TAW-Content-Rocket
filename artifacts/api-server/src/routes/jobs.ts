@@ -219,4 +219,30 @@ router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
   stream.pipe(res);
 });
 
+router.get("/clips/:clipId/download-square", async (req, res): Promise<void> => {
+  const params = DownloadClipParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [clip] = await db.select().from(clipsTable).where(eq(clipsTable.id, params.data.clipId));
+  if (!clip) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+
+  const squarePath = path.join(CLIPS_DIR, `clip_${clip.id}_square.mp4`);
+  if (!fs.existsSync(squarePath)) {
+    res.status(404).json({ error: "Square clip not ready yet — process a new job to generate it" });
+    return;
+  }
+
+  const filename = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_square.mp4`;
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Type", "video/mp4");
+
+  fs.createReadStream(squarePath).pipe(res);
+});
+
 export default router;

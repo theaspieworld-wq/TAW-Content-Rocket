@@ -93,32 +93,48 @@ async function extractAudio(videoPath: string, outputDir: string): Promise<strin
   return audioPath;
 }
 
+function parseSrtToSegments(srt: string): TranscriptSegment[] {
+  const blocks = srt.trim().split(/\n\n+/);
+  const segments: TranscriptSegment[] = [];
+  for (const block of blocks) {
+    const lines = block.trim().split("\n");
+    const timeLine = lines.find((l) => /-->/.test(l));
+    if (!timeLine) continue;
+    const m = timeLine.match(
+      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/
+    );
+    if (!m) continue;
+    const start = +m[1] * 3600 + +m[2] * 60 + +m[3] + +m[4] / 1000;
+    const end   = +m[5] * 3600 + +m[6] * 60 + +m[7] + +m[8] / 1000;
+    const timeIdx = lines.findIndex((l) => /-->/.test(l));
+    // Strip any inline SRT html tags (e.g. <i>, <b>)
+    const text = lines.slice(timeIdx + 1).join(" ").replace(/<[^>]+>/g, "").trim();
+    if (!text || end <= start) continue;
+    segments.push({ start, end, text });
+  }
+  return segments;
+}
+
 async function transcribeAudio(audioPath: string, videoDuration: number): Promise<TranscriptSegment[]> {
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
 
-  // First, try verbose_json which returns real per-segment timestamps (best caption sync).
-  // If the proxy doesn't support that format for this model, fall back gracefully.
+  // SRT format returns real per-segment timestamps — most reliable for caption sync.
   try {
-    const vResponse = await openai.audio.transcriptions.create({
+    const srtResponse = await openai.audio.transcriptions.create({
       model: "gpt-4o-mini-transcribe",
       file: audioFile,
-      response_format: "verbose_json",
+      response_format: "srt",
     } as Parameters<typeof openai.audio.transcriptions.create>[0]);
 
-    const vResp = vResponse as unknown as {
-      text?: string;
-      segments?: Array<{ start: number; end: number; text: string }>;
-    };
-
-    if (Array.isArray(vResp.segments) && vResp.segments.length > 0) {
-      logger.info("Transcription using real timestamps (verbose_json)");
-      return vResp.segments
-        .filter((s) => s.text?.trim())
-        .map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
+    const srtText = typeof srtResponse === "string" ? srtResponse : String(srtResponse);
+    const segments = parseSrtToSegments(srtText);
+    if (segments.length > 0) {
+      logger.info({ count: segments.length }, "Transcription using real SRT timestamps");
+      return segments;
     }
-  } catch (verboseErr) {
-    logger.warn({ verboseErr }, "verbose_json not available — falling back to json + estimation");
+  } catch (srtErr) {
+    logger.warn({ srtErr }, "SRT format failed — falling back to json + estimation");
   }
 
   // Fallback: plain json gives only raw text, so we estimate timing from sentence structure.
@@ -381,6 +397,129 @@ async function renderMainClip(
   }
 }
 
+async function renderSquareClip(
+  videoPath: string,
+  clipId: number,
+  title: string,
+  startSeconds: number,
+  endSeconds: number,
+  transcript: TranscriptSegment[],
+  outputPath: string,
+): Promise<void> {
+  const squareCrop = "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080";
+  const clipDuration = endSeconds - startSeconds;
+  const captionFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+
+  // Build non-overlapping caption segments (same logic as renderMainClip)
+  const rawSegments = transcript
+    .filter((s) => s.end > startSeconds && s.start < endSeconds)
+    .map((s) => ({
+      segStart: Math.max(0, s.start - startSeconds),
+      segEnd: Math.min(clipDuration, s.end - startSeconds),
+      text: s.text,
+    }))
+    .filter((s) => s.segEnd > s.segStart)
+    .sort((a, b) => a.segStart - b.segStart);
+
+  for (let i = 0; i < rawSegments.length - 1; i++) {
+    if (rawSegments[i].segEnd > rawSegments[i + 1].segStart) {
+      rawSegments[i].segEnd = rawSegments[i + 1].segStart;
+    }
+  }
+
+  const captionFilters: string[] = [];
+  for (const { segStart, segEnd, text } of rawSegments) {
+    if (segEnd <= segStart) continue;
+    const words = text.trim().toUpperCase().split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      if ((currentLine + " " + word).trim().length > 28) {
+        if (currentLine) lines.push(currentLine.trim());
+        currentLine = word;
+      } else {
+        currentLine = (currentLine + " " + word).trim();
+      }
+    }
+    if (currentLine) lines.push(currentLine.trim());
+    const captionText = escapeFfmpegText(lines.join("\\n"));
+    const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
+    captionFilters.push(
+      `drawtext=text='${captionText}':fontfile=${captionFont}:fontsize=48:fontcolor=white:x=(w-text_w)/2:y=h-th-80:enable=${enableExpr}:borderw=4:bordercolor=black@0.9:line_spacing=10`
+    );
+  }
+
+  const hasLogo = fs.existsSync(LOGO_PATH);
+  const hasCaptions = captionFilters.length > 0;
+
+  if (hasLogo && hasCaptions) {
+    const captionChain = captionFilters.join(",");
+    const filterComplex = [
+      `[0:v]${squareCrop}[bg]`,
+      `[1:v]scale=200:-1[logo]`,
+      `[bg][logo]overlay=x=(W-w)/2:y=20[base]`,
+      `[base]${captionChain}[v]`,
+    ].join(";");
+    await execFileAsync("ffmpeg", [
+      "-ss", startSeconds.toString(),
+      "-i", videoPath,
+      "-loop", "1", "-i", LOGO_PATH,
+      "-t", clipDuration.toString(),
+      "-filter_complex", filterComplex,
+      "-map", "[v]", "-map", "0:a",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-metadata", `title=${title}`,
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 300000 });
+  } else if (hasCaptions) {
+    const allFilters = [squareCrop, ...captionFilters].join(",");
+    await execFileAsync("ffmpeg", [
+      "-ss", startSeconds.toString(),
+      "-i", videoPath,
+      "-t", clipDuration.toString(),
+      "-vf", allFilters,
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-metadata", `title=${title}`,
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 300000 });
+  } else if (hasLogo) {
+    const filterComplex = [
+      `[0:v]${squareCrop}[bg]`,
+      `[1:v]scale=200:-1[logo]`,
+      `[bg][logo]overlay=x=(W-w)/2:y=20[v]`,
+    ].join(";");
+    await execFileAsync("ffmpeg", [
+      "-ss", startSeconds.toString(),
+      "-i", videoPath,
+      "-loop", "1", "-i", LOGO_PATH,
+      "-t", clipDuration.toString(),
+      "-filter_complex", filterComplex,
+      "-map", "[v]", "-map", "0:a",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-metadata", `title=${title}`,
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 300000 });
+  } else {
+    await execFileAsync("ffmpeg", [
+      "-ss", startSeconds.toString(),
+      "-i", videoPath,
+      "-t", clipDuration.toString(),
+      "-vf", squareCrop,
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-metadata", `title=${title}`,
+      "-movflags", "+faststart",
+      outputPath, "-y",
+    ], { timeout: 300000 });
+  }
+}
+
 async function renderQuoteImages(
   videoPath: string,
   jobId: number,
@@ -414,21 +553,23 @@ async function renderQuoteImages(
       if (currentLine) lines.push(currentLine.trim());
 
       const quoteText = escapeFfmpegText(lines.join("\\n"));
-      // Center text vertically in the dark overlay area (y=720 to bottom = 630px)
-      // Use ffmpeg's th variable to auto-center: y = 720 + (630 - th) / 2
-      const textY = "720+((630-th)/2)";
+      // Dark overlay covers the bottom 40% of the 1080×1080 frame: y=648, h=432
+      // Center text vertically within that dark band
+      const darkY = 648;
+      const darkH = 432;
+      const textY = `${darkY}+((${darkH}-th)/2)`;
 
       await execFileAsync("ffmpeg", [
         "-ss", timestamp.toFixed(2),
         "-i", videoPath,
         "-vframes", "1",
         "-vf", [
-          // 4:5 portrait crop — 1080×1350
-          "scale=1080:1350:force_original_aspect_ratio=increase,crop=1080:1350",
-          // Semi-transparent dark gradient at the bottom for quote readability
-          "drawbox=x=0:y=720:w=iw:h=630:color=black@0.72:t=fill",
-          // Quote text centred in the dark area, white Poppins Bold
-          `drawtext=fontfile=${fontFile}:text='${quoteText}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=${textY}:line_spacing=14:borderw=3:bordercolor=black@0.55`,
+          // 1:1 square crop — 1080×1080
+          "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080",
+          // Semi-transparent dark box in the bottom 40%
+          `drawbox=x=0:y=${darkY}:w=iw:h=${darkH}:color=black@0.75:t=fill`,
+          // Quote text ALL CAPS centred in the dark area, white Poppins Bold
+          `drawtext=fontfile=${fontFile}:text='${quoteText}':fontcolor=white:fontsize=46:x=(w-text_w)/2:y=${textY}:line_spacing=14:borderw=3:bordercolor=black@0.55`,
         ].join(","),
         "-q:v", "2",
         outputPath, "-y",
@@ -754,6 +895,23 @@ export async function processJob(jobId: number): Promise<void> {
           );
         } else {
           fs.copyFileSync(mainClipPath, finalPath);
+        }
+
+        // Render 1:1 square version for Facebook (non-fatal)
+        try {
+          const squarePath = path.join(CLIPS_DIR, `clip_${clip.id}_square.mp4`);
+          await renderSquareClip(
+            videoPath,
+            clip.id,
+            clip.title,
+            parseFloat(clip.startSeconds),
+            parseFloat(clip.endSeconds),
+            transcript,
+            squarePath,
+          );
+          logger.info({ clipId: clip.id }, "Square clip rendered successfully");
+        } catch (sqErr) {
+          logger.warn({ clipId: clip.id, err: sqErr }, "Square clip render failed — skipping");
         }
 
         await db.update(clipsTable).set({

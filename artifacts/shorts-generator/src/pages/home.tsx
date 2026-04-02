@@ -1143,13 +1143,20 @@ export default function Home() {
                             {Math.floor(clip.endSeconds / 60)}:{(Math.floor(clip.endSeconds % 60)).toString().padStart(2, '0')}
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-4 pt-0 mt-auto relative z-20 bg-card">
+                        <CardContent className="p-4 pt-0 mt-auto relative z-20 bg-card space-y-2">
                           {clip.status === 'completed' && clip.filePath ? (
-                            <Button className="w-full shadow-sm hover:shadow transition-all gap-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 font-medium" asChild>
-                              <a href={`/api/clips/${clip.id}/download`} download>
-                                <Download className="w-4 h-4" /> Download Clip
-                              </a>
-                            </Button>
+                            <>
+                              <Button className="w-full shadow-sm hover:shadow transition-all gap-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 font-medium" asChild>
+                                <a href={`/api/clips/${clip.id}/download`} download>
+                                  <Download className="w-4 h-4" /> Download Shorts (9:16)
+                                </a>
+                              </Button>
+                              <Button className="w-full shadow-sm hover:shadow transition-all gap-2 h-10 font-medium" variant="outline" asChild>
+                                <a href={`/api/clips/${clip.id}/download-square`} download>
+                                  <Download className="w-4 h-4" /> Download Facebook (1:1)
+                                </a>
+                              </Button>
+                            </>
                           ) : clip.status === 'failed' ? (
                             <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive h-10" disabled>
                               <AlertCircle className="w-4 h-4 mr-2" /> Failed
