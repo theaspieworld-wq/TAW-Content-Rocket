@@ -97,41 +97,47 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
   const audioBuffer = fs.readFileSync(audioPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
 
-  // whisper-1 with verbose_json returns real per-segment timestamps — much better caption sync
+  // gpt-4o-mini-transcribe is the model available via the Replit AI proxy.
+  // It only supports "json" format (no per-segment timestamps), so we estimate
+  // timing by distributing words evenly across the clip duration.
   const response = await openai.audio.transcriptions.create({
-    model: "whisper-1",
+    model: "gpt-4o-mini-transcribe",
     file: audioFile,
-    response_format: "verbose_json",
+    response_format: "json",
   } as Parameters<typeof openai.audio.transcriptions.create>[0]);
 
-  const resp = response as unknown as {
-    text?: string;
-    segments?: Array<{ start: number; end: number; text: string }>;
-  };
+  const rawText: string =
+    typeof response === "string"
+      ? response
+      : ((response as unknown as { text?: string }).text ?? "");
 
-  // Use real segment timestamps when available
-  if (Array.isArray(resp.segments) && resp.segments.length > 0) {
-    return resp.segments
-      .filter((s) => s.text?.trim())
-      .map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
-  }
+  if (!rawText.trim()) return [];
 
-  // Fallback: distribute words evenly if segments are missing
-  const rawText = (resp.text ?? "").trim();
-  if (!rawText) return [];
+  // Split on sentence boundaries first to get more natural caption chunks,
+  // then trim each sentence to a max of ~4 seconds of speech.
+  const sentences = rawText
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .flatMap((s) => {
+      // If a sentence is very long, split it further on commas / conjunctions
+      if (s.length > 120) {
+        return s.split(/,\s+|\s+(?:and|but|so|because|that|which|who)\s+/i).filter(Boolean);
+      }
+      return [s];
+    })
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  const words = rawText.split(/\s+/);
-  const totalWords = words.length;
+  const totalChars = sentences.reduce((n, s) => n + s.length, 0) || 1;
   const duration = Math.max(1, videoDuration);
-  const wordsPerSec = totalWords / duration;
-  const chunkSize = Math.max(5, Math.round(wordsPerSec * 4));
 
   const segments: TranscriptSegment[] = [];
-  for (let i = 0; i < totalWords; i += chunkSize) {
-    const chunk = words.slice(i, Math.min(i + chunkSize, totalWords));
-    const start = (i / totalWords) * duration;
-    const end = (Math.min(i + chunkSize, totalWords) / totalWords) * duration;
-    segments.push({ start, end, text: chunk.join(" ") });
+  let elapsed = 0;
+  for (const sentence of sentences) {
+    const fraction = sentence.length / totalChars;
+    const segDuration = fraction * duration;
+    segments.push({ start: elapsed, end: elapsed + segDuration, text: sentence });
+    elapsed += segDuration;
   }
   return segments;
 }
