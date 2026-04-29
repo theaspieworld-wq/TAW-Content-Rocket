@@ -490,8 +490,8 @@ export default function Home() {
                     </DialogHeader>
                     <form onSubmit={handleUploadOutro} className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <Label>Video File (MP4)</Label>
-                        <Input type="file" accept="video/mp4" ref={fileInputRef} required className="cursor-pointer file:cursor-pointer file:bg-primary/10 file:text-primary file:border-0 file:rounded-md file:mr-4 file:px-3 file:py-1 hover:file:bg-primary/20 text-sm" />
+                        <Label>Video File (MP4 or MOV)</Label>
+                        <Input type="file" accept="video/mp4,video/quicktime,.mp4,.mov" ref={fileInputRef} required className="cursor-pointer file:cursor-pointer file:bg-primary/10 file:text-primary file:border-0 file:rounded-md file:mr-4 file:px-3 file:py-1 hover:file:bg-primary/20 text-sm" />
                       </div>
                       <div className="space-y-2">
                         <Label>Name (Optional)</Label>
