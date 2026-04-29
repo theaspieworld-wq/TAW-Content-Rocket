@@ -416,7 +416,12 @@ components:
           type: array
           items:
             type: string
-          description: Filenames of 4:5 quote card images (1080x1350) with quote text overlaid — fetch via GET /api/images/{filename}
+          description: Filenames of quote card images — fetch via GET /api/images/{filename}
+        instagramCaptions:
+          type: array
+          items:
+            type: string
+          description: One Instagram/TikTok caption per quote — story paragraphs, hashtags, and CTA
       required:
         - videoTitle
         - thumbnailUrl
@@ -427,6 +432,7 @@ components:
         - newsletterEmail
         - quotes
         - quoteImages
+        - instagramCaptions
     Outro:
       type: object
       properties:

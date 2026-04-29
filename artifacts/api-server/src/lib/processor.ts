@@ -47,6 +47,7 @@ export interface GeneratedContent {
   newsletterEmail: NewsletterEmail;
   quotes: string[];
   quoteImages: string[];
+  instagramCaptions: string[];
 }
 
 async function updateJobStatus(jobId: number, status: string, extra?: { videoTitle?: string; errorMessage?: string }): Promise<void> {
@@ -286,82 +287,20 @@ async function renderMainClip(
   title: string,
   startSeconds: number,
   endSeconds: number,
-  transcript: TranscriptSegment[],
+  _transcript: TranscriptSegment[],
   outputPath: string,
 ): Promise<void> {
-  const captionFilters: string[] = [];
-  const captionFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
-  const clipDuration = endSeconds - startSeconds;
-
-  // Convert transcript segments to clip-relative time and remove any that fall outside the clip
-  const rawSegments = transcript
-    .filter((s) => s.end > startSeconds && s.start < endSeconds)
-    .map((s) => ({
-      segStart: Math.max(0, s.start - startSeconds),
-      segEnd: Math.min(clipDuration, s.end - startSeconds),
-      text: s.text,
-    }))
-    .filter((s) => s.segEnd > s.segStart)
-    .sort((a, b) => a.segStart - b.segStart);
-
-  // Enforce non-overlapping windows: if two segments overlap, trim the earlier one's end
-  // so at most ONE caption is ever visible at a time.
-  for (let i = 0; i < rawSegments.length - 1; i++) {
-    if (rawSegments[i].segEnd > rawSegments[i + 1].segStart) {
-      rawSegments[i].segEnd = rawSegments[i + 1].segStart;
-    }
-  }
-
-  for (const { segStart, segEnd, text } of rawSegments) {
-    if (segEnd <= segStart) continue;
-
-    // ALL CAPS captions, word-wrapped at ~30 chars per line for 1080px portrait frame
-    const words = text.trim().toUpperCase().split(/\s+/).filter(Boolean);
-    const lines: string[] = [];
-    let currentLine = "";
-    for (const word of words) {
-      if ((currentLine + " " + word).trim().length > 30) {
-        if (currentLine) lines.push(currentLine.trim());
-        currentLine = word;
-      } else {
-        currentLine = (currentLine + " " + word).trim();
-      }
-    }
-    if (currentLine) lines.push(currentLine.trim());
-
-    const captionText = escapeFfmpegText(lines.join("\\n"));
-    // Escape commas inside between() so they aren't parsed as filter separators
-    const enableExpr = `between(t\\,${segStart.toFixed(2)}\\,${segEnd.toFixed(2)})`;
-    // Bottom-third captions: 180px from the bottom of the 1920px frame
-    captionFilters.push(
-      `drawtext=text='${captionText}':fontfile=${captionFont}:fontsize=56:fontcolor=white:x=(w-text_w)/2:y=h-th-180:enable=${enableExpr}:borderw=5:bordercolor=black@0.9:line_spacing=12`
-    );
-  }
-
-  // Portrait crop strategy: scale so the video fills 1080×1920 (centre-crop).
-  // This works for any input aspect ratio — landscape, square, or portrait.
-  // scale forces the shortest side to fill the target, then crop trims the excess
-  // from the centre so the speaker stays in frame.
+  // Portrait crop: scale so the video fills 1080×1920 (centre-crop).
   const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
 
   const logoExists = fs.existsSync(LOGO_PATH);
-  let filterComplex: string;
 
   if (logoExists) {
-    if (captionFilters.length > 0) {
-      filterComplex = [
-        `[0:v]${portraitCrop}[bg]`,
-        `[1:v]scale=280:-1[logo]`,
-        `[bg][logo]overlay=x=(W-w)/2:y=30[base]`,
-        `[base]${captionFilters.join(",")}[v]`,
-      ].join(";");
-    } else {
-      filterComplex = [
-        `[0:v]${portraitCrop}[bg]`,
-        `[1:v]scale=280:-1[logo]`,
-        `[bg][logo]overlay=x=(W-w)/2:y=30[v]`,
-      ].join(";");
-    }
+    const filterComplex = [
+      `[0:v]${portraitCrop}[bg]`,
+      `[1:v]scale=280:-1[logo]`,
+      `[bg][logo]overlay=x=(W-w)/2:y=30[v]`,
+    ].join(";");
 
     await execFileAsync("ffmpeg", [
       "-ss", startSeconds.toString(),
@@ -378,16 +317,11 @@ async function renderMainClip(
       outputPath, "-y",
     ], { timeout: 300000 });
   } else {
-    // Fallback: no logo, just portrait crop/scale + captions via -vf
-    const allFilters = [
-      portraitCrop,
-      ...captionFilters,
-    ].join(",");
     await execFileAsync("ffmpeg", [
       "-ss", startSeconds.toString(),
       "-i", videoPath,
       "-t", (endSeconds - startSeconds).toString(),
-      "-vf", allFilters,
+      "-vf", portraitCrop,
       "-c:v", "libx264", "-preset", "fast", "-crf", "23",
       "-c:a", "aac", "-b:a", "128k",
       "-metadata", `title=${title}`,
@@ -642,27 +576,47 @@ function getThumbnailUrl(youtubeUrl: string): string {
   return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : "";
 }
 
+interface NewsletterSection {
+  heading: string;
+  body?: string;
+  subItems?: Array<{ label: string; description: string }>;
+}
+
 function buildNewsletterHtml(params: {
   videoTitle: string;
   thumbnailUrl: string;
   youtubeUrl: string;
-  greeting: string;
-  takeaways: string[];
-  closing: string;
+  intro: string;
+  sections: NewsletterSection[];
+  cta: string;
 }): string {
-  const { videoTitle, thumbnailUrl, youtubeUrl, greeting, takeaways, closing } = params;
-  const items = takeaways.map((t) => `<li style="margin-bottom:8px">${t}</li>`).join("");
+  const { videoTitle, thumbnailUrl, youtubeUrl, intro, sections, cta } = params;
+
+  const sectionsHtml = sections.map((sec) => {
+    const subHtml = sec.subItems && sec.subItems.length > 0
+      ? `<ul style="padding-left:0;margin:10px 0 0;list-style:none">${
+          sec.subItems.map((item) =>
+            `<li style="margin-bottom:10px"><strong>${item.label}</strong><br>${item.description}</li>`
+          ).join("")
+        }</ul>`
+      : "";
+    return [
+      `<h2 style="font-size:17px;font-weight:700;margin:28px 0 8px;color:#0d0d0d;border-left:4px solid #f21178;padding-left:10px">${sec.heading}</h2>`,
+      sec.body ? `<p style="margin:0 0 8px">${sec.body}</p>` : "",
+      subHtml,
+    ].join("");
+  }).join("");
+
   return [
-    `<div style="max-width:600px;margin:0 auto;font-family:Arial,'Helvetica Neue',sans-serif;color:#1a1a1a;line-height:1.7">`,
-    `<img src="${thumbnailUrl}" alt="${videoTitle}" style="width:100%;height:auto;border-radius:8px;margin-bottom:24px;display:block" />`,
-    `<h1 style="font-size:22px;font-weight:700;margin:0 0 20px;color:#0d0d0d">${videoTitle}</h1>`,
-    `<p>Hi [First Name],</p>`,
-    `<p>${greeting}</p>`,
-    `<h2 style="font-size:17px;font-weight:700;margin:24px 0 10px;color:#0d0d0d">Key Takeaways</h2>`,
-    `<ul style="padding-left:20px;margin:0 0 24px">${items}</ul>`,
-    `<p>${closing}</p>`,
-    `<a href="${youtubeUrl}" style="display:inline-block;background:#f21178;color:#ffffff;padding:13px 30px;text-decoration:none;border-radius:6px;font-weight:700;font-size:15px;margin:8px 0 28px">Watch the Full Video</a>`,
-    `<p style="color:#666;font-size:14px;border-top:1px solid #eee;padding-top:20px;margin-top:8px">Best,<br>The TAW Media Team</p>`,
+    `<div style="max-width:600px;margin:0 auto;font-family:Arial,'Helvetica Neue',sans-serif;color:#1a1a1a;line-height:1.7;font-size:15px">`,
+    thumbnailUrl ? `<img src="${thumbnailUrl}" alt="${videoTitle}" style="width:100%;height:auto;border-radius:8px;margin-bottom:24px;display:block" />` : "",
+    `<p style="margin:0 0 16px">Dear Valued Member,</p>`,
+    `<p style="margin:0 0 16px">${intro}</p>`,
+    sectionsHtml,
+    `<p style="margin:28px 0 8px">${cta}</p>`,
+    `<p style="margin:0 0 20px"><a href="${youtubeUrl}" style="color:#f21178;font-weight:700">Watch the full video here: ${youtubeUrl}</a></p>`,
+    `<p style="margin:24px 0 4px">Warmly,</p>`,
+    `<p style="margin:0;color:#444">The TAW Media Team</p>`,
     `</div>`,
   ].join("");
 }
@@ -686,7 +640,7 @@ ${transcriptText}
 Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
 
 {
-  "blogPost": "SEO-OPTIMISED HTML BLOG POST. OUTPUT RULES: plain HTML only — no markdown, no code fences, no backticks, no extra commentary. ALLOWED TAGS: <h1> <h2> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. SEO RULES: identify 2-3 primary keywords from the video title and transcript. Place keywords naturally in the <h1>, in at least two <h2> headings, and throughout the body paragraphs. Write in a conversational, authoritative tone that ranks well on Google. STRUCTURE — follow this ORDER exactly, no deviations: FIRST: <h1>[SEO-optimised, engaging title containing primary keyword]</h1>. SECOND: 1-2 <p> opening paragraphs that hook the reader and naturally introduce the primary keyword — NO <h2> heading above these paragraphs. THIRD: 4 to 5 themed sections each as <h2>[keyword-rich section heading]</h2> followed by 1-2 <p> paragraphs of substantive insight. FOURTH AND ABSOLUTELY LAST — the final element of the entire post, after all sections, must be: <p><strong>TL;DR:</strong> [2-3 sentence SEO summary]</p>. CRITICAL: TL;DR appears ONLY at the very end. NEVER at the top, NEVER before any section, NEVER after the <h1>. Target 700-900 words total.",
+  "blogPost": "SEO-OPTIMISED HTML BLOG POST. OUTPUT RULES: plain HTML only — no markdown, no code fences, no backticks, no extra commentary. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. SEO RULES: identify 2-3 primary keywords from the video title and transcript. Place keywords naturally in the <h1>, in at least two <h2> headings, and throughout the body paragraphs. Write in a conversational, authoritative tone that ranks well on Google. STRUCTURE — follow this ORDER exactly: FIRST: <h1>[SEO-optimised, engaging title containing primary keyword]</h1>. SECOND: 1-2 <p> opening paragraphs that hook the reader and naturally introduce the primary keyword. THIRD: 3-5 themed sections each as <h2>[keyword-rich section heading]</h2> followed by 1-2 <p> paragraphs of substantive insight. Where the video content is structured into steps or days, use <h3> for each sub-step (e.g. <h3>Day 1: Stop the Bleeding</h3>) and follow each <h3> with a short <p> and a <ul><li> list of specific action points. FOURTH AND ABSOLUTELY LAST — the final element of the entire post must be: <p><strong>TL;DR:</strong> [2-3 sentence SEO summary]</p>. CRITICAL: TL;DR appears ONLY at the very end. Target 700-900 words total.",
   "threadPosts": [
     "Hook — the single most compelling insight from the video. Start with the insight itself, no label or preamble. Max 280 chars.",
     "Key insight from the video. Start directly with the content, no label or preamble. Max 280 chars.",
@@ -694,16 +648,37 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     "Practical action step the viewer can use immediately. Start directly with the content, no label or preamble. Max 280 chars.",
     "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Start directly with the content, no label or preamble. Max 280 chars."
   ],
-  "socialArticle": "Long-form professional article for Facebook, Quora, and LinkedIn. 8-10 substantial paragraphs totalling 700-1000 words. STRUCTURE: Open with a bold statement or provocative question that hooks the reader instantly. Follow with 2-3 paragraphs of context that establish why this topic matters. Then write 4-5 body paragraphs that each explore a distinct insight, argument, or takeaway from the video transcript — each paragraph should be meaty (3-5 sentences) with specific detail, not generic statements. Write a conclusion paragraph that synthesises the key ideas and motivates the reader to act. End that final paragraph with: Watch the full video here: ${youtubeUrl}. Write in a confident, conversational tone that works on social media.",
+  "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. TARGET LENGTH: 300-400 words — no more. STRUCTURE: Open with a compelling hook (bold statement or question). 3-4 body paragraphs, each covering one distinct insight from the transcript with specific detail. Closing paragraph that motivates action, ending with: Watch the full video here: ${youtubeUrl}. Write in a confident, conversational tone. Plain text only — no bullet points, no headers.",
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
-  "newsletterGreeting": "Opening paragraph after 'Hi [First Name],' — 2-3 sentences that explain what this video covers and why it matters to the reader.",
-  "newsletterTakeaways": ["Key takeaway 1", "Key takeaway 2", "Key takeaway 3"],
-  "newsletterClosing": "One paragraph closing that builds anticipation for the video and encourages clicking the button below.",
+  "newsletterIntro": "Opening paragraph (2-3 sentences) after 'Dear Valued Member,' — explain what this video is about and why it matters. Write in a warm, professional tone.",
+  "newsletterSections": [
+    {
+      "heading": "First section heading — e.g. the core problem or context from the video",
+      "body": "1-2 sentence intro to this section explaining the key concept or insight.",
+      "subItems": []
+    },
+    {
+      "heading": "Second section heading — e.g. the solution, method, or framework from the video",
+      "body": "1 sentence framing the solution or approach.",
+      "subItems": [
+        { "label": "Step or Day 1 label", "description": "What this step involves and its key action." },
+        { "label": "Step or Day 2 label", "description": "What this step involves and its key action." },
+        { "label": "Step or Day 3 label", "description": "What this step involves and its key action." }
+      ]
+    }
+  ],
+  "newsletterCta": "1-2 sentence closing that excites the reader about watching the full video. E.g. 'Ready to [outcome]? The full video breaks down every step in detail.'",
   "quotes": [
     "Powerful verbatim or near-verbatim quote from the transcript. Max 200 chars. No attribution needed.",
     "Second quote — different theme or insight. Max 200 chars.",
     "Third quote — emotionally resonant or thought-provoking. Max 200 chars.",
     "Fourth quote — actionable or memorable. Max 200 chars."
+  ],
+  "instagramCaptions": [
+    "Long-form Instagram/TikTok caption for Quote 1. STRUCTURE: Hook line (bold statement). 3-4 story paragraphs that elaborate on the quote theme using insights from the video. A question to prompt engagement. 8-10 relevant hashtags on their own line. A CTA line (e.g. 'Comment BRAIN and I will send you the free guide.' or 'Link in bio for the full video.'). Write in first-person, conversational tone. 200-350 words.",
+    "Long-form Instagram/TikTok caption for Quote 2. Same structure as above — hook, story paragraphs, engagement question, hashtags, CTA. Different angle or insight from Quote 2.",
+    "Long-form Instagram/TikTok caption for Quote 3. Same structure. Different angle.",
+    "Long-form Instagram/TikTok caption for Quote 4. Same structure. Different angle."
   ]
 }`;
 
@@ -723,9 +698,9 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     videoTitle,
     thumbnailUrl,
     youtubeUrl,
-    greeting: g.newsletterGreeting ?? "",
-    takeaways: Array.isArray(g.newsletterTakeaways) ? g.newsletterTakeaways : [],
-    closing: g.newsletterClosing ?? "",
+    intro: g.newsletterIntro ?? "",
+    sections: Array.isArray(g.newsletterSections) ? g.newsletterSections : [],
+    cta: g.newsletterCta ?? "",
   });
 
   return {
@@ -741,6 +716,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     },
     quotes: Array.isArray(g.quotes) ? g.quotes.slice(0, 4) : [],
     quoteImages: [],
+    instagramCaptions: Array.isArray(g.instagramCaptions) ? g.instagramCaptions.slice(0, 4) : [],
   };
 }
 
@@ -799,11 +775,8 @@ export async function processJob(jobId: number): Promise<void> {
     // Step 4: Generate written content (non-fatal — job completes even if this fails)
     try {
       const content = await generateContent(job.youtubeUrl, title, transcript);
-      // Render 4:5 quote images — one per quote, frame taken from the matching clip
-      const quoteImages = await renderQuoteImages(videoPath, jobId, clipSegments, content.quotes);
-      content.quoteImages = quoteImages;
       await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
-      logger.info({ jobId, quoteImages: quoteImages.length }, "Content and quote images completed");
+      logger.info({ jobId }, "Content generation completed");
     } catch (contentErr) {
       logger.warn({ jobId, err: contentErr }, "Content generation failed — rendering will continue");
     }

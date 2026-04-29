@@ -136,6 +136,16 @@ export const GetJobContentResponse = zod.object({
     .describe(
       "4 powerful quotes from the transcript for use on social media quote cards",
     ),
+  quoteImages: zod
+    .array(zod.string())
+    .describe(
+      "Filenames of quote card images — fetch via GET \/api\/images\/{filename}",
+    ),
+  instagramCaptions: zod
+    .array(zod.string())
+    .describe(
+      "One Instagram\/TikTok caption per quote — story paragraphs, hashtags, and CTA",
+    ),
 });
 
 /**
@@ -166,6 +176,16 @@ export const RegenerateJobContentResponse = zod.object({
     .array(zod.string())
     .describe(
       "4 powerful quotes from the transcript for use on social media quote cards",
+    ),
+  quoteImages: zod
+    .array(zod.string())
+    .describe(
+      "Filenames of quote card images — fetch via GET \/api\/images\/{filename}",
+    ),
+  instagramCaptions: zod
+    .array(zod.string())
+    .describe(
+      "One Instagram\/TikTok caption per quote — story paragraphs, hashtags, and CTA",
     ),
 });
 

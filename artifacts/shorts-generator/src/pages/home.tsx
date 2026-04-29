@@ -874,7 +874,7 @@ export default function Home() {
                               </Button>
                             </div>
                             {/<(h[1-6]|p|strong|em|ul|li)\b/i.test(jobContent.blogPost) ? (
-                              <div className="bg-muted/30 rounded-lg p-5 border border-border/40 max-h-96 overflow-y-auto prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h1:text-xl prose-h2:text-base prose-h2:mt-5 prose-p:text-foreground/85 prose-p:leading-relaxed prose-li:text-foreground/85 prose-strong:text-foreground"
+                              <div className="bg-muted/30 rounded-lg p-5 border border-border/40 max-h-96 overflow-y-auto prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h1:text-xl prose-h2:text-base prose-h2:mt-5 prose-h3:text-sm prose-h3:mt-4 prose-h3:text-primary prose-p:text-foreground/85 prose-p:leading-relaxed prose-li:text-foreground/85 prose-strong:text-foreground"
                                 dangerouslySetInnerHTML={{ __html: jobContent.blogPost }}
                               />
                             ) : (
@@ -996,93 +996,87 @@ export default function Home() {
                       </TabsContent>
 
                       <TabsContent value="quotes" className="m-0">
-                        <div className="rounded-xl border border-border bg-card p-6 space-y-6">
-                          {/* Quote card images — 4:5 portrait frames with quote text burned in */}
-                          {jobContent.quoteImages && jobContent.quoteImages.length > 0 && (
-                            <div>
-                              <div className="flex items-center justify-between mb-4">
-                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Quote Card Images</span>
-                                <span className="text-[10px] text-muted-foreground">4:5 · 1080×1350px · Ready to post</span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                {jobContent.quoteImages.map((filename, i) => (
-                                  <div key={i} className="relative group rounded-xl overflow-hidden border border-border/40" style={{ aspectRatio: '4/5' }}>
-                                    <img
-                                      src={`/api/images/${filename}`}
-                                      alt={`Quote card ${i + 1}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end justify-between p-2 opacity-0 group-hover:opacity-100">
-                                      <span className="text-[10px] font-semibold text-white uppercase tracking-widest">Quote {i + 1}</span>
-                                      <a
-                                        href={`/api/images/${filename}`}
-                                        download={`quote-card-${i + 1}.jpg`}
-                                        className="inline-flex items-center gap-1 bg-white/90 text-black text-[10px] font-semibold rounded px-2 py-1"
-                                      >
-                                        <Download className="w-2.5 h-2.5" /> Save
-                                      </a>
+                        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                              <MessageSquareQuote className="w-4 h-4 text-[#f21178]" />
+                              Quotes &amp; Captions
+                            </h3>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1.5 border-border/60"
+                              onClick={() => {
+                                if (!jobContent.quotes?.length) return;
+                                const rows = jobContent.quotes.map((q, i) => {
+                                  const caption = jobContent.instagramCaptions?.[i] ?? "";
+                                  return `"${q.replace(/"/g, '""')}","${caption.replace(/"/g, '""')}"`;
+                                });
+                                const csv = `"Quote","Instagram / TikTok Caption"\n${rows.join("\n")}`;
+                                const blob = new Blob([csv], { type: "text/csv" });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `quotes-${jobWithClips.id}.csv`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                            >
+                              <Download className="w-3 h-3" /> Export CSV
+                            </Button>
+                          </div>
+
+                          {jobContent.quotes && jobContent.quotes.length > 0 ? (
+                            <div className="space-y-6">
+                              {jobContent.quotes.map((quote, i) => {
+                                const caption = jobContent.instagramCaptions?.[i] ?? "";
+                                return (
+                                  <div key={i} className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden">
+                                    {/* Quote row */}
+                                    <div className="p-4 border-b border-border/40">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-bold text-foreground uppercase tracking-widest">Quote</span>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-6 text-[10px] gap-1 border-border/50 px-2"
+                                          onClick={() => copyToClipboard(quote, `quote-${i}`)}
+                                        >
+                                          {copiedKey === `quote-${i}` ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}
+                                          {copiedKey === `quote-${i}` ? "Copied!" : "Copy"}
+                                        </Button>
+                                      </div>
+                                      <p className="text-sm leading-relaxed text-foreground font-medium italic border-l-2 pl-3" style={{ borderColor: i % 2 === 0 ? '#f21178' : '#fd9601' }}>
+                                        "{quote}"
+                                      </p>
                                     </div>
+                                    {/* Instagram / TikTok Caption row */}
+                                    {caption && (
+                                      <div className="p-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-xs font-bold text-foreground uppercase tracking-widest">Instagram / TikTok Caption</span>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 text-[10px] gap-1 border-border/50 px-2"
+                                            onClick={() => copyToClipboard(caption, `caption-${i}`)}
+                                          >
+                                            {copiedKey === `caption-${i}` ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}
+                                            {copiedKey === `caption-${i}` ? "Copied!" : "Copy"}
+                                          </Button>
+                                        </div>
+                                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{caption}</p>
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-center py-10 text-muted-foreground text-sm">
+                              No quotes available. Regenerate content to include quotes.
                             </div>
                           )}
-
-                          {/* Quote text cards with copy + CSV export */}
-                          <div>
-                            <div className="flex items-center justify-between mb-4">
-                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Quote Text</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs gap-1.5 border-border/60"
-                                onClick={() => {
-                                  if (!jobContent.quotes?.length) return;
-                                  const csv = ["Quote", ...jobContent.quotes].map((q, i) =>
-                                    i === 0 ? `"${q}"` : `"${q.replace(/"/g, '""')}"`
-                                  ).join("\n");
-                                  const blob = new Blob([csv], { type: "text/csv" });
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement("a");
-                                  a.href = url;
-                                  a.download = `quotes-${jobWithClips.id}.csv`;
-                                  a.click();
-                                  URL.revokeObjectURL(url);
-                                }}
-                              >
-                                <Download className="w-3 h-3" /> Export CSV
-                              </Button>
-                            </div>
-                            {jobContent.quotes && jobContent.quotes.length > 0 ? (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {jobContent.quotes.map((quote, i) => (
-                                  <div
-                                    key={i}
-                                    className="relative rounded-xl p-5 border border-border/60 bg-gradient-to-br from-card to-muted/20 group"
-                                  >
-                                    <MessageSquareQuote className="w-6 h-6 text-[#f21178]/30 mb-3" />
-                                    <p className="text-sm leading-relaxed text-foreground font-medium">{quote}</p>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="absolute top-3 right-3 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                      onClick={() => copyToClipboard(quote, `quote-${i}`)}
-                                    >
-                                      {copiedKey === `quote-${i}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                    </Button>
-                                    <div className="mt-4 pt-3 border-t border-border/30 flex items-center gap-1.5">
-                                      <div className="w-2 h-2 rounded-full" style={{ background: i % 2 === 0 ? '#f21178' : '#fd9601' }} />
-                                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Quote {i + 1}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-center py-10 text-muted-foreground text-sm">
-                                No quotes available. Regenerate content to include quotes.
-                              </div>
-                            )}
-                          </div>
                         </div>
                       </TabsContent>
                     </Tabs>

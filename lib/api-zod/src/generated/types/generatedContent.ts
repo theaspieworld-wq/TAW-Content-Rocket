@@ -20,4 +20,8 @@ export interface GeneratedContent {
   newsletterEmail: NewsletterEmail;
   /** 4 powerful quotes from the transcript for use on social media quote cards */
   quotes: string[];
+  /** Filenames of quote card images — fetch via GET /api/images/{filename} */
+  quoteImages: string[];
+  /** One Instagram/TikTok caption per quote — story paragraphs, hashtags, and CTA */
+  instagramCaptions: string[];
 }

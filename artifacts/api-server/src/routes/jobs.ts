@@ -162,16 +162,6 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
 
   const content = await generateContent(job.youtubeUrl, videoTitle, transcript);
 
-  // Preserve existing quote images (video no longer available to re-render)
-  if (job.generatedContent) {
-    try {
-      const existing = JSON.parse(job.generatedContent);
-      if (Array.isArray(existing.quoteImages) && existing.quoteImages.length > 0) {
-        content.quoteImages = existing.quoteImages;
-      }
-    } catch (_) {}
-  }
-
   await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, job.id));
 
   res.json(content);
