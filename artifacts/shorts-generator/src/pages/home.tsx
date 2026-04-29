@@ -75,7 +75,7 @@ import { Label } from "@/components/ui/label";
 
 const formSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid YouTube URL" }),
-  clipCount: z.coerce.number().min(1).max(10).default(3),
+  clipCount: z.coerce.number().min(1).max(10).default(9),
   outroId: z.string().optional()
 });
 
@@ -213,7 +213,7 @@ export default function Home() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       youtubeUrl: "",
-      clipCount: 3,
+      clipCount: 9,
       outroId: defaultOutro ? String(defaultOutro.id) : "none"
     }
   });
@@ -236,7 +236,7 @@ export default function Home() {
       onSuccess: (newJob) => {
         form.reset({
           youtubeUrl: "",
-          clipCount: 3,
+          clipCount: 9,
           outroId: values.outroId
         });
         setSelectedJobId(newJob.id);

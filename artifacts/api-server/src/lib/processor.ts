@@ -594,29 +594,29 @@ function buildNewsletterHtml(params: {
 
   const sectionsHtml = sections.map((sec) => {
     const subHtml = sec.subItems && sec.subItems.length > 0
-      ? `<ul style="padding-left:0;margin:10px 0 0;list-style:none">${
+      ? `<ul style="padding-left:20px;margin:8px 0 12px">${
           sec.subItems.map((item) =>
-            `<li style="margin-bottom:10px"><strong>${item.label}</strong><br>${item.description}</li>`
+            `<li style="margin-bottom:8px"><strong>${item.label}</strong> — ${item.description}</li>`
           ).join("")
         }</ul>`
       : "";
     return [
-      `<h2 style="font-size:17px;font-weight:700;margin:28px 0 8px;color:#0d0d0d;border-left:4px solid #f21178;padding-left:10px">${sec.heading}</h2>`,
-      sec.body ? `<p style="margin:0 0 8px">${sec.body}</p>` : "",
+      `<h2 style="font-size:16px;font-weight:700;margin:24px 0 6px;color:#0d0d0d">${sec.heading}</h2>`,
+      sec.body ? `<p style="margin:0 0 6px">${sec.body}</p>` : "",
       subHtml,
     ].join("");
   }).join("");
 
   return [
-    `<div style="max-width:600px;margin:0 auto;font-family:Arial,'Helvetica Neue',sans-serif;color:#1a1a1a;line-height:1.7;font-size:15px">`,
-    thumbnailUrl ? `<img src="${thumbnailUrl}" alt="${videoTitle}" style="width:100%;height:auto;border-radius:8px;margin-bottom:24px;display:block" />` : "",
-    `<p style="margin:0 0 16px">Dear Valued Member,</p>`,
-    `<p style="margin:0 0 16px">${intro}</p>`,
+    `<div style="max-width:600px;margin:0 auto;font-family:Georgia,serif;color:#1a1a1a;line-height:1.8;font-size:15px">`,
+    thumbnailUrl ? `<img src="${thumbnailUrl}" alt="${videoTitle}" style="width:100%;height:auto;margin-bottom:24px;display:block" />` : "",
+    `<p style="margin:0 0 14px">Dear Valued Member,</p>`,
+    `<p style="margin:0 0 14px">${intro}</p>`,
     sectionsHtml,
-    `<p style="margin:28px 0 8px">${cta}</p>`,
-    `<p style="margin:0 0 20px"><a href="${youtubeUrl}" style="color:#f21178;font-weight:700">Watch the full video here: ${youtubeUrl}</a></p>`,
+    `<p style="margin:24px 0 14px">${cta}</p>`,
+    `<p style="margin:0 0 14px">Watch the full video here: <a href="${youtubeUrl}" style="color:#f21178">${youtubeUrl}</a></p>`,
     `<p style="margin:24px 0 4px">Warmly,</p>`,
-    `<p style="margin:0;color:#444">The TAW Media Team</p>`,
+    `<p style="margin:0">The TAW Media Team</p>`,
     `</div>`,
   ].join("");
 }
@@ -640,7 +640,7 @@ ${transcriptText}
 Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
 
 {
-  "blogPost": "SEO-OPTIMISED HTML BLOG POST. OUTPUT RULES: plain HTML only — no markdown, no code fences, no backticks, no extra commentary. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. SEO RULES: identify 2-3 primary keywords from the video title and transcript. Place keywords naturally in the <h1>, in at least two <h2> headings, and throughout the body paragraphs. Write in a conversational, authoritative tone that ranks well on Google. STRUCTURE — follow this ORDER exactly: FIRST: <h1>[SEO-optimised, engaging title containing primary keyword]</h1>. SECOND: 1-2 <p> opening paragraphs that hook the reader and naturally introduce the primary keyword. THIRD: 3-5 themed sections each as <h2>[keyword-rich section heading]</h2> followed by 1-2 <p> paragraphs of substantive insight. Where the video content is structured into steps or days, use <h3> for each sub-step (e.g. <h3>Day 1: Stop the Bleeding</h3>) and follow each <h3> with a short <p> and a <ul><li> list of specific action points. FOURTH AND ABSOLUTELY LAST — the final element of the entire post must be: <p><strong>TL;DR:</strong> [2-3 sentence SEO summary]</p>. CRITICAL: TL;DR appears ONLY at the very end. Target 700-900 words total.",
+  "blogPost": "SEO-OPTIMISED HTML BLOG POST. OUTPUT RULES: plain HTML only — no markdown, no code fences, no backticks, no extra commentary. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. SEO RULES: identify 2-3 primary keywords from the video title and transcript. Place keywords naturally in the <h1>, in at least two <h2> headings, and throughout the body paragraphs. Write in a conversational, authoritative tone that ranks well on Google. STRUCTURE — follow this ORDER exactly: FIRST: <h1>[SEO-optimised, engaging title containing primary keyword]</h1>. SECOND: 2-3 <p> opening paragraphs that hook the reader and naturally introduce the primary keyword — go deep, establish the problem and why it matters. THIRD: 6-8 themed sections each as <h2>[keyword-rich section heading]</h2> followed by 2-3 <p> paragraphs of substantive, detailed insight per section. Where the video content is structured into steps or days, use <h3> for each sub-step (e.g. <h3>Day 1: Stop the Bleeding</h3>) and follow each <h3> with 1-2 <p> paragraphs and a <ul><li> list of specific action points. FOURTH AND ABSOLUTELY LAST — the final element of the entire post must be: <p><strong>TL;DR:</strong> [3-4 sentence SEO summary]</p>. CRITICAL: TL;DR appears ONLY at the very end. TARGET: minimum 1500 words — write in full, do not truncate.",
   "threadPosts": [
     "Hook — the single most compelling insight from the video. Start with the insight itself, no label or preamble. Max 280 chars.",
     "Key insight from the video. Start directly with the content, no label or preamble. Max 280 chars.",
@@ -648,44 +648,46 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     "Practical action step the viewer can use immediately. Start directly with the content, no label or preamble. Max 280 chars.",
     "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Start directly with the content, no label or preamble. Max 280 chars."
   ],
-  "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. TARGET LENGTH: 300-400 words — no more. STRUCTURE: Open with a compelling hook (bold statement or question). 3-4 body paragraphs, each covering one distinct insight from the transcript with specific detail. Closing paragraph that motivates action, ending with: Watch the full video here: ${youtubeUrl}. Write in a confident, conversational tone. Plain text only — no bullet points, no headers.",
+  "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. TARGET LENGTH: exactly 500 words — write in full, do not truncate or pad. STRUCTURE: Open with a compelling hook — a bold statement or provocative question. Follow with 4-5 body paragraphs, each covering a distinct insight from the transcript with specific, concrete detail. Closing paragraph that motivates action — end ONLY with this exact call to action on its own line: 'FREE autism life hacks book — link in comments.' DO NOT include a video URL or any other link. Plain text only — no bullet points, no headers.",
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
-  "newsletterIntro": "Opening paragraph (2-3 sentences) after 'Dear Valued Member,' — explain what this video is about and why it matters. Write in a warm, professional tone.",
+  "newsletterIntro": "Opening paragraph (3-4 sentences) after 'Dear Valued Member,' — explain what this video is about, why it matters, and what the reader will gain. Write in a warm, conversational tone.",
   "newsletterSections": [
     {
-      "heading": "First section heading — e.g. the core problem or context from the video",
-      "body": "1-2 sentence intro to this section explaining the key concept or insight.",
+      "heading": "First section heading — the core problem or context explored in the video",
+      "body": "2-3 sentences of substantive insight explaining the key concept, why conventional wisdom fails, and what the video reveals.",
       "subItems": []
     },
     {
-      "heading": "Second section heading — e.g. the solution, method, or framework from the video",
-      "body": "1 sentence framing the solution or approach.",
+      "heading": "Second section heading — the solution, method, or framework taught in the video",
+      "body": "1-2 sentences framing the approach and why it works.",
       "subItems": [
-        { "label": "Step or Day 1 label", "description": "What this step involves and its key action." },
-        { "label": "Step or Day 2 label", "description": "What this step involves and its key action." },
-        { "label": "Step or Day 3 label", "description": "What this step involves and its key action." }
+        { "label": "Step or Day 1 label", "description": "Concise description of what this step involves and its specific action or outcome." },
+        { "label": "Step or Day 2 label", "description": "Concise description of what this step involves and its specific action or outcome." },
+        { "label": "Step or Day 3 label", "description": "Concise description of what this step involves and its specific action or outcome." }
       ]
     }
   ],
-  "newsletterCta": "1-2 sentence closing that excites the reader about watching the full video. E.g. 'Ready to [outcome]? The full video breaks down every step in detail.'",
+  "newsletterCta": "2-3 sentences of enthusiastic closing text that describes what the reader will gain from watching the full video. Build genuine anticipation. No button — just text.",
   "quotes": [
-    "Powerful verbatim or near-verbatim quote from the transcript. Max 200 chars. No attribution needed.",
-    "Second quote — different theme or insight. Max 200 chars.",
-    "Third quote — emotionally resonant or thought-provoking. Max 200 chars.",
-    "Fourth quote — actionable or memorable. Max 200 chars."
+    "Powerful verbatim or near-verbatim quote from the transcript. Max 220 chars. No attribution needed.",
+    "Second quote — different theme or insight from the transcript. Max 220 chars.",
+    "Third quote — emotionally resonant or thought-provoking. Max 220 chars.",
+    "Fourth quote — actionable or memorable. Max 220 chars.",
+    "Fifth quote — a fresh angle not covered by the above four. Max 220 chars."
   ],
   "instagramCaptions": [
-    "Long-form Instagram/TikTok caption for Quote 1. STRUCTURE: Hook line (bold statement). 3-4 story paragraphs that elaborate on the quote theme using insights from the video. A question to prompt engagement. 8-10 relevant hashtags on their own line. A CTA line (e.g. 'Comment BRAIN and I will send you the free guide.' or 'Link in bio for the full video.'). Write in first-person, conversational tone. 200-350 words.",
-    "Long-form Instagram/TikTok caption for Quote 2. Same structure as above — hook, story paragraphs, engagement question, hashtags, CTA. Different angle or insight from Quote 2.",
+    "Long-form Instagram/TikTok caption for Quote 1. STRUCTURE: Hook line that grabs attention. 3-4 story paragraphs in first-person that elaborate on the quote theme using real insights from the video. An open question to prompt comments. 8-10 relevant hashtags on their own line. CTA line (e.g. 'Comment BRAIN below and I will send you the free guide.' or 'Link in bio for the full video.'). 250-350 words total.",
+    "Long-form Instagram/TikTok caption for Quote 2. Same structure — hook, story paragraphs, question, hashtags, CTA. Different angle from Quote 2.",
     "Long-form Instagram/TikTok caption for Quote 3. Same structure. Different angle.",
-    "Long-form Instagram/TikTok caption for Quote 4. Same structure. Different angle."
+    "Long-form Instagram/TikTok caption for Quote 4. Same structure. Different angle.",
+    "Long-form Instagram/TikTok caption for Quote 5. Same structure. Different angle."
   ]
 }`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
-    max_completion_tokens: 6000,
+    max_completion_tokens: 10000,
   });
 
   const rawContent = response.choices[0]?.message?.content ?? "{}";
@@ -714,9 +716,9 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       subject: g.newsletterSubject ?? "",
       body: newsletterHtml,
     },
-    quotes: Array.isArray(g.quotes) ? g.quotes.slice(0, 4) : [],
+    quotes: Array.isArray(g.quotes) ? g.quotes.slice(0, 5) : [],
     quoteImages: [],
-    instagramCaptions: Array.isArray(g.instagramCaptions) ? g.instagramCaptions.slice(0, 4) : [],
+    instagramCaptions: Array.isArray(g.instagramCaptions) ? g.instagramCaptions.slice(0, 5) : [],
   };
 }
 
