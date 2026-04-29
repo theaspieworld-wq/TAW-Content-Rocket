@@ -610,13 +610,13 @@ function buildNewsletterHtml(params: {
   return [
     `<div style="max-width:600px;margin:0 auto;font-family:Georgia,serif;color:#1a1a1a;line-height:1.8;font-size:15px">`,
     thumbnailUrl ? `<img src="${thumbnailUrl}" alt="${videoTitle}" style="width:100%;height:auto;margin-bottom:24px;display:block" />` : "",
-    `<p style="margin:0 0 14px">Dear Valued Member,</p>`,
+    `<p style="margin:0 0 14px">Hey!</p>`,
     `<p style="margin:0 0 14px">${intro}</p>`,
     sectionsHtml,
     `<p style="margin:24px 0 14px">${cta}</p>`,
     `<p style="margin:0 0 14px">Watch the full video here: <a href="${youtubeUrl}" style="color:#f21178">${youtubeUrl}</a></p>`,
-    `<p style="margin:24px 0 4px">Warmly,</p>`,
-    `<p style="margin:0">The TAW Media Team</p>`,
+    `<p style="margin:24px 0 4px">Speak soon,</p>`,
+    `<p style="margin:0">Dan &amp; The TAW Media Team</p>`,
     `</div>`,
   ].join("");
 }
@@ -650,7 +650,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
   ],
   "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. OUTPUT: plain HTML only — no markdown, no code fences, no backticks. ALLOWED TAGS: <h2> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. TARGET LENGTH: 500 words — write in full, do not truncate. STRUCTURE: Open with a <p> hook — a bold statement or provocative question using <strong> for emphasis. Then 2-3 themed <h2> subheadings each followed by 1-2 <p> paragraphs of substantive insight. Where natural, include one <ul><li> list of 3-5 concrete points under a subheading. Close with a <p> that motivates action — end ONLY with this exact text as the final sentence: 'FREE autism life hacks book — link in comments.' DO NOT include a video URL or any other link.",
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
-  "newsletterIntro": "Opening paragraph (3-4 sentences) after 'Dear Valued Member,' — explain what this video is about, why it matters, and what the reader will gain. Write in a warm, conversational tone.",
+  "newsletterIntro": "Opening paragraph (3-4 sentences) written after 'Hey!' — jump straight into what this video is about and why the reader needs to see it. Write exactly like Dan from The Aspie World: direct, upbeat, no corporate fluff, slightly cheeky, speaks to the neurodivergent community like a mate who gets it. Use short punchy sentences. No 'Dear Valued Member' or formal sign-off language in this paragraph.",
   "newsletterSections": [
     {
       "heading": "First section heading — the core problem or context explored in the video",
