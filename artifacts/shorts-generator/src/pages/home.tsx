@@ -939,14 +939,36 @@ export default function Home() {
                               variant="outline"
                               size="sm"
                               className="h-7 text-xs gap-1.5 border-border/60"
-                              onClick={() => copyToClipboard(jobContent.socialArticle, "social")}
+                              onClick={() => {
+                                // Strip HTML tags to plain text for pasting into social platforms
+                                const plain = jobContent.socialArticle
+                                  .replace(/<h2[^>]*>/gi, "\n\n")
+                                  .replace(/<\/h2>/gi, "\n")
+                                  .replace(/<\/p>/gi, "\n\n")
+                                  .replace(/<li[^>]*>/gi, "• ")
+                                  .replace(/<\/li>/gi, "\n")
+                                  .replace(/<[^>]+>/g, "")
+                                  .replace(/&amp;/g, "&")
+                                  .replace(/&lt;/g, "<")
+                                  .replace(/&gt;/g, ">")
+                                  .replace(/\n{3,}/g, "\n\n")
+                                  .trim();
+                                copyToClipboard(plain, "social");
+                              }}
                             >
                               {copiedKey === "social" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                               {copiedKey === "social" ? "Copied!" : "Copy Article"}
                             </Button>
                           </div>
-                          <div className="bg-muted/30 rounded-lg p-5 border border-border/40">
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{jobContent.socialArticle}</p>
+                          <div className="bg-muted/30 rounded-lg p-5 border border-border/40 max-h-[500px] overflow-y-auto">
+                            {/<(h2|p|strong|ul|li)\b/i.test(jobContent.socialArticle) ? (
+                              <div
+                                className="prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h2:text-base prose-h2:mt-5 prose-h2:mb-2 prose-p:text-foreground/85 prose-p:leading-relaxed prose-p:mb-3 prose-li:text-foreground/85 prose-ul:my-2 prose-strong:text-foreground"
+                                dangerouslySetInnerHTML={{ __html: jobContent.socialArticle }}
+                              />
+                            ) : (
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{jobContent.socialArticle}</p>
+                            )}
                           </div>
                         </div>
                       </TabsContent>
