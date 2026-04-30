@@ -629,7 +629,8 @@ export async function generateContent(
   const thumbnailUrl = getThumbnailUrl(youtubeUrl);
   const transcriptText = transcript.map((s) => s.text).join(" ").slice(0, 10000);
 
-  const prompt = `You are a professional content creator for TAW Media. Based on this YouTube video transcript, generate content for four formats.
+  // ── Call A: short-form content (quotes, captions, newsletter, thread) ─────────
+  const promptA = `You are a professional content creator for TAW Media. Based on this YouTube video transcript, generate short-form social media content.
 
 VIDEO TITLE: ${videoTitle}
 VIDEO URL: ${youtubeUrl}
@@ -640,85 +641,110 @@ ${transcriptText}
 Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
 
 {
-  "blogPost": "SEO-OPTIMISED HTML BLOG POST. OUTPUT RULES: plain HTML only — no markdown, no code fences, no backticks, no extra commentary. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. SEO RULES: identify 2-3 primary keywords from the video title and transcript. Place keywords naturally in the <h1>, in at least two <h2> headings, and throughout the body paragraphs. Write in a conversational, authoritative tone that ranks well on Google. STRUCTURE — follow this ORDER exactly: FIRST: <h1>[SEO-optimised, engaging title containing primary keyword]</h1>. SECOND: 2-3 <p> opening paragraphs that hook the reader and naturally introduce the primary keyword — go deep, establish the problem and why it matters. THIRD: 6-8 themed sections each as <h2>[keyword-rich section heading]</h2> followed by 2-3 <p> paragraphs of substantive, detailed insight per section. Where the video content is structured into steps or days, use <h3> for each sub-step (e.g. <h3>Day 1: Stop the Bleeding</h3>) and follow each <h3> with 1-2 <p> paragraphs and a <ul><li> list of specific action points. FOURTH AND ABSOLUTELY LAST — the final element of the entire post must be: <p><strong>TL;DR:</strong> [3-4 sentence SEO summary]</p>. CRITICAL: TL;DR appears ONLY at the very end. TARGET: minimum 1500 words — write in full, do not truncate.",
-  "threadPosts": [
-    "Hook — the single most compelling insight from the video. Start with the insight itself, no label or preamble. Max 280 chars.",
-    "Key insight from the video. Start directly with the content, no label or preamble. Max 280 chars.",
-    "Another insight or tactical tip. Start directly with the content, no label or preamble. Max 280 chars.",
-    "Practical action step the viewer can use immediately. Start directly with the content, no label or preamble. Max 280 chars.",
-    "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Start directly with the content, no label or preamble. Max 280 chars."
-  ],
-  "socialArticle": "Professional article for Facebook, Quora, and LinkedIn. OUTPUT: plain HTML only — no markdown, no code fences, no backticks. ALLOWED TAGS: <h2> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. TARGET LENGTH: 500 words — write in full, do not truncate. STRUCTURE: Open with a <p> hook — a bold statement or provocative question using <strong> for emphasis. Then 2-3 themed <h2> subheadings each followed by 1-2 <p> paragraphs of substantive insight. Where natural, include one <ul><li> list of 3-5 concrete points under a subheading. Close with a <p> that motivates action — end ONLY with this exact text as the final sentence: 'FREE autism life hacks book — link in comments.' DO NOT include a video URL or any other link.",
-  "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
-  "newsletterIntro": "Opening paragraph (3-4 sentences) written after 'Hey!' — jump straight into what this video is about and why the reader needs to see it. Write exactly like Dan from The Aspie World: direct, upbeat, no corporate fluff, slightly cheeky, speaks to the neurodivergent community like a mate who gets it. Use short punchy sentences. No 'Dear Valued Member' or formal sign-off language in this paragraph.",
-  "newsletterSections": [
-    {
-      "heading": "First section heading — the core problem or context explored in the video",
-      "body": "2-3 sentences of substantive insight explaining the key concept, why conventional wisdom fails, and what the video reveals.",
-      "subItems": []
-    },
-    {
-      "heading": "Second section heading — the solution, method, or framework taught in the video",
-      "body": "1-2 sentences framing the approach and why it works.",
-      "subItems": [
-        { "label": "Step or Day 1 label", "description": "Concise description of what this step involves and its specific action or outcome." },
-        { "label": "Step or Day 2 label", "description": "Concise description of what this step involves and its specific action or outcome." },
-        { "label": "Step or Day 3 label", "description": "Concise description of what this step involves and its specific action or outcome." }
-      ]
-    }
-  ],
-  "newsletterCta": "2-3 sentences of enthusiastic closing text that describes what the reader will gain from watching the full video. Build genuine anticipation. No button — just text.",
   "quotes": [
-    "Powerful verbatim or near-verbatim quote from the transcript. Max 220 chars. No attribution needed.",
-    "Second quote — different theme or insight from the transcript. Max 220 chars.",
+    "Powerful verbatim or near-verbatim quote from the transcript. Max 220 chars. No attribution.",
+    "Second quote — different theme or insight. Max 220 chars.",
     "Third quote — emotionally resonant or thought-provoking. Max 220 chars.",
     "Fourth quote — actionable or memorable. Max 220 chars.",
     "Fifth quote — a fresh angle not covered by the above four. Max 220 chars."
   ],
   "instagramCaptions": [
-    "Long-form Instagram/TikTok caption for Quote 1. STRUCTURE: Hook line that grabs attention. 3-4 story paragraphs in first-person that elaborate on the quote theme using real insights from the video. An open question to prompt comments. 8-10 relevant hashtags on their own line. CTA line (e.g. 'Comment BRAIN below and I will send you the free guide.' or 'Link in bio for the full video.'). 250-350 words total.",
-    "Long-form Instagram/TikTok caption for Quote 2. Same structure — hook, story paragraphs, question, hashtags, CTA. Different angle from Quote 2.",
-    "Long-form Instagram/TikTok caption for Quote 3. Same structure. Different angle.",
-    "Long-form Instagram/TikTok caption for Quote 4. Same structure. Different angle.",
-    "Long-form Instagram/TikTok caption for Quote 5. Same structure. Different angle."
-  ]
+    "Instagram/TikTok caption for Quote 1. Hook line that grabs attention. 3-4 first-person story paragraphs elaborating on the quote theme using real insights from the video. Open question to prompt comments. 8-10 relevant hashtags on their own line. CTA line (e.g. 'Comment BRAIN below and I will DM you the free guide.'). 250-350 words total.",
+    "Instagram/TikTok caption for Quote 2. Same structure — hook, story paragraphs, question, hashtags, CTA. Different angle from Quote 2.",
+    "Instagram/TikTok caption for Quote 3. Same structure. Different angle.",
+    "Instagram/TikTok caption for Quote 4. Same structure. Different angle.",
+    "Instagram/TikTok caption for Quote 5. Same structure. Different angle."
+  ],
+  "threadPosts": [
+    "Hook — the single most compelling insight from the video. Start with the insight, no preamble. Max 280 chars.",
+    "Key insight from the video. Start directly with the content. Max 280 chars.",
+    "Another insight or tactical tip. Max 280 chars.",
+    "Practical action step the viewer can use immediately. Max 280 chars.",
+    "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Max 280 chars."
+  ],
+  "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
+  "newsletterIntro": "3-4 sentences written after 'Hey!' — jump straight into what this video is about and why the reader needs to see it. Write exactly like Dan from The Aspie World: direct, upbeat, no corporate fluff, slightly cheeky, speaks to the neurodivergent community like a mate who gets it. Short punchy sentences. Do NOT start with 'Hey' — that is already in the template.",
+  "newsletterSections": [
+    {
+      "heading": "First section heading — the core problem or context from the video",
+      "body": "2-3 sentences explaining the key concept, why conventional wisdom fails, and what the video reveals.",
+      "subItems": []
+    },
+    {
+      "heading": "Second section heading — the solution or framework taught in the video",
+      "body": "1-2 sentences framing the approach and why it works.",
+      "subItems": [
+        { "label": "Step or Day 1 label", "description": "What this step involves and its specific action or outcome." },
+        { "label": "Step or Day 2 label", "description": "What this step involves and its specific action or outcome." },
+        { "label": "Step or Day 3 label", "description": "What this step involves and its specific action or outcome." }
+      ]
+    }
+  ],
+  "newsletterCta": "2-3 sentences of enthusiastic closing that describes what the reader will gain from watching the full video. No button — plain text only."
 }`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
-    max_completion_tokens: 10000,
-  });
+  // ── Call B: long-form content (blog + article) ─────────────────────────────
+  const promptB = `You are a professional content creator for TAW Media. Based on this YouTube video transcript, generate long-form written content.
 
-  const rawContent = response.choices[0]?.message?.content ?? "{}";
-  const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI returned no valid JSON for content generation");
+VIDEO TITLE: ${videoTitle}
+VIDEO URL: ${youtubeUrl}
 
-  const g = JSON.parse(jsonMatch[0]);
+TRANSCRIPT:
+${transcriptText}
+
+Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
+
+{
+  "blogPost": "SEO-OPTIMISED HTML BLOG POST. OUTPUT RULES: plain HTML only — no markdown, no code fences. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. SEO: identify 2-3 primary keywords; place them in the <h1>, in at least two <h2>s, and throughout the body. STRUCTURE in order: (1) <h1> SEO title. (2) 2-3 <p> opening hook paragraphs. (3) 6-8 <h2> sections each with 2-3 <p> body paragraphs; use <h3> for step or day sub-sections followed by a <ul><li> list. (4) LAST element: <p><strong>TL;DR:</strong> 3-4 sentence summary</p>. TARGET: minimum 1500 words.",
+  "socialArticle": "HTML article for Facebook, Quora, LinkedIn. ALLOWED TAGS: <h2> <p> <strong> <em> <ul> <li> only. No classes, no styles, no divs. TARGET: 500 words. STRUCTURE: <p> hook with <strong> emphasis. 2-3 <h2> sections with 1-2 <p> each. One <ul><li> list of 3-5 points where natural. Final <p> ending ONLY with: 'FREE autism life hacks book — link in comments.' No video URL, no other links."
+}`;
+
+  // Run both calls in parallel
+  const [responseA, responseB] = await Promise.all([
+    openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: promptA }],
+      max_completion_tokens: 8000,
+    }),
+    openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: promptB }],
+      max_completion_tokens: 8000,
+    }),
+  ]);
+
+  const parseJson = (raw: string): Record<string, unknown> => {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return {};
+    try { return JSON.parse(match[0]); } catch { return {}; }
+  };
+
+  const a = parseJson(responseA.choices[0]?.message?.content ?? "{}");
+  const b = parseJson(responseB.choices[0]?.message?.content ?? "{}");
 
   const newsletterHtml = buildNewsletterHtml({
     videoTitle,
     thumbnailUrl,
     youtubeUrl,
-    intro: g.newsletterIntro ?? "",
-    sections: Array.isArray(g.newsletterSections) ? g.newsletterSections : [],
-    cta: g.newsletterCta ?? "",
+    intro: (a.newsletterIntro as string) ?? "",
+    sections: Array.isArray(a.newsletterSections) ? (a.newsletterSections as NewsletterSection[]) : [],
+    cta: (a.newsletterCta as string) ?? "",
   });
 
   return {
     videoTitle,
     thumbnailUrl,
     youtubeUrl,
-    blogPost: g.blogPost ?? "",
-    threadPosts: Array.isArray(g.threadPosts) ? g.threadPosts : [],
-    socialArticle: g.socialArticle ?? "",
+    blogPost: (b.blogPost as string) ?? "",
+    threadPosts: Array.isArray(a.threadPosts) ? (a.threadPosts as string[]) : [],
+    socialArticle: (b.socialArticle as string) ?? "",
     newsletterEmail: {
-      subject: g.newsletterSubject ?? "",
+      subject: (a.newsletterSubject as string) ?? "",
       body: newsletterHtml,
     },
-    quotes: Array.isArray(g.quotes) ? g.quotes.slice(0, 5) : [],
+    quotes: Array.isArray(a.quotes) ? (a.quotes as string[]).slice(0, 5) : [],
     quoteImages: [],
-    instagramCaptions: Array.isArray(g.instagramCaptions) ? g.instagramCaptions.slice(0, 5) : [],
+    instagramCaptions: Array.isArray(a.instagramCaptions) ? (a.instagramCaptions as string[]).slice(0, 5) : [],
   };
 }
 
