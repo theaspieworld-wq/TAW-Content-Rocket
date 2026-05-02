@@ -2,7 +2,7 @@
 
 ## Overview
 
-TAW Media Content Rocket — YouTube Shorts Generator. pnpm workspace monorepo using TypeScript. Paste a YouTube URL and the app automatically downloads, transcribes, selects the best moments with AI, renders short-form vertical clips, generates a full content pack (blog, newsletter, social posts, carousel slides, podcast audio), and supports multi-brand workflows.
+TAW Media Content Rocket. pnpm workspace monorepo using TypeScript. Paste a YouTube URL and the app automatically downloads, transcribes, selects the best moments with AI, renders short-form vertical clips, generates a full content pack (blog, newsletter, social posts, carousel slides, podcast audio), and supports multi-brand workflows.
 
 ## Stack
 

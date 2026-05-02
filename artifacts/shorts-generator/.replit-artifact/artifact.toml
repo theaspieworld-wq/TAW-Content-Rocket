@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "YouTube Shorts Generator"
+title = "TAW Media Content Rocket"
 version = "1.0.0"
 id = "artifacts/shorts-generator"
 router = "path"
