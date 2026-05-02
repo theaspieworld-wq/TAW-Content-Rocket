@@ -26,6 +26,21 @@ export interface Brand {
   introAudioPath?: string | null;
   /** @nullable */
   outroAudioPath?: string | null;
+  /**
+   * Google Font family name e.g. "Poppins"
+   * @nullable
+   */
+  fontFamily?: string | null;
+  /**
+   * Brand primary color as hex e.g. "#f21178"
+   * @nullable
+   */
+  primaryColor?: string | null;
+  /**
+   * Brand secondary color as hex e.g. "#7c3aed"
+   * @nullable
+   */
+  secondaryColor?: string | null;
   createdAt: string;
 }
 
@@ -35,6 +50,12 @@ export interface CreateBrandBody {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  /** @nullable */
+  fontFamily?: string | null;
+  /** @nullable */
+  primaryColor?: string | null;
+  /** @nullable */
+  secondaryColor?: string | null;
 }
 
 export interface UpdateBrandBody {
@@ -43,6 +64,12 @@ export interface UpdateBrandBody {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  /** @nullable */
+  fontFamily?: string | null;
+  /** @nullable */
+  primaryColor?: string | null;
+  /** @nullable */
+  secondaryColor?: string | null;
 }
 
 export interface CreateJobBody {

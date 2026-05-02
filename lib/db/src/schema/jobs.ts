@@ -10,6 +10,9 @@ export const brandsTable = pgTable("brands", {
   defaultCta: text("default_cta"),
   introAudioPath: text("intro_audio_path"),
   outroAudioPath: text("outro_audio_path"),
+  fontFamily: text("font_family"),
+  primaryColor: text("primary_color"),
+  secondaryColor: text("secondary_color"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

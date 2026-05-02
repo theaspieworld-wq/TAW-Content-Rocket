@@ -17,9 +17,78 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
 const CLIPS_DIR = path.join(process.cwd(), "clips");
 fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
+const FONTS_CACHE_DIR = path.join(process.cwd(), "fonts");
+fs.mkdirSync(FONTS_CACHE_DIR, { recursive: true });
+
 const LOGO_PATH = path.join(process.cwd(), "src", "assets", "taw-logo.png");
 const POPPINS_BOLD_PATH = path.join(process.cwd(), "src", "assets", "fonts", "Poppins-Bold.ttf");
 const DEJAVU_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+
+function hexToFfmpeg(hex: string): string {
+  return "0x" + hex.replace(/^#/, "");
+}
+
+async function getFontPath(fontFamily: string | null): Promise<string> {
+  const defaultFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+  if (!fontFamily || fontFamily.toLowerCase() === "poppins") return defaultFont;
+
+  const safe = fontFamily.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+  if (!safe) return defaultFont;
+
+  const filename = `${safe.replace(/ /g, "_")}_700.ttf`;
+  const cached = path.join(FONTS_CACHE_DIR, filename);
+  if (fs.existsSync(cached)) return cached;
+
+  try {
+    const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(safe)}:700`;
+    const cssRes = await fetch(cssUrl, {
+      headers: { "User-Agent": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)" },
+    });
+    const css = await cssRes.text();
+    const match = css.match(/src:\s*url\(([^)]+\.ttf)\)/i);
+    if (!match) throw new Error(`No TTF URL in Google Fonts response for font: ${fontFamily}`);
+
+    const fontRes = await fetch(match[1]);
+    const buf = await fontRes.arrayBuffer();
+    fs.writeFileSync(cached, Buffer.from(buf));
+    logger.info({ fontFamily }, "Google Font downloaded and cached");
+    return cached;
+  } catch (err) {
+    logger.warn({ fontFamily, err }, "Failed to download Google Font, using default");
+    return defaultFont;
+  }
+}
+
+async function generateSlideBackground(
+  slideTitle: string,
+  slideBullets: string[],
+  primaryColor: string | null,
+  tempDir: string,
+): Promise<string | null> {
+  try {
+    const colorHint = primaryColor ? `Use a color palette inspired by the accent color ${primaryColor}.` : "Use rich, deep, cinematic colors.";
+    const summary = [slideTitle, ...slideBullets.slice(0, 2)].join(". ");
+    const prompt = `A cinematic, high-quality photographic or abstract art background image representing the concept: "${summary}". ${colorHint} No text, no letters, no numbers, no human faces. Dramatic professional photography with depth of field, rich textures, and moody lighting. Suitable as an Instagram carousel slide background.`;
+
+    const response = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt,
+      size: "1024x1024",
+      quality: "low",
+      n: 1,
+    } as Parameters<typeof openai.images.generate>[0]) as { data?: Array<{ b64_json?: string | null }> };
+
+    const base64 = (response.data ?? [])[0]?.b64_json ?? "";
+    if (!base64) return null;
+
+    const bgPath = path.join(tempDir, `slide_bg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.png`);
+    fs.writeFileSync(bgPath, Buffer.from(base64, "base64"));
+    return bgPath;
+  } catch (err) {
+    logger.warn({ slideTitle, err }, "AI slide background generation failed — using solid background");
+    return null;
+  }
+}
 
 interface TranscriptSegment {
   start: number;
@@ -300,8 +369,15 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
 async function generateCarouselSlides(
   jobId: number,
   slides: CarouselSlide[],
+  brand: typeof brandsTable.$inferSelect | null,
+  tempDir: string,
 ): Promise<string[]> {
-  const fontFile = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+  const fontFile = await getFontPath(brand?.fontFamily ?? null);
+  const primary = brand?.primaryColor ?? "#f21178";
+  const secondary = brand?.secondaryColor ?? "#7c3aed";
+  const primaryFf = hexToFfmpeg(primary);
+  const secondaryFf = hexToFfmpeg(secondary);
+  const brandLabel = brand?.name ?? "Content Rocket";
   const filenames: string[] = [];
 
   for (let i = 0; i < slides.length; i++) {
@@ -310,59 +386,70 @@ async function generateCarouselSlides(
       const filename = `carousel_${jobId}_${i + 1}.png`;
       const outputPath = path.join(CLIPS_DIR, filename);
 
+      // Try to generate an AI background image for this slide
+      const bgPath = await generateSlideBackground(slide.title, slide.bullets, primary, tempDir);
+
       // Wrap title at 20 chars per line
       const titleLines = wrapText(slide.title.toUpperCase(), 20);
       const bullets = slide.bullets.slice(0, 4).map(b => wrapText(b, 26)[0] || b);
 
-      const filters: string[] = [
-        // Base dark background
-        `drawbox=x=0:y=0:w=1080:h=1080:color=0x0a0618@1:t=fill`,
-        // Subtle gradient overlay (lighter at top)
-        `drawbox=x=0:y=0:w=1080:h=400:color=0x140a28@0.5:t=fill`,
-        // Pink left accent bar
-        `drawbox=x=0:y=0:w=10:h=1080:color=0xf21178@1:t=fill`,
-        // Bottom brand bar
-        `drawbox=x=0:y=940:w=1080:h=140:color=0x1a0535@1:t=fill`,
-        // Slide counter top-right
-        `drawtext=fontfile=${fontFile}:text='${i + 1} / ${slides.length}':fontsize=34:fontcolor=0xf21178:x=980:y=50:shadowx=2:shadowy=2:shadowcolor=black@0.6`,
-      ];
+      // Base filters differ based on whether we have an AI background
+      const filters: string[] = bgPath
+        ? [
+            `scale=1080:1080:force_original_aspect_ratio=fill`,
+            `crop=1080:1080`,
+            `drawbox=x=0:y=0:w=1080:h=1080:color=black@0.55:t=fill`,
+          ]
+        : [
+            `drawbox=x=0:y=0:w=1080:h=1080:color=0x0a0618@1:t=fill`,
+            `drawbox=x=0:y=0:w=1080:h=400:color=0x140a28@0.5:t=fill`,
+          ];
+
+      // Brand accent bar (left edge) using primary color
+      filters.push(`drawbox=x=0:y=0:w=10:h=1080:color=${primaryFf}@1:t=fill`);
+      // Bottom brand bar
+      filters.push(`drawbox=x=0:y=940:w=1080:h=140:color=black@0.75:t=fill`);
+      // Slide counter top-right
+      filters.push(`drawtext=fontfile=${fontFile}:text='${i + 1} / ${slides.length}':fontsize=34:fontcolor=${primaryFf}:x=980:y=50:shadowx=2:shadowy=2:shadowcolor=black@0.8`);
 
       // Title lines
       titleLines.slice(0, 3).forEach((line, j) => {
         filters.push(
-          `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=68:fontcolor=white:x=50:y=${130 + j * 85}:shadowx=2:shadowy=3:shadowcolor=black@0.7`
+          `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=68:fontcolor=white:x=50:y=${130 + j * 85}:shadowx=3:shadowy=3:shadowcolor=black@0.9`
         );
       });
 
-      // Horizontal divider
+      // Horizontal divider in secondary color
       const dividerY = 130 + Math.min(titleLines.length, 3) * 85 + 15;
-      filters.push(`drawbox=x=50:y=${dividerY}:w=200:h=4:color=0xfd9601@1:t=fill`);
+      filters.push(`drawbox=x=50:y=${dividerY}:w=200:h=4:color=${secondaryFf}@1:t=fill`);
 
       // Bullet points
       bullets.forEach((bullet, j) => {
         const bulletY = dividerY + 45 + j * 72;
         if (bulletY < 910) {
           filters.push(
-            `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText("  " + bullet)}':fontsize=40:fontcolor=0xe0d6f0:x=50:y=${bulletY}:shadowx=1:shadowy=2:shadowcolor=black@0.5`
+            `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText("  " + bullet)}':fontsize=40:fontcolor=white:x=50:y=${bulletY}:shadowx=2:shadowy=2:shadowcolor=black@0.7`
           );
         }
       });
 
-      // Brand label in bottom bar
+      // Brand label in bottom bar using primary color
       filters.push(
-        `drawtext=fontfile=${fontFile}:text='Content Rocket':fontsize=30:fontcolor=0xf21178:x=(w-text_w)/2:y=970:shadowx=1:shadowy=1:shadowcolor=black@0.8`
+        `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(brandLabel)}':fontsize=30:fontcolor=${primaryFf}:x=(w-text_w)/2:y=970:shadowx=1:shadowy=1:shadowcolor=black@0.8`
       );
 
-      await execFileAsync("ffmpeg", [
-        "-f", "lavfi",
-        "-i", "color=c=black:s=1080x1080:d=1",
-        "-vf", filters.join(","),
-        "-frames:v", "1",
-        "-y", outputPath,
-      ], { timeout: 30000 });
+      const ffmpegArgs = bgPath
+        ? ["-i", bgPath, "-vf", filters.join(","), "-frames:v", "1", "-y", outputPath]
+        : ["-f", "lavfi", "-i", "color=c=black:s=1080x1080:d=1", "-vf", filters.join(","), "-frames:v", "1", "-y", outputPath];
+
+      await execFileAsync("ffmpeg", ffmpegArgs, { timeout: 30000 });
+
+      if (bgPath) {
+        try { fs.unlinkSync(bgPath); } catch (_) {}
+      }
 
       filenames.push(filename);
-      logger.info({ jobId, slideIndex: i + 1 }, "Carousel slide rendered");
+      logger.info({ jobId, slideIndex: i + 1, hasBg: !!bgPath }, "Carousel slide rendered");
     } catch (err) {
       logger.warn({ jobId, slideIndex: i + 1, err }, "Failed to render carousel slide — skipping");
     }
@@ -705,6 +792,8 @@ export async function generateContent(
     contentCta?: string | null;
     brandName?: string | null;
     jobId?: number;
+    brand?: typeof brandsTable.$inferSelect | null;
+    tempDir?: string;
   },
 ): Promise<GeneratedContent> {
   const thumbnailUrl = getThumbnailUrl(youtubeUrl);
@@ -840,7 +929,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       title: s.title ?? "Key Insight",
       bullets: Array.isArray(s.bullets) ? s.bullets : [],
     }));
-    carouselImages = await generateCarouselSlides(jobId, slides);
+    carouselImages = await generateCarouselSlides(jobId, slides, options?.brand ?? null, options?.tempDir ?? os.tmpdir());
   }
 
   return {
@@ -936,6 +1025,8 @@ export async function processJob(jobId: number): Promise<void> {
         contentCta: job.contentCta ?? null,
         brandName: brand?.name ?? null,
         jobId,
+        brand,
+        tempDir,
       });
       await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
       logger.info({ jobId }, "Content generation completed");

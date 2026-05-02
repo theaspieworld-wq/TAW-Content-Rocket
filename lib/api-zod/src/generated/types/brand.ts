@@ -19,5 +19,20 @@ export interface Brand {
   introAudioPath?: string | null;
   /** @nullable */
   outroAudioPath?: string | null;
+  /**
+   * Google Font family name e.g. "Poppins"
+   * @nullable
+   */
+  fontFamily?: string | null;
+  /**
+   * Brand primary color as hex e.g. "#f21178"
+   * @nullable
+   */
+  primaryColor?: string | null;
+  /**
+   * Brand secondary color as hex e.g. "#7c3aed"
+   * @nullable
+   */
+  secondaryColor?: string | null;
   createdAt: Date;
 }

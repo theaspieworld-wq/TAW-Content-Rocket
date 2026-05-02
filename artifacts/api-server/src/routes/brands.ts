@@ -66,6 +66,9 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
     defaultCta: b.defaultCta ?? null,
     introAudioPath: b.introAudioPath ?? null,
     outroAudioPath: b.outroAudioPath ?? null,
+    fontFamily: b.fontFamily ?? null,
+    primaryColor: b.primaryColor ?? null,
+    secondaryColor: b.secondaryColor ?? null,
     createdAt: b.createdAt.toISOString(),
   };
 }
@@ -86,6 +89,9 @@ router.post("/brands", async (req, res): Promise<void> => {
     name: parsed.data.name,
     voiceStyle: parsed.data.voiceStyle ?? null,
     defaultCta: parsed.data.defaultCta ?? null,
+    fontFamily: parsed.data.fontFamily ?? null,
+    primaryColor: parsed.data.primaryColor ?? null,
+    secondaryColor: parsed.data.secondaryColor ?? null,
   }).returning();
 
   res.status(201).json(brandToJson(brand));
@@ -114,6 +120,9 @@ router.patch("/brands/:id", async (req, res): Promise<void> => {
     ...(body.data.name !== undefined ? { name: body.data.name } : {}),
     ...(body.data.voiceStyle !== undefined ? { voiceStyle: body.data.voiceStyle } : {}),
     ...(body.data.defaultCta !== undefined ? { defaultCta: body.data.defaultCta } : {}),
+    ...(body.data.fontFamily !== undefined ? { fontFamily: body.data.fontFamily } : {}),
+    ...(body.data.primaryColor !== undefined ? { primaryColor: body.data.primaryColor } : {}),
+    ...(body.data.secondaryColor !== undefined ? { secondaryColor: body.data.secondaryColor } : {}),
   }).where(eq(brandsTable.id, params.data.id)).returning();
 
   res.json(brandToJson(updated));

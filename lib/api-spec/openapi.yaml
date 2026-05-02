@@ -388,6 +388,15 @@ components:
           type: ["string", "null"]
         outroAudioPath:
           type: ["string", "null"]
+        fontFamily:
+          type: ["string", "null"]
+          description: Google Font family name e.g. "Poppins"
+        primaryColor:
+          type: ["string", "null"]
+          description: Brand primary color as hex e.g. "#f21178"
+        secondaryColor:
+          type: ["string", "null"]
+          description: Brand secondary color as hex e.g. "#7c3aed"
         createdAt:
           type: string
           format: date-time
@@ -404,6 +413,12 @@ components:
           type: ["string", "null"]
         defaultCta:
           type: ["string", "null"]
+        fontFamily:
+          type: ["string", "null"]
+        primaryColor:
+          type: ["string", "null"]
+        secondaryColor:
+          type: ["string", "null"]
       required:
         - name
     UpdateBrandBody:
@@ -414,6 +429,12 @@ components:
         voiceStyle:
           type: ["string", "null"]
         defaultCta:
+          type: ["string", "null"]
+        fontFamily:
+          type: ["string", "null"]
+        primaryColor:
+          type: ["string", "null"]
+        secondaryColor:
           type: ["string", "null"]
     CreateJobBody:
       type: object

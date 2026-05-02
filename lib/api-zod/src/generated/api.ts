@@ -25,6 +25,18 @@ export const ListBrandsResponseItem = zod.object({
   defaultCta: zod.string().nullish(),
   introAudioPath: zod.string().nullish(),
   outroAudioPath: zod.string().nullish(),
+  fontFamily: zod
+    .string()
+    .nullish()
+    .describe('Google Font family name e.g. \"Poppins\"'),
+  primaryColor: zod
+    .string()
+    .nullish()
+    .describe('Brand primary color as hex e.g. \"#f21178\"'),
+  secondaryColor: zod
+    .string()
+    .nullish()
+    .describe('Brand secondary color as hex e.g. \"#7c3aed\"'),
   createdAt: zod.coerce.date(),
 });
 export const ListBrandsResponse = zod.array(ListBrandsResponseItem);
@@ -36,6 +48,9 @@ export const CreateBrandBody = zod.object({
   name: zod.string(),
   voiceStyle: zod.string().nullish(),
   defaultCta: zod.string().nullish(),
+  fontFamily: zod.string().nullish(),
+  primaryColor: zod.string().nullish(),
+  secondaryColor: zod.string().nullish(),
 });
 
 /**
@@ -49,6 +64,9 @@ export const UpdateBrandBody = zod.object({
   name: zod.string().optional(),
   voiceStyle: zod.string().nullish(),
   defaultCta: zod.string().nullish(),
+  fontFamily: zod.string().nullish(),
+  primaryColor: zod.string().nullish(),
+  secondaryColor: zod.string().nullish(),
 });
 
 export const UpdateBrandResponse = zod.object({
@@ -59,6 +77,18 @@ export const UpdateBrandResponse = zod.object({
   defaultCta: zod.string().nullish(),
   introAudioPath: zod.string().nullish(),
   outroAudioPath: zod.string().nullish(),
+  fontFamily: zod
+    .string()
+    .nullish()
+    .describe('Google Font family name e.g. \"Poppins\"'),
+  primaryColor: zod
+    .string()
+    .nullish()
+    .describe('Brand primary color as hex e.g. \"#f21178\"'),
+  secondaryColor: zod
+    .string()
+    .nullish()
+    .describe('Brand secondary color as hex e.g. \"#7c3aed\"'),
   createdAt: zod.coerce.date(),
 });
 

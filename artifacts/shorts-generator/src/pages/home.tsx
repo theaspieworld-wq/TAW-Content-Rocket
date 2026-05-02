@@ -90,6 +90,12 @@ import { Textarea } from "@/components/ui/textarea";
 
 const CLIP_DURATIONS = [15, 30, 45, 60, 90] as const;
 
+const GOOGLE_FONTS = [
+  "Poppins", "Montserrat", "Inter", "Roboto", "Oswald",
+  "Raleway", "Lato", "Open Sans", "Nunito", "Playfair Display",
+  "Space Grotesk", "DM Sans", "Bebas Neue", "Syne", "Plus Jakarta Sans",
+] as const;
+
 const formSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid YouTube URL" }),
   clipCount: z.coerce.number().min(0).max(10).default(9),
@@ -153,9 +159,15 @@ export default function Home() {
   const [newBrandName, setNewBrandName] = useState("");
   const [newBrandVoice, setNewBrandVoice] = useState("");
   const [newBrandCta, setNewBrandCta] = useState("");
+  const [newBrandFont, setNewBrandFont] = useState("Poppins");
+  const [newBrandPrimary, setNewBrandPrimary] = useState("#f21178");
+  const [newBrandSecondary, setNewBrandSecondary] = useState("#7c3aed");
   const [editBrandName, setEditBrandName] = useState("");
   const [editBrandVoice, setEditBrandVoice] = useState("");
   const [editBrandCta, setEditBrandCta] = useState("");
+  const [editBrandFont, setEditBrandFont] = useState("Poppins");
+  const [editBrandPrimary, setEditBrandPrimary] = useState("#f21178");
+  const [editBrandSecondary, setEditBrandSecondary] = useState("#7c3aed");
 
   // Outro form state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -290,6 +302,19 @@ export default function Home() {
     }
   }, [defaultOutro?.id]);
 
+  // Load Google Fonts for live preview in the font picker
+  useEffect(() => {
+    const families = GOOGLE_FONTS
+      .filter(f => f !== "Poppins")
+      .map(f => f.replace(/ /g, "+") + ":wght@400;700")
+      .join("&family=");
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${families}&display=swap`;
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, []);
+
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const payload = {
       youtubeUrl: values.youtubeUrl,
@@ -409,11 +434,15 @@ export default function Home() {
         name: newBrandName.trim(),
         voiceStyle: newBrandVoice.trim() || null,
         defaultCta: newBrandCta.trim() || null,
+        fontFamily: newBrandFont,
+        primaryColor: newBrandPrimary,
+        secondaryColor: newBrandSecondary,
       },
     }, {
       onSuccess: () => {
         toast({ title: "Brand Created", description: `${newBrandName} has been added.` });
         setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta("");
+        setNewBrandFont("Poppins"); setNewBrandPrimary("#f21178"); setNewBrandSecondary("#7c3aed");
         setIsAddingBrand(false);
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
       },
@@ -430,6 +459,9 @@ export default function Home() {
         name: editBrandName.trim() || undefined,
         voiceStyle: editBrandVoice.trim() || null,
         defaultCta: editBrandCta.trim() || null,
+        fontFamily: editBrandFont,
+        primaryColor: editBrandPrimary,
+        secondaryColor: editBrandSecondary,
       },
     }, {
       onSuccess: () => {
@@ -455,6 +487,9 @@ export default function Home() {
     setEditBrandName(brand.name);
     setEditBrandVoice(brand.voiceStyle ?? "");
     setEditBrandCta(brand.defaultCta ?? "");
+    setEditBrandFont(brand.fontFamily ?? "Poppins");
+    setEditBrandPrimary(brand.primaryColor ?? "#f21178");
+    setEditBrandSecondary(brand.secondaryColor ?? "#7c3aed");
   };
 
   const handleBrandFileUpload = async (brandId: number, type: "logo" | "intro-audio" | "outro-audio", file: File) => {
@@ -748,6 +783,40 @@ export default function Home() {
                       <Label className="text-xs">Default CTA</Label>
                       <Input value={newBrandCta} onChange={e => setNewBrandCta(e.target.value)} placeholder="e.g. Book a free strategy call →" className="h-8 text-xs" />
                     </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Font Family</Label>
+                      <Select value={newBrandFont} onValueChange={setNewBrandFont}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-56">
+                          {GOOGLE_FONTS.map(font => (
+                            <SelectItem key={font} value={font} style={{ fontFamily: font }} className="text-xs">
+                              {font}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Brand Colors</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground">Primary</p>
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={newBrandPrimary} onChange={e => setNewBrandPrimary(e.target.value)} className="h-8 w-8 rounded cursor-pointer border border-border/50 p-0.5 bg-transparent" />
+                            <span className="text-[10px] font-mono text-muted-foreground">{newBrandPrimary}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground">Secondary</p>
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={newBrandSecondary} onChange={e => setNewBrandSecondary(e.target.value)} className="h-8 w-8 rounded cursor-pointer border border-border/50 p-0.5 bg-transparent" />
+                            <span className="text-[10px] font-mono text-muted-foreground">{newBrandSecondary}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <Button type="submit" size="sm" className="flex-1 h-8 text-xs" disabled={createBrand.isPending}>
                         {createBrand.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
@@ -811,6 +880,40 @@ export default function Home() {
                                   <Label className="text-[10px] text-muted-foreground uppercase">Default CTA</Label>
                                   <Input value={editBrandCta} onChange={e => setEditBrandCta(e.target.value)} className="h-7 text-xs" />
                                 </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Font Family</Label>
+                                  <Select value={editBrandFont} onValueChange={setEditBrandFont}>
+                                    <SelectTrigger className="h-7 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-56">
+                                      {GOOGLE_FONTS.map(font => (
+                                        <SelectItem key={font} value={font} style={{ fontFamily: font }} className="text-xs">
+                                          {font}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Brand Colors</Label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-0.5">
+                                      <p className="text-[10px] text-muted-foreground">Primary</p>
+                                      <div className="flex items-center gap-1.5">
+                                        <input type="color" value={editBrandPrimary} onChange={e => setEditBrandPrimary(e.target.value)} className="h-7 w-7 rounded cursor-pointer border border-border/50 p-0.5 bg-transparent" />
+                                        <span className="text-[9px] font-mono text-muted-foreground">{editBrandPrimary}</span>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <p className="text-[10px] text-muted-foreground">Secondary</p>
+                                      <div className="flex items-center gap-1.5">
+                                        <input type="color" value={editBrandSecondary} onChange={e => setEditBrandSecondary(e.target.value)} className="h-7 w-7 rounded cursor-pointer border border-border/50 p-0.5 bg-transparent" />
+                                        <span className="text-[9px] font-mono text-muted-foreground">{editBrandSecondary}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                                 <div className="flex gap-2">
                                   <Button type="submit" size="sm" className="flex-1 h-7 text-[11px]" disabled={updateBrand.isPending}>
                                     {updateBrand.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
@@ -823,6 +926,27 @@ export default function Home() {
                               </form>
                             ) : (
                               <>
+                                {(brand.primaryColor || brand.secondaryColor || brand.fontFamily) && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {brand.primaryColor && (
+                                      <div className="flex items-center gap-1">
+                                        <div className="w-3.5 h-3.5 rounded-full border border-border/50" style={{ backgroundColor: brand.primaryColor }} />
+                                        <span className="text-[10px] font-mono text-muted-foreground">{brand.primaryColor}</span>
+                                      </div>
+                                    )}
+                                    {brand.secondaryColor && (
+                                      <div className="flex items-center gap-1">
+                                        <div className="w-3.5 h-3.5 rounded-full border border-border/50" style={{ backgroundColor: brand.secondaryColor }} />
+                                        <span className="text-[10px] font-mono text-muted-foreground">{brand.secondaryColor}</span>
+                                      </div>
+                                    )}
+                                    {brand.fontFamily && (
+                                      <span className="text-[10px] text-muted-foreground" style={{ fontFamily: brand.fontFamily }}>
+                                        {brand.fontFamily}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                                 {brand.defaultCta && (
                                   <div>
                                     <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Default CTA</p>

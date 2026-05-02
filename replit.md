@@ -43,9 +43,9 @@ artifacts-monorepo/
 - Paste any YouTube URL → AI downloads, transcribes, selects best segments with configurable clip length (15/30/45/60/90s)
 - Clips rendered with title overlay + burned-in captions; optional outro overlay
 - Shorts toggle (include/exclude vertical clips), configurable clip count (0–10)
-- Multi-brand support: logos, voice style, default CTA, intro/outro audio files
+- Multi-brand support: logos, voice style, default CTA, intro/outro audio files, Google Font family, primary/secondary brand colors
 - Podcast audio extraction at 192kbps with brand intro/outro concat
-- 4-slide carousel infographic PNG generation via ffmpeg drawtext
+- 4-slide carousel infographic PNG generation: AI-generated photographic background per slide via gpt-image-1, brand colors (primary accent bar + secondary divider), brand Google Font downloaded + cached, brand name in footer
 - Full content pack: blog post HTML, newsletter email, social posts, quotes + Instagram captions, carousel caption
 - Export All ZIP download: shorts + facebook 1:1 + podcast + carousel slides + content folder
 - CSV export of quotes + captions
@@ -53,7 +53,7 @@ artifacts-monorepo/
 
 ## Database Schema
 
-- `brands` table: id, name, logo_path, voice_style, default_cta, intro_audio_path, outro_audio_path, created_at
+- `brands` table: id, name, logo_path, voice_style, default_cta, intro_audio_path, outro_audio_path, font_family, primary_color, secondary_color, created_at
 - `jobs` table: id, youtube_url, video_title, status, error_message, clip_count, clip_duration_seconds, content_cta, outro_id, brand_id, transcript, generated_content, created_at, updated_at
 - `clips` table: id, job_id, title, start_seconds, end_seconds, duration_seconds, file_path, status, created_at
 - `outros` table: id, name, file_path, is_default, position, cta_text, cta_start_seconds, created_at
