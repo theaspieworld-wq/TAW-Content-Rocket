@@ -4,7 +4,7 @@ import {
   Zap, CheckCircle2, ArrowRight, Play, FileText, Mail,
   Layers, Mic, MessageSquare, Image, Youtube, Clock,
   ChevronDown, ChevronUp, Star, TrendingUp, Users, Shield,
-  Rocket, Brain, Package, Palette
+  Rocket, Brain, Package, Palette, Newspaper
 } from "lucide-react";
 import { useState } from "react";
 
@@ -13,8 +13,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const FEATURES = [
   { icon: Youtube,       label: "YouTube Shorts",        desc: "AI-picked vertical clips at 30s, 45s or 60s — best moments only" },
   { icon: FileText,      label: "Blog Post",              desc: "Full SEO-ready long-form article written in your brand voice" },
-  { icon: Mail,          label: "Newsletter",             desc: "Ready-to-send email draft with subject line and CTA" },
-  { icon: Layers,        label: "Email Carousels",        desc: "Slide-by-slide carousel optimised for LinkedIn and email" },
+  { icon: Newspaper,     label: "Email Newsletter",        desc: "Ready-to-send email newsletter with subject line and CTA" },
+  { icon: Layers,        label: "Carousel Post",          desc: "Slide-by-slide carousel post for LinkedIn and Instagram" },
   { icon: Mic,           label: "Podcast Audio",          desc: "Clean MP3 extracted and trimmed for podcast distribution" },
   { icon: MessageSquare, label: "Social Threads",         desc: "Twitter/X and LinkedIn threads with hooks and hashtags" },
   { icon: Image,         label: "Quote Graphics",         desc: "Pull-quote images ready for Instagram and Stories" },
@@ -58,7 +58,11 @@ const COMPARISON = [
     rocket: true,  opus: false,  descript: false, repurpose: false, vtb: false,
   },
   {
-    feature: "Email carousels",
+    feature: "Email newsletter",
+    rocket: true,  opus: false,  descript: false, repurpose: false, vtb: false,
+  },
+  {
+    feature: "Carousel post",
     rocket: true,  opus: false,  descript: false, repurpose: false, vtb: false,
   },
   {
@@ -95,7 +99,7 @@ const COMPARISON = [
 const FAQS = [
   {
     q: "What is Content Rocket?",
-    a: "Content Rocket is an AI content repurposing platform by TAW Media that turns a single YouTube video into a complete multi-channel content pack — YouTube Shorts, blog post, newsletter, email carousels, podcast audio, social media threads, and quote graphics. It's built for creators, coaches, and media teams who want to publish across every platform without spending 10+ hours repurposing each video manually.",
+    a: "Content Rocket is an AI content repurposing platform by TAW Media that turns a single YouTube video into a complete multi-channel content pack — YouTube Shorts, blog post, email newsletter, carousel post, podcast audio, social media threads, and quote graphics. It's built for creators, coaches, and media teams who want to publish across every platform without spending 10+ hours repurposing each video manually.",
   },
   {
     q: "How does Content Rocket generate YouTube Shorts?",
@@ -107,7 +111,7 @@ const FAQS = [
   },
   {
     q: "How is Content Rocket different from Opus Clip?",
-    a: "Opus Clip is excellent for short-form video clips. Content Rocket does that and goes much further — it also writes your blog post, newsletter, social threads, email carousel, and produces podcast audio, all in your brand's voice. It's a complete content multiplication system, not just a clip tool.",
+    a: "Opus Clip is excellent for short-form video clips. Content Rocket does that and goes much further — it also writes your blog post, email newsletter, carousel post, social threads, and produces podcast audio, all in your brand's voice. It's a complete content multiplication system, not just a clip tool.",
   },
   {
     q: "Can I use my own brand voice and colours?",
@@ -119,7 +123,7 @@ const FAQS = [
   },
   {
     q: "What formats does the exported content come in?",
-    a: "Short clips are exported as MP4. Podcast audio as MP3. Written content (blog post, newsletter, carousels, social threads) is included as formatted text. Everything is packaged into a single ZIP download, and you can optionally sync exports directly to a Google Drive or Dropbox folder via your brand settings.",
+    a: "Short clips are exported as MP4. Podcast audio as MP3. Written content (blog post, email newsletter, carousel post, social threads) is included as formatted text. Everything is packaged into a single ZIP download, and you can optionally sync exports directly to a Google Drive or Dropbox folder via your brand settings.",
   },
   {
     q: "How much does Content Rocket cost?",
@@ -200,7 +204,7 @@ export default function LandingPage() {
         </h1>
 
         <p className="text-slate-400 text-lg sm:text-xl mb-10 leading-relaxed max-w-2xl mx-auto">
-          Content Rocket is the AI-powered repurposing platform built by <strong className="text-slate-300">TAW Media</strong>. Paste a YouTube URL and get YouTube Shorts, a blog post, newsletter, carousels, podcast audio, social threads, and quote graphics — all in your brand voice, in minutes.
+          Content Rocket is the AI-powered repurposing platform built by <strong className="text-slate-300">TAW Media</strong>. Paste a YouTube URL and get YouTube Shorts, a blog post, email newsletter, carousel post, podcast audio, social threads, and quote graphics — all in your brand voice, in minutes.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
@@ -227,7 +231,7 @@ export default function LandingPage() {
 
         {/* Output pills */}
         <div className="flex flex-wrap items-center justify-center gap-2 mt-10">
-          {["YouTube Shorts", "Blog Posts", "Newsletters", "Email Carousels", "Podcast Audio", "Social Threads", "Quote Graphics"].map((f) => (
+          {["YouTube Shorts", "Blog Posts", "Email Newsletter", "Carousel Post", "Podcast Audio", "Social Threads", "Quote Graphics"].map((f) => (
             <span key={f} className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-slate-400 border border-white/8">
               {f}
             </span>

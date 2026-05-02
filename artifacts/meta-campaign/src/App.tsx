@@ -107,7 +107,7 @@ const ADS = [
     id: 1,
     name: "The Transformation",
     creative: "creative-01-before-after.png",
-    primaryText: `Imagine posting on 7 platforms — every single week — without writing a word.\n\nMost content creators spend 10+ hours turning ONE video into blogs, Shorts, newsletters, carousels, and social posts.\n\nContent Rocket does it in 5 minutes.\n\nPaste your YouTube URL. In minutes, you get:\n✦ YouTube Shorts (ready to post)\n✦ Full blog post with SEO headings\n✦ Email newsletter\n✦ Instagram carousel\n✦ Social captions for X, LinkedIn, Threads\n✦ Podcast audio file\n✦ Quote graphics\n\nCreators using Content Rocket are posting 5× more without burning out.\n\n🚀 Start your free trial — $49/mo`,
+    primaryText: `Imagine posting on 7 platforms — every single week — without writing a word.\n\nMost content creators spend 10+ hours turning ONE video into blogs, Shorts, newsletters, carousel posts, and social posts.\n\nContent Rocket does it in 5 minutes.\n\nPaste your YouTube URL. In minutes, you get:\n✦ YouTube Shorts (ready to post)\n✦ Full blog post with SEO headings\n✦ Email newsletter\n✦ Carousel post\n✦ Social captions for X, LinkedIn, Threads\n✦ Podcast audio file\n✦ Quote graphics\n\nCreators using Content Rocket are posting 5× more without burning out.\n\n🚀 Start your free trial — $49/mo`,
     headline: "Stop Spending 10 Hours Repurposing Content",
     description: "Paste one YouTube URL. Get a full content pack in minutes.",
     cta: "Learn More",
@@ -127,9 +127,9 @@ const ADS = [
     id: 3,
     name: "The ROI Play",
     creative: "creative-08-roi-value.png",
-    primaryText: `Hiring a content team costs $3,000–$8,000/month.\n\nContent Rocket costs $49/month.\n\nHere's what you get at $49/mo:\n💎 Unlimited YouTube Shorts\n💎 AI blog posts (SEO-ready)\n💎 Email newsletters\n💎 Instagram carousels (4 slides)\n💎 Podcast audio extracts\n💎 X / LinkedIn / Threads captions\n💎 Quote graphics\n💎 Multi-brand support\n\nOne YouTube video in → full content pack out.\n\nUsed by 500+ content creators, agencies, and businesses.\n\n📊 Calculate your ROI below 👇`,
+    primaryText: `Hiring a content team costs $3,000–$8,000/month.\n\nContent Rocket costs $49/month.\n\nHere's what you get at $49/mo:\n💎 Unlimited YouTube Shorts\n💎 AI blog posts (SEO-ready)\n💎 Email newsletters\n💎 Carousel posts (4 slides)\n💎 Podcast audio extracts\n💎 X / LinkedIn / Threads captions\n💎 Quote graphics\n💎 Multi-brand support\n\nOne YouTube video in → full content pack out.\n\nUsed by 500+ content creators, agencies, and businesses.\n\n📊 Calculate your ROI below 👇`,
     headline: "$49/Month. What a Content Agency Charges $3,000 For.",
-    description: "Unlimited Shorts, blogs, newsletters, carousels & more from every video.",
+    description: "Unlimited Shorts, blogs, newsletters, carousel posts & more from every video.",
     cta: "Sign Up",
     adSetFit: "Marketing Agencies & Freelancers",
   },
@@ -137,7 +137,7 @@ const ADS = [
     id: 4,
     name: "Social Proof / Testimonial",
     creative: "creative-05-testimonial.png",
-    primaryText: `"I used to spend my entire Sunday repurposing content. Now I do it in 5 minutes on Friday." — Alex M., 250K Subscribers\n\nContent Rocket automatically turns your YouTube videos into:\n→ Vertical Shorts (with captions & title cards)\n→ A full blog post\n→ Your email newsletter\n→ Instagram carousel slides\n→ Podcast episode\n→ Thread posts for X & LinkedIn\n\nAI-powered. Brand-consistent. Takes minutes.\n\nJoin hundreds of creators who've reclaimed their weekends.\n\n✅ No contract. Cancel any time.\n🚀 From $49/month`,
+    primaryText: `"I used to spend my entire Sunday repurposing content. Now I do it in 5 minutes on Friday." — Alex M., 250K Subscribers\n\nContent Rocket automatically turns your YouTube videos into:\n→ Vertical Shorts (with captions & title cards)\n→ A full blog post\n→ Your email newsletter\n→ Carousel post\n→ Podcast episode\n→ Thread posts for X & LinkedIn\n\nAI-powered. Brand-consistent. Takes minutes.\n\nJoin hundreds of creators who've reclaimed their weekends.\n\n✅ No contract. Cancel any time.\n🚀 From $49/month`,
     headline: "Creators Are Reclaiming 10 Hours Every Week",
     description: "See why 500+ creators trust Content Rocket to grow on every platform.",
     cta: "Learn More",
@@ -427,10 +427,10 @@ export default function App() {
                 <div className="bg-[#111] rounded-xl border border-white/8 p-5 space-y-3">
                   <p className="text-sm font-semibold text-white">What Content Rocket Does</p>
                   <p className="text-sm text-slate-300 leading-relaxed">
-                    Paste any YouTube URL → AI downloads, transcribes, picks the best moments, renders vertical Shorts with captions & title cards, then generates a full blog post, email newsletter, Instagram carousel, podcast episode, and social captions — all in under 5 minutes.
+                    Paste any YouTube URL → AI downloads, transcribes, picks the best moments, renders vertical Shorts with captions & title cards, then generates a full blog post, email newsletter, carousel post, podcast episode, and social captions — all in under 5 minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {["YouTube Shorts", "Blog Posts", "Newsletters", "Carousels", "Podcast Audio", "Social Threads", "Quote Graphics"].map(f => (
+                    {["YouTube Shorts", "Blog Posts", "Email Newsletter", "Carousel Post", "Podcast Audio", "Social Threads", "Quote Graphics"].map(f => (
                       <Badge key={f} color="purple">{f}</Badge>
                     ))}
                   </div>
