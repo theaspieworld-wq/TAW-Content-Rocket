@@ -18,6 +18,18 @@ uri = "file://attached_assets/logo_concept_3.png"
 type = "image"
 title = "content_rocket_logo_badge"
 
+[[generated]]
+id = "vtO1OyZHrQSG6oqHAvGF2"
+uri = "file://attached_assets/logo_concept_4.png"
+type = "image"
+title = "content_rocket_logo_hybrid"
+
+[[generated]]
+id = "gbyahSdY5ACju_jo-8jJ0"
+uri = "file://attached_assets/logo_concept_5.png"
+type = "image"
+title = "content_rocket_logo_hybrid_v2"
+
 [[outputs]]
 id = "TYAfV71mG0F40LI5Ppi2c"
 uri = "file://attached_assets/logo_concept_1.png"
@@ -35,3 +47,15 @@ id = "1B7htTdYssTOCwezQ9msO"
 uri = "file://attached_assets/logo_concept_3.png"
 type = "image"
 title = "Concept 3 — Badge / Icon"
+
+[[outputs]]
+id = "i-PjVyvMcs10FOnTBCi6c"
+uri = "file://attached_assets/logo_concept_4.png"
+type = "image"
+title = "Hybrid A — Icons in dotted orbit ring"
+
+[[outputs]]
+id = "CO-pyP2D0MnzN0vYzszd7"
+uri = "file://attached_assets/logo_concept_5.png"
+type = "image"
+title = "Hybrid B — Icons with angled rocket trail"
