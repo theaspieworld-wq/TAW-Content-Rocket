@@ -34,3 +34,4 @@ channel = "stable-25_05"
 [userenv.shared]
 VITE_CLERK_PUBLISHABLE_KEY = "pk_test_bmV1dHJhbC1tb25pdG9yLTcwLmNsZXJrLmFjY291bnRzLmRldiQ"
 ADMIN_USER_IDS = "user_3DBK9SQlcQp8oR5yPvVOER3iegB,user_3DBin1BAS059TCMO3aCReAnwntp"
+ADMIN_EMAILS = "theaspieworld@gmail.com,guest@theaspieworld.com"

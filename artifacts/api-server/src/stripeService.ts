@@ -40,17 +40,29 @@ export class StripeService {
     return session;
   }
 
-  isAdmin(clerkUserId: string): boolean {
+  isAdmin(clerkUserId: string, email?: string | null): boolean {
     const adminIds = (process.env.ADMIN_USER_IDS ?? '')
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    return adminIds.includes(clerkUserId);
+    if (adminIds.includes(clerkUserId)) return true;
+
+    // Email-based fallback — covers cases where a new OAuth account was
+    // created for the same address, or the user ID hasn't been added yet.
+    if (email) {
+      const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (adminEmails.includes(email.toLowerCase())) return true;
+    }
+
+    return false;
   }
 
-  async getUserSubscriptionStatus(clerkUserId: string) {
+  async getUserSubscriptionStatus(clerkUserId: string, email?: string | null) {
     // Admin bypass — no subscription required
-    if (this.isAdmin(clerkUserId)) {
+    if (this.isAdmin(clerkUserId, email)) {
       return { active: true, isAdmin: true, subscription: null };
     }
 

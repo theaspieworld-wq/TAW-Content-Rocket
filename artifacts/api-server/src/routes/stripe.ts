@@ -41,7 +41,7 @@ router.get('/stripe/subscription', async (req, res) => {
       claims?.email ?? claims?.emailAddress ?? claims?.primary_email_address ?? null;
     await stripeStorage.upsertUser(userId, email);
 
-    const status = await stripeService.getUserSubscriptionStatus(userId);
+    const status = await stripeService.getUserSubscriptionStatus(userId, email);
     res.json(status);
   } catch (err: any) {
     logger.error({ err }, 'Failed to get subscription');
