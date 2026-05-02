@@ -11,6 +11,7 @@ import { Loader2, ArrowLeft, User, LogOut, Copy, Check } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import PricingPage from "@/pages/pricing";
+import LandingPage from "@/pages/landing";
 
 const queryClient = new QueryClient();
 
@@ -156,102 +157,6 @@ function SignUpPage() {
   );
 }
 
-function LandingPage() {
-  const [, setLocation] = useLocation();
-  return (
-    <div className="min-h-[100dvh] bg-[#080614] flex flex-col relative overflow-hidden">
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-[#f21178]/6 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/4 w-[350px] h-[350px] bg-violet-700/5 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Top nav */}
-      <nav className="relative z-10 flex items-center justify-between px-6 py-4 max-w-5xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <img src={`${basePath}/logo.png`} alt="Content Rocket" className="h-8 w-8 rounded-lg object-cover" />
-          <span className="text-white font-semibold text-sm">Content Rocket</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-slate-400 hover:text-white hover:bg-white/5 px-4"
-            onClick={() => setLocation("/pricing")}
-          >
-            Pricing
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-slate-400 hover:text-white hover:bg-white/5 px-4"
-            onClick={() => setLocation("/sign-in")}
-          >
-            Sign In
-          </Button>
-          <Button
-            size="sm"
-            className="bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 text-white font-semibold px-4 border-0 shadow-lg shadow-[#f21178]/20"
-            onClick={() => setLocation("/sign-up")}
-          >
-            Get Started
-          </Button>
-        </div>
-      </nav>
-
-      {/* Hero */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 max-w-2xl mx-auto w-full">
-        <div className="flex flex-col items-center gap-3 mb-10">
-          <img src={`${basePath}/logo.png`} alt="Content Rocket" className="h-24 w-24 rounded-2xl object-cover shadow-xl shadow-[#f21178]/20" />
-          <div className="text-center">
-            <p className="text-[10px] font-semibold tracking-[0.25em] text-slate-500 uppercase">TAW Media</p>
-          </div>
-        </div>
-
-        <h1 className="text-4xl sm:text-5xl font-bold text-white mb-5 leading-tight tracking-tight">
-          Turn one video into a<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#f21178] to-violet-500">
-            full content pack
-          </span>
-        </h1>
-
-        <p className="text-slate-400 text-lg mb-10 leading-relaxed max-w-xl mx-auto">
-          AI-powered YouTube Shorts, blog posts, newsletters, carousels, podcast audio, and more — all from a single YouTube video.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-5">
-          <Button
-            size="lg"
-            className="w-full sm:w-auto bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 text-white font-semibold px-8 h-12 text-base shadow-lg shadow-[#f21178]/20 border-0"
-            onClick={() => setLocation("/sign-up")}
-          >
-            Get Started
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="w-full sm:w-auto border-slate-700 text-slate-300 hover:bg-slate-800/60 hover:text-white px-8 h-12 text-base"
-            onClick={() => setLocation("/sign-in")}
-          >
-            Sign In
-          </Button>
-        </div>
-
-        <button
-          onClick={() => setLocation("/pricing")}
-          className="text-sm text-slate-500 hover:text-[#f21178] transition-colors mb-10 underline underline-offset-4 decoration-slate-700 hover:decoration-[#f21178]"
-        >
-          See plans &amp; pricing →
-        </button>
-
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {["YouTube Shorts", "Blog Posts", "Newsletters", "Carousels", "Podcast Audio", "Social Threads", "Quote Graphics"].map((f) => (
-            <span key={f} className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-slate-400 border border-white/8">
-              {f}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function HomeRedirect() {
   return (
