@@ -1,0 +1,37 @@
+uploads = []
+
+[[generated]]
+id = "rnJw33e_xZcgr3vpNzEYM"
+uri = "file://attached_assets/logo_concept_1.png"
+type = "image"
+title = "content_rocket_logo_minimal"
+
+[[generated]]
+id = "3rnjAhBI2hkqegpUzjOq3"
+uri = "file://attached_assets/logo_concept_2.png"
+type = "image"
+title = "content_rocket_logo_burst"
+
+[[generated]]
+id = "qSB51p6gkRz1dUmp9cVe8"
+uri = "file://attached_assets/logo_concept_3.png"
+type = "image"
+title = "content_rocket_logo_badge"
+
+[[outputs]]
+id = "TYAfV71mG0F40LI5Ppi2c"
+uri = "file://attached_assets/logo_concept_1.png"
+type = "image"
+title = "Concept 1 — Minimal Rocket Wordmark"
+
+[[outputs]]
+id = "Hgsj2zMWIJXpa30FciXCA"
+uri = "file://attached_assets/logo_concept_2.png"
+type = "image"
+title = "Concept 2 — Content Burst"
+
+[[outputs]]
+id = "1B7htTdYssTOCwezQ9msO"
+uri = "file://attached_assets/logo_concept_3.png"
+type = "image"
+title = "Concept 3 — Badge / Icon"
