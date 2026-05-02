@@ -50,7 +50,9 @@ router.post("/jobs", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId!;
   const parsed = CreateJobBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    const firstIssue = parsed.error.issues[0];
+    const message = firstIssue?.message ?? "Invalid request";
+    res.status(400).json({ error: message });
     return;
   }
 

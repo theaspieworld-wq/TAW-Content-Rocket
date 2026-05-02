@@ -253,6 +253,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           queryClient.setQueryData(getGetJobContentQueryKey(jobWithClips.id), data);
           queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
         },
+        throwOnError: false,
       });
     }
   }, [jobWithClips?.id, jobWithClips?.status, jobWithClips?.hasContent]);
@@ -275,6 +276,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       onError: () => {
         toast({ title: "Error", description: "Could not regenerate content.", variant: "destructive" });
       },
+      throwOnError: false,
     });
   };
 
@@ -353,12 +355,17 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
       },
       onError: (error: any) => {
+        const message =
+          error?.data?.error ||
+          error?.message?.replace(/^HTTP \d+ [^:]+:\s*/, "") ||
+          "Failed to create job.";
         toast({
           title: "Error",
-          description: error.error || "Failed to create job.",
+          description: message,
           variant: "destructive",
         });
       },
+      throwOnError: false,
     });
   };
 
@@ -370,6 +377,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         toast({ title: "Job Deleted", description: "The job has been removed." });
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
       },
+      throwOnError: false,
     });
   };
 
@@ -417,6 +425,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         setEditingOutroId(null);
         queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
       },
+      throwOnError: false,
     });
   };
 
@@ -426,6 +435,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         toast({ title: "Outro Deleted" });
         queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
       },
+      throwOnError: false,
     });
   };
 
@@ -435,6 +445,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         toast({ title: "Default Outro Set" });
         queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
       },
+      throwOnError: false,
     });
   };
 
@@ -461,6 +472,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
       },
       onError: () => toast({ title: "Error", description: "Failed to create brand.", variant: "destructive" }),
+      throwOnError: false,
     });
   };
 
@@ -485,6 +497,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         setEditingBrandId(null);
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
       },
+      throwOnError: false,
     });
   };
 
@@ -495,6 +508,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         if (form.getValues("brandId") === String(id)) form.setValue("brandId", "");
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
       },
+      throwOnError: false,
     });
   };
 
