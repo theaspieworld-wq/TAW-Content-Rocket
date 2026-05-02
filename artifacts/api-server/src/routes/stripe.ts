@@ -1,9 +1,11 @@
 import { Router, type IRouter } from 'express';
-import { getAuth } from '@clerk/express';
+import { getAuth, createClerkClient } from '@clerk/express';
 import { stripeStorage } from '../stripeStorage.js';
 import { stripeService } from '../stripeService.js';
 import { getStripePublishableKey } from '../stripeClient.js';
 import { logger } from '../lib/logger.js';
+
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
 const router: IRouter = Router();
 
@@ -33,12 +35,24 @@ router.get('/stripe/subscription', async (req, res) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    // Ensure a DB row exists for this user on first visit so we can attach
-    // Stripe customer/subscription data later. Email may not be in the JWT
-    // by default, so we upsert with null and let checkout populate it.
     const claims = auth.sessionClaims as any;
-    const email: string | null =
+    let email: string | null =
       claims?.email ?? claims?.emailAddress ?? claims?.primary_email_address ?? null;
+
+    // JWT doesn't include email by default — fetch from Clerk directly so the
+    // admin email bypass always has a real value to compare against.
+    if (!email) {
+      try {
+        const clerkUser = await clerk.users.getUser(userId);
+        const primary = clerkUser.emailAddresses.find(
+          (e: any) => e.id === clerkUser.primaryEmailAddressId
+        );
+        email = primary?.emailAddress ?? null;
+      } catch (clerkErr) {
+        logger.warn({ clerkErr }, 'Could not fetch user email from Clerk');
+      }
+    }
+
     await stripeStorage.upsertUser(userId, email);
 
     const status = await stripeService.getUserSubscriptionStatus(userId, email);

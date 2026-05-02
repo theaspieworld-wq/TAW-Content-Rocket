@@ -120,7 +120,19 @@ function ThemeEnforcer() {
 function SignInPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-[#080614] px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+        appearance={{
+          ...clerkAppearance,
+          elements: {
+            ...clerkAppearance.elements,
+            // Hide the "use another method" link so email-OTP strategy is not surfaced
+            alternativeMethodsBlockButton: { display: "none" },
+          },
+        }}
+      />
     </div>
   );
 }
