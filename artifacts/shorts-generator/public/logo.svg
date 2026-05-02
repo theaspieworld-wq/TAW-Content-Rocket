@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="60" viewBox="0 0 220 60" fill="none">
+  <rect width="48" height="48" x="0" y="6" rx="12" fill="#16102a"/>
+  <path d="M24 11 C24 11 35 16 36 27 L36 38 L29 42 L19 38 L19 27 C20 16 24 11 24 11Z" fill="#f21178"/>
+  <circle cx="24" cy="26" r="4.5" fill="white" opacity="0.95"/>
+  <path d="M19 38 L15 47 L20 43 Z" fill="#7c3aed"/>
+  <path d="M29 38 L33 47 L28 43 Z" fill="#7c3aed"/>
+  <path d="M19 30 L12 36 L19 36 Z" fill="#7c3aed"/>
+  <path d="M29 30 L36 36 L29 36 Z" fill="#7c3aed"/>
+  <text x="58" y="26" font-family="Poppins,Inter,sans-serif" font-size="10" font-weight="600" letter-spacing="3" fill="#64748b">TAW MEDIA</text>
+  <text x="58" y="46" font-family="Poppins,Inter,sans-serif" font-size="18" font-weight="700" fill="white">Content Rocket</text>
+</svg>

@@ -1,12 +1,24 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { getAuth } from "@clerk/express";
 import healthRouter from "./health";
 import jobsRouter from "./jobs";
 import outrosRouter from "./outros";
 import brandsRouter from "./brands";
 
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const auth = getAuth(req);
+  const userId = (auth?.sessionClaims as any)?.userId || auth?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(requireAuth);
 router.use(jobsRouter);
 router.use(outrosRouter);
 router.use(brandsRouter);
