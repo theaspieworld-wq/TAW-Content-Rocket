@@ -1,14 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ClerkProvider, SignIn, SignUp, UserProfile, Show, useClerk } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, UserProfile, Show, useClerk, useUser } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
+import PricingPage from "@/pages/pricing";
 
 const queryClient = new QueryClient();
 
@@ -173,14 +175,56 @@ function HomeRedirect() {
   );
 }
 
+function useSubscriptionStatus() {
+  const { user } = useUser();
+  const [status, setStatus] = useState<"loading" | "active" | "inactive">("loading");
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${basePath}/api/stripe/subscription`)
+      .then((r) => r.json())
+      .then((d) => setStatus(d.active ? "active" : "inactive"))
+      .catch(() => setStatus("inactive"));
+  }, [user?.id]);
+
+  return status;
+}
+
 function AppPage() {
+  const subStatus = useSubscriptionStatus();
+  const [, setLocation] = useLocation();
+
   return (
     <>
-      <Show when="signed-in">
-        <Home />
-      </Show>
       <Show when="signed-out">
         <Redirect to="/" />
+      </Show>
+      <Show when="signed-in">
+        {subStatus === "loading" ? (
+          <div className="min-h-[100dvh] bg-[#080614] flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-[#f21178]" />
+          </div>
+        ) : subStatus === "inactive" ? (
+          <div className="min-h-[100dvh] bg-[#080614] flex flex-col items-center justify-center px-4 relative overflow-hidden">
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-[#f21178]/6 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 text-center max-w-md">
+              <img src={`${basePath}/logo.png`} alt="Content Rocket" className="h-20 w-20 rounded-2xl object-cover mx-auto mb-6 shadow-xl shadow-[#f21178]/20" />
+              <h2 className="text-2xl font-bold text-white mb-3">Subscription required</h2>
+              <p className="text-slate-400 mb-8">
+                You need an active Content Rocket subscription to use the app. Get started with a plan below.
+              </p>
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 text-white font-semibold px-8 h-12 border-0 shadow-lg shadow-[#f21178]/20"
+                onClick={() => setLocation("/pricing")}
+              >
+                View Plans
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Home />
+        )}
       </Show>
     </>
   );
@@ -283,6 +327,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/app" component={AppPage} />
             <Route path="/app/profile/*?" component={ProfilePage} />
+            <Route path="/pricing" component={PricingPage} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route component={NotFound} />
