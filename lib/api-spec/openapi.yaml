@@ -13,6 +13,8 @@ tags:
     description: Video processing jobs
   - name: outros
     description: Outro clip management
+  - name: brands
+    description: Brand management
 paths:
   /healthz:
     get:
@@ -26,6 +28,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /brands:
+    get:
+      operationId: listBrands
+      tags: [brands]
+      summary: List all brands
+      responses:
+        "200":
+          description: List of brands
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Brand"
+    post:
+      operationId: createBrand
+      tags: [brands]
+      summary: Create a new brand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandBody"
+      responses:
+        "201":
+          description: Brand created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}:
+    patch:
+      operationId: updateBrand
+      tags: [brands]
+      summary: Update brand settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBrandBody"
+      responses:
+        "200":
+          description: Updated brand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBrand
+      tags: [brands]
+      summary: Delete a brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /jobs:
     get:
       operationId: listJobs
@@ -283,6 +371,50 @@ components:
           type: string
       required:
         - error
+    Brand:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        logoPath:
+          type: ["string", "null"]
+        voiceStyle:
+          type: ["string", "null"]
+        defaultCta:
+          type: ["string", "null"]
+        introAudioPath:
+          type: ["string", "null"]
+        outroAudioPath:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - createdAt
+    CreateBrandBody:
+      type: object
+      properties:
+        name:
+          type: string
+        voiceStyle:
+          type: ["string", "null"]
+        defaultCta:
+          type: ["string", "null"]
+      required:
+        - name
+    UpdateBrandBody:
+      type: object
+      properties:
+        name:
+          type: string
+        voiceStyle:
+          type: ["string", "null"]
+        defaultCta:
+          type: ["string", "null"]
     CreateJobBody:
       type: object
       properties:
@@ -290,8 +422,19 @@ components:
           type: string
         clipCount:
           type: integer
-          default: 3
+          default: 9
+          minimum: 0
+          maximum: 10
+        clipDurationSeconds:
+          type: integer
+          default: 45
+          description: Target duration in seconds for each short clip (15, 30, 45, 60, 90)
+        contentCta:
+          type: ["string", "null"]
+          description: Call-to-action text to append to all text content
         outroId:
+          type: ["integer", "null"]
+        brandId:
           type: ["integer", "null"]
       required:
         - youtubeUrl
@@ -311,11 +454,21 @@ components:
           type: ["string", "null"]
         clipCount:
           type: integer
+        clipDurationSeconds:
+          type: integer
+        contentCta:
+          type: ["string", "null"]
         outroId:
+          type: ["integer", "null"]
+        brandId:
           type: ["integer", "null"]
         hasContent:
           type: boolean
           description: Whether AI content has been generated for this job
+        hasFacebookVideo:
+          type: boolean
+        hasPodcast:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -327,7 +480,10 @@ components:
         - youtubeUrl
         - status
         - clipCount
+        - clipDurationSeconds
         - hasContent
+        - hasFacebookVideo
+        - hasPodcast
         - createdAt
         - updatedAt
     Clip:
@@ -396,7 +552,7 @@ components:
           type: string
         blogPost:
           type: string
-          description: Full blog post in markdown format with H1, H2, TLDR
+          description: Full blog post HTML with H1, H2, H3 and TL;DR
         threadPosts:
           type: array
           items:
@@ -404,24 +560,32 @@ components:
           description: 5 posts for X/Threads, each max 280 chars
         socialArticle:
           type: string
-          description: Article for Facebook, Quora, and LinkedIn with video link
+          description: HTML article for Facebook, Quora, and LinkedIn
         newsletterEmail:
           $ref: "#/components/schemas/NewsletterEmail"
         quotes:
           type: array
           items:
             type: string
-          description: 4 powerful quotes from the transcript for use on social media quote cards
+          description: 5 powerful quotes from the transcript
         quoteImages:
           type: array
           items:
             type: string
-          description: Filenames of quote card images — fetch via GET /api/images/{filename}
+          description: Legacy field - always empty array
         instagramCaptions:
           type: array
           items:
             type: string
-          description: One Instagram/TikTok caption per quote — story paragraphs, hashtags, and CTA
+          description: One Instagram/TikTok caption per quote
+        carouselImages:
+          type: array
+          items:
+            type: string
+          description: Filenames of 4 infographic carousel slides - fetch via GET /api/images/{filename}
+        carouselCaption:
+          type: string
+          description: Instagram caption for the carousel post
       required:
         - videoTitle
         - thumbnailUrl
@@ -433,6 +597,8 @@ components:
         - quotes
         - quoteImages
         - instagramCaptions
+        - carouselImages
+        - carouselCaption
     Outro:
       type: object
       properties:

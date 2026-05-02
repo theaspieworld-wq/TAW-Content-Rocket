@@ -16,10 +16,17 @@ export interface Job {
   /** @nullable */
   errorMessage?: string | null;
   clipCount: number;
+  clipDurationSeconds: number;
+  /** @nullable */
+  contentCta?: string | null;
   /** @nullable */
   outroId?: number | null;
+  /** @nullable */
+  brandId?: number | null;
   /** Whether AI content has been generated for this job */
   hasContent: boolean;
+  hasFacebookVideo: boolean;
+  hasPodcast: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

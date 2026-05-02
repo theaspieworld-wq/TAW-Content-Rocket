@@ -13,11 +13,56 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface Brand {
+  id: number;
+  name: string;
+  /** @nullable */
+  logoPath?: string | null;
+  /** @nullable */
+  voiceStyle?: string | null;
+  /** @nullable */
+  defaultCta?: string | null;
+  /** @nullable */
+  introAudioPath?: string | null;
+  /** @nullable */
+  outroAudioPath?: string | null;
+  createdAt: string;
+}
+
+export interface CreateBrandBody {
+  name: string;
+  /** @nullable */
+  voiceStyle?: string | null;
+  /** @nullable */
+  defaultCta?: string | null;
+}
+
+export interface UpdateBrandBody {
+  name?: string;
+  /** @nullable */
+  voiceStyle?: string | null;
+  /** @nullable */
+  defaultCta?: string | null;
+}
+
 export interface CreateJobBody {
   youtubeUrl: string;
+  /**
+   * @minimum 0
+   * @maximum 10
+   */
   clipCount?: number;
+  /** Target duration in seconds for each short clip (15, 30, 45, 60, 90) */
+  clipDurationSeconds?: number;
+  /**
+   * Call-to-action text to append to all text content
+   * @nullable
+   */
+  contentCta?: string | null;
   /** @nullable */
   outroId?: number | null;
+  /** @nullable */
+  brandId?: number | null;
 }
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
@@ -41,10 +86,17 @@ export interface Job {
   /** @nullable */
   errorMessage?: string | null;
   clipCount: number;
+  clipDurationSeconds: number;
+  /** @nullable */
+  contentCta?: string | null;
   /** @nullable */
   outroId?: number | null;
+  /** @nullable */
+  brandId?: number | null;
   /** Whether AI content has been generated for this job */
   hasContent: boolean;
+  hasFacebookVideo: boolean;
+  hasPodcast: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,19 +138,23 @@ export interface GeneratedContent {
   videoTitle: string;
   thumbnailUrl: string;
   youtubeUrl: string;
-  /** Full blog post in markdown format with H1, H2, TLDR */
+  /** Full blog post HTML with H1, H2, H3 and TL;DR */
   blogPost: string;
   /** 5 posts for X/Threads, each max 280 chars */
   threadPosts: string[];
-  /** Article for Facebook, Quora, and LinkedIn with video link */
+  /** HTML article for Facebook, Quora, and LinkedIn */
   socialArticle: string;
   newsletterEmail: NewsletterEmail;
-  /** 4 powerful quotes from the transcript for use on social media quote cards */
+  /** 5 powerful quotes from the transcript */
   quotes: string[];
-  /** Filenames of quote card images — fetch via GET /api/images/{filename} */
+  /** Legacy field - always empty array */
   quoteImages: string[];
-  /** One Instagram/TikTok caption per quote — story paragraphs, hashtags, and CTA */
+  /** One Instagram/TikTok caption per quote */
   instagramCaptions: string[];
+  /** Filenames of 4 infographic carousel slides - fetch via GET /api/images/{filename} */
+  carouselImages: string[];
+  /** Instagram caption for the carousel post */
+  carouselCaption: string;
 }
 
 export type OutroPosition = (typeof OutroPosition)[keyof typeof OutroPosition];

@@ -2,7 +2,7 @@
 
 ## Overview
 
-YouTube Shorts Generator — pnpm workspace monorepo using TypeScript. Paste a YouTube URL and the app automatically finds the best moments, transcribes, picks segments with AI, and renders short-form clips (15s–60s) with a title overlay and burned-in captions.
+TAW Media Content Rocket — YouTube Shorts Generator. pnpm workspace monorepo using TypeScript. Paste a YouTube URL and the app automatically downloads, transcribes, selects the best moments with AI, renders short-form vertical clips, generates a full content pack (blog, newsletter, social posts, carousel slides, podcast audio), and supports multi-brand workflows.
 
 ## Stack
 
@@ -15,8 +15,8 @@ YouTube Shorts Generator — pnpm workspace monorepo using TypeScript. Paste a Y
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (ESM bundle)
-- **AI**: OpenAI via Replit AI Integrations (transcription: gpt-4o-mini-transcribe, segment selection: gpt-5-mini)
-- **Video processing**: yt-dlp (download), ffmpeg (rendering)
+- **AI**: OpenAI via Replit AI Integrations (transcription: gpt-4o-mini-transcribe, segment selection + content: gpt-5-mini)
+- **Video processing**: yt-dlp (download), ffmpeg (rendering, carousel, podcast)
 - **Frontend**: React + Vite + Tailwind + shadcn/ui
 
 ## Structure
@@ -24,8 +24,8 @@ YouTube Shorts Generator — pnpm workspace monorepo using TypeScript. Paste a Y
 ```text
 artifacts-monorepo/
 ├── artifacts/
-│   ├── api-server/         # Express API server (jobs, clips, download routes)
-│   └── shorts-generator/   # React + Vite frontend (Studio Shorts UI)
+│   ├── api-server/         # Express API server (jobs, clips, brands, download routes)
+│   └── shorts-generator/   # React + Vite frontend (TAW Media Content Rocket UI)
 ├── lib/
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -40,15 +40,23 @@ artifacts-monorepo/
 
 ## Key Features
 
-- Paste any YouTube URL → AI downloads, transcribes, selects best 15–60s segments
-- Renders clips with: all-caps black Poppins Bold title on white bar at top, white all-caps captions centered at bottom
+- Paste any YouTube URL → AI downloads, transcribes, selects best segments with configurable clip length (15/30/45/60/90s)
+- Clips rendered with title overlay + burned-in captions; optional outro overlay
+- Shorts toggle (include/exclude vertical clips), configurable clip count (0–10)
+- Multi-brand support: logos, voice style, default CTA, intro/outro audio files
+- Podcast audio extraction at 192kbps with brand intro/outro concat
+- 4-slide carousel infographic PNG generation via ffmpeg drawtext
+- Full content pack: blog post HTML, newsletter email, social posts, quotes + Instagram captions, carousel caption
+- Export All ZIP download: shorts + facebook 1:1 + podcast + carousel slides + content folder
+- CSV export of quotes + captions
 - Real-time job status polling (pending → downloading → transcribing → analyzing → rendering → completed)
-- Download each generated clip as an MP4
 
 ## Database Schema
 
-- `jobs` table: id, youtube_url, video_title, status, error_message, clip_count, created_at, updated_at
+- `brands` table: id, name, logo_path, voice_style, default_cta, intro_audio_path, outro_audio_path, created_at
+- `jobs` table: id, youtube_url, video_title, status, error_message, clip_count, clip_duration_seconds, content_cta, outro_id, brand_id, transcript, generated_content, created_at, updated_at
 - `clips` table: id, job_id, title, start_seconds, end_seconds, duration_seconds, file_path, status, created_at
+- `outros` table: id, name, file_path, is_default, position, cta_text, cta_start_seconds, created_at
 
 ## API Routes
 
@@ -56,7 +64,31 @@ artifacts-monorepo/
 - `POST /api/jobs` — create a new job (starts processing async)
 - `GET /api/jobs/:id` — get job + its clips
 - `DELETE /api/jobs/:id` — delete a job
+- `GET /api/jobs/:id/content` — get generated content (blog, social, carousel, etc.)
+- `POST /api/jobs/:id/regenerate-content` — regenerate content with AI
+- `GET /api/jobs/:id/download-podcast` — download podcast MP3
+- `GET /api/jobs/:id/download-all` — download ZIP of all outputs
 - `GET /api/clips/:clipId/download` — download a rendered clip MP4
+- `GET /api/brands` — list brands
+- `POST /api/brands` — create brand
+- `PUT /api/brands/:id` — update brand
+- `DELETE /api/brands/:id` — delete brand
+- `POST /api/brands/:id/logo` — upload brand logo
+- `POST /api/brands/:id/intro-audio` — upload brand intro audio
+- `POST /api/brands/:id/outro-audio` — upload brand outro audio
+- `GET /api/brands/:id/logo` — serve brand logo
+- `GET /api/outros` — list outros
+- `POST /api/outros/upload` — upload outro video
+- `PUT /api/outros/:id` — update outro
+- `DELETE /api/outros/:id` — delete outro
+- `POST /api/outros/:id/set-default` — set default outro
+- `GET /api/images/:filename` — serve generated carousel PNG images
+
+## File Storage
+
+- `clips/` — rendered MP4s, podcast MP3s, carousel PNGs, ZIP exports
+- `brands/` — uploaded brand logos and intro/outro audio files
+- `outros/` — uploaded outro video files
 
 ## Environment Variables
 
@@ -78,18 +110,26 @@ pnpm --filter @workspace/shorts-generator run dev
 pnpm --filter @workspace/api-spec run codegen
 
 # DB push
-pnpm --filter @workspace/db run push
+pnpm --filter @workspace/db run push-force
+
+# Typecheck libs (must run before leaf typechecks)
+pnpm run typecheck:libs
+
+# Full typecheck
+pnpm run typecheck
 ```
-
-## Clips Storage
-
-Generated clips are stored at `/home/runner/workspace/clips/clip_{id}.mp4` (relative to where the API server runs). The directory is auto-created on first run.
 
 ## Notes
 
 - yt-dlp downloads the video (up to 720p) to a temp directory
-- ffmpeg extracts audio at 16kHz mono for transcription
+- ffmpeg extracts audio at 16kHz mono for transcription, 192kbps MP3 for podcast
 - OpenAI gpt-4o-mini-transcribe provides word-level timestamps
-- gpt-5-mini selects the N best segments (configurable, default 3)
+- gpt-5-mini selects clip segments and generates all content (respects brand voice + CTA)
 - ffmpeg renders final clips: white title bar + black text at top, white caption text at bottom
+- Carousel slides generated via ffmpeg drawtext (4 slides, 1080x1080 PNG)
+- Podcast: raw audio extract + optional brand intro/outro concat via ffmpeg concat demuxer
+- ZIP uses `archiver` package; folder structure: `[VideoTitle]/shorts/`, `facebook_1x1.mp4`, `podcast.mp3`, `carousel/`, `content/`
+- Brand file uploads stored in `artifacts/api-server/brands/`
 - Temp files are cleaned up after each job completes
+- `hasPodcast` and `hasFacebookVideo` are computed dynamically by checking if files exist on disk
+- Frontend uses `zod/v4` for form schemas; zodResolver uses `as any` cast due to structural type incompatibility between zod/v4 and @hookform/resolvers peer types (runtime validation works correctly)

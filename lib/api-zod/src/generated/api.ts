@@ -15,6 +15,61 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary List all brands
+ */
+export const ListBrandsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  logoPath: zod.string().nullish(),
+  voiceStyle: zod.string().nullish(),
+  defaultCta: zod.string().nullish(),
+  introAudioPath: zod.string().nullish(),
+  outroAudioPath: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListBrandsResponse = zod.array(ListBrandsResponseItem);
+
+/**
+ * @summary Create a new brand
+ */
+export const CreateBrandBody = zod.object({
+  name: zod.string(),
+  voiceStyle: zod.string().nullish(),
+  defaultCta: zod.string().nullish(),
+});
+
+/**
+ * @summary Update brand settings
+ */
+export const UpdateBrandParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateBrandBody = zod.object({
+  name: zod.string().optional(),
+  voiceStyle: zod.string().nullish(),
+  defaultCta: zod.string().nullish(),
+});
+
+export const UpdateBrandResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  logoPath: zod.string().nullish(),
+  voiceStyle: zod.string().nullish(),
+  defaultCta: zod.string().nullish(),
+  introAudioPath: zod.string().nullish(),
+  outroAudioPath: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a brand
+ */
+export const DeleteBrandParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary List all jobs
  */
 export const ListJobsResponseItem = zod.object({
@@ -32,10 +87,15 @@ export const ListJobsResponseItem = zod.object({
   ]),
   errorMessage: zod.string().nullish(),
   clipCount: zod.number(),
+  clipDurationSeconds: zod.number(),
+  contentCta: zod.string().nullish(),
   outroId: zod.number().nullish(),
+  brandId: zod.number().nullish(),
   hasContent: zod
     .boolean()
     .describe("Whether AI content has been generated for this job"),
+  hasFacebookVideo: zod.boolean(),
+  hasPodcast: zod.boolean(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -44,12 +104,31 @@ export const ListJobsResponse = zod.array(ListJobsResponseItem);
 /**
  * @summary Create a new processing job
  */
-export const createJobBodyClipCountDefault = 3;
+export const createJobBodyClipCountDefault = 9;
+export const createJobBodyClipCountMin = 0;
+export const createJobBodyClipCountMax = 10;
+
+export const createJobBodyClipDurationSecondsDefault = 45;
 
 export const CreateJobBody = zod.object({
   youtubeUrl: zod.string(),
-  clipCount: zod.number().default(createJobBodyClipCountDefault),
+  clipCount: zod
+    .number()
+    .min(createJobBodyClipCountMin)
+    .max(createJobBodyClipCountMax)
+    .default(createJobBodyClipCountDefault),
+  clipDurationSeconds: zod
+    .number()
+    .default(createJobBodyClipDurationSecondsDefault)
+    .describe(
+      "Target duration in seconds for each short clip (15, 30, 45, 60, 90)",
+    ),
+  contentCta: zod
+    .string()
+    .nullish()
+    .describe("Call-to-action text to append to all text content"),
   outroId: zod.number().nullish(),
+  brandId: zod.number().nullish(),
 });
 
 /**
@@ -75,10 +154,15 @@ export const GetJobResponse = zod
     ]),
     errorMessage: zod.string().nullish(),
     clipCount: zod.number(),
+    clipDurationSeconds: zod.number(),
+    contentCta: zod.string().nullish(),
     outroId: zod.number().nullish(),
+    brandId: zod.number().nullish(),
     hasContent: zod
       .boolean()
       .describe("Whether AI content has been generated for this job"),
+    hasFacebookVideo: zod.boolean(),
+    hasPodcast: zod.boolean(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -120,32 +204,34 @@ export const GetJobContentResponse = zod.object({
   youtubeUrl: zod.string(),
   blogPost: zod
     .string()
-    .describe("Full blog post in markdown format with H1, H2, TLDR"),
+    .describe("Full blog post HTML with H1, H2, H3 and TL;DR"),
   threadPosts: zod
     .array(zod.string())
     .describe("5 posts for X\/Threads, each max 280 chars"),
   socialArticle: zod
     .string()
-    .describe("Article for Facebook, Quora, and LinkedIn with video link"),
+    .describe("HTML article for Facebook, Quora, and LinkedIn"),
   newsletterEmail: zod.object({
     subject: zod.string().describe("Email subject line"),
     body: zod.string().describe("HTML email body for pasting into a CRM"),
   }),
   quotes: zod
     .array(zod.string())
-    .describe(
-      "4 powerful quotes from the transcript for use on social media quote cards",
-    ),
+    .describe("5 powerful quotes from the transcript"),
   quoteImages: zod
     .array(zod.string())
-    .describe(
-      "Filenames of quote card images — fetch via GET \/api\/images\/{filename}",
-    ),
+    .describe("Legacy field - always empty array"),
   instagramCaptions: zod
     .array(zod.string())
+    .describe("One Instagram\/TikTok caption per quote"),
+  carouselImages: zod
+    .array(zod.string())
     .describe(
-      "One Instagram\/TikTok caption per quote — story paragraphs, hashtags, and CTA",
+      "Filenames of 4 infographic carousel slides - fetch via GET \/api\/images\/{filename}",
     ),
+  carouselCaption: zod
+    .string()
+    .describe("Instagram caption for the carousel post"),
 });
 
 /**
@@ -161,32 +247,34 @@ export const RegenerateJobContentResponse = zod.object({
   youtubeUrl: zod.string(),
   blogPost: zod
     .string()
-    .describe("Full blog post in markdown format with H1, H2, TLDR"),
+    .describe("Full blog post HTML with H1, H2, H3 and TL;DR"),
   threadPosts: zod
     .array(zod.string())
     .describe("5 posts for X\/Threads, each max 280 chars"),
   socialArticle: zod
     .string()
-    .describe("Article for Facebook, Quora, and LinkedIn with video link"),
+    .describe("HTML article for Facebook, Quora, and LinkedIn"),
   newsletterEmail: zod.object({
     subject: zod.string().describe("Email subject line"),
     body: zod.string().describe("HTML email body for pasting into a CRM"),
   }),
   quotes: zod
     .array(zod.string())
-    .describe(
-      "4 powerful quotes from the transcript for use on social media quote cards",
-    ),
+    .describe("5 powerful quotes from the transcript"),
   quoteImages: zod
     .array(zod.string())
-    .describe(
-      "Filenames of quote card images — fetch via GET \/api\/images\/{filename}",
-    ),
+    .describe("Legacy field - always empty array"),
   instagramCaptions: zod
     .array(zod.string())
+    .describe("One Instagram\/TikTok caption per quote"),
+  carouselImages: zod
+    .array(zod.string())
     .describe(
-      "One Instagram\/TikTok caption per quote — story paragraphs, hashtags, and CTA",
+      "Filenames of 4 infographic carousel slides - fetch via GET \/api\/images\/{filename}",
     ),
+  carouselCaption: zod
+    .string()
+    .describe("Instagram caption for the carousel post"),
 });
 
 /**

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { 
-  useListJobs, 
-  useCreateJob, 
-  useGetJob, 
+import * as z from "zod/v4";
+import {
+  useListJobs,
+  useCreateJob,
+  useGetJob,
   useDeleteJob,
   useHealthCheck,
   useListOutros,
@@ -14,19 +14,25 @@ import {
   useSetDefaultOutro,
   useGetJobContent,
   useRegenerateJobContent,
+  useListBrands,
+  useCreateBrand,
+  useUpdateBrand,
+  useDeleteBrand,
   getGetJobQueryKey,
   getListJobsQueryKey,
   getHealthCheckQueryKey,
   getListOutrosQueryKey,
+  getListBrandsQueryKey,
   getGetJobContentQueryKey,
+  type Brand,
 } from "@workspace/api-client-react";
 import { formatDistanceToNow } from "date-fns";
-import { 
-  Video, 
-  Scissors, 
-  Trash2, 
-  Loader2, 
-  Download, 
+import {
+  Video,
+  Scissors,
+  Trash2,
+  Loader2,
+  Download,
   AlertCircle,
   PlayCircle,
   FileVideo,
@@ -48,65 +54,89 @@ import {
   Menu,
   X,
   MessageSquareQuote,
+  Building2,
+  Mic,
+  Package,
+  Clock,
+  Zap,
+  Image,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Megaphone,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Form, 
-  FormControl, 
-  FormField, 
-  FormItem, 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
   FormMessage,
-  FormLabel
 } from "@/components/ui/form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+const CLIP_DURATIONS = [15, 30, 45, 60, 90] as const;
 
 const formSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid YouTube URL" }),
-  clipCount: z.coerce.number().min(1).max(10).default(9),
-  outroId: z.string().optional()
+  clipCount: z.coerce.number().min(0).max(10).default(9),
+  clipDurationSeconds: z.coerce.number().default(45),
+  contentCta: z.string().optional(),
+  outroId: z.string().optional(),
+  brandId: z.string().optional(),
+  includeShorts: z.boolean().default(true),
 });
 
 function getStatusProgress(status: string) {
-  switch(status) {
-    case 'pending': return 10;
-    case 'downloading': return 30;
-    case 'transcribing': return 50;
-    case 'analyzing': return 70;
-    case 'rendering': return 90;
-    case 'completed': return 100;
-    case 'failed': return 100;
+  switch (status) {
+    case "pending": return 8;
+    case "downloading": return 28;
+    case "transcribing": return 50;
+    case "analyzing": return 68;
+    case "rendering": return 88;
+    case "completed": return 100;
+    case "failed": return 100;
     default: return 0;
   }
 }
 
 function getStatusColor(status: string) {
-  switch(status) {
-    case 'pending': return 'bg-muted text-muted-foreground';
-    case 'downloading': return 'bg-[#9b4dca]/20 text-[#9b4dca] border-[#9b4dca]/30';
-    case 'transcribing': return 'bg-[#9b4dca]/20 text-[#9b4dca] border-[#9b4dca]/30';
-    case 'analyzing': return 'bg-[#f21178]/20 text-[#f21178] border-[#f21178]/30';
-    case 'rendering': return 'bg-[#f21178]/20 text-[#f21178] border-[#f21178]/30';
-    case 'completed': return 'bg-[#00c896]/20 text-[#00c896] border-[#00c896]/30';
-    case 'failed': return 'bg-destructive/20 text-destructive border-destructive/30';
-    default: return 'bg-muted text-muted-foreground border-transparent';
+  switch (status) {
+    case "pending": return "bg-muted text-muted-foreground";
+    case "downloading": return "bg-violet-500/20 text-violet-400 border-violet-500/30";
+    case "transcribing": return "bg-violet-500/20 text-violet-400 border-violet-500/30";
+    case "analyzing": return "bg-[#f21178]/20 text-[#f21178] border-[#f21178]/30";
+    case "rendering": return "bg-[#f21178]/20 text-[#f21178] border-[#f21178]/30";
+    case "completed": return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    case "failed": return "bg-destructive/20 text-destructive border-destructive/30";
+    default: return "bg-muted text-muted-foreground border-transparent";
   }
 }
 
 function getStatusLabel(status: string) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  const labels: Record<string, string> = {
+    pending: "Pending",
+    downloading: "Downloading",
+    transcribing: "Transcribing",
+    analyzing: "Analysing",
+    rendering: "Rendering",
+    completed: "Completed",
+    failed: "Failed",
+  };
+  return labels[status] ?? status;
 }
 
 export default function Home() {
@@ -115,31 +145,46 @@ export default function Home() {
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [expandedBrandId, setExpandedBrandId] = useState<number | null>(null);
+  const [editingBrandId, setEditingBrandId] = useState<number | null>(null);
+  const [isAddingBrand, setIsAddingBrand] = useState(false);
 
+  // Brand form state
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandVoice, setNewBrandVoice] = useState("");
+  const [newBrandCta, setNewBrandCta] = useState("");
+  const [editBrandName, setEditBrandName] = useState("");
+  const [editBrandVoice, setEditBrandVoice] = useState("");
+  const [editBrandCta, setEditBrandCta] = useState("");
+
+  // Outro form state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadName, setUploadName] = useState("");
   const [uploadPosition, setUploadPosition] = useState<"beginning" | "end">("end");
   const [uploadCtaText, setUploadCtaText] = useState("");
   const [uploadCtaStartSeconds, setUploadCtaStartSeconds] = useState<number | "">("");
-
   const [editName, setEditName] = useState("");
   const [editPosition, setEditPosition] = useState<"beginning" | "end">("end");
   const [editCtaText, setEditCtaText] = useState("");
   const [editCtaStartSeconds, setEditCtaStartSeconds] = useState<number | "">("");
 
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: health } = useHealthCheck({
-    query: { refetchInterval: 30000, queryKey: getHealthCheckQueryKey() }
+    query: { refetchInterval: 30000, queryKey: getHealthCheckQueryKey() },
   });
 
   const { data: jobs, isLoading: isJobsLoading } = useListJobs({
-    query: { refetchInterval: 5000, queryKey: getListJobsQueryKey() }
+    query: { refetchInterval: 5000, queryKey: getListJobsQueryKey() },
   });
 
   const { data: outros, isLoading: isOutrosLoading } = useListOutros({
-    query: { queryKey: getListOutrosQueryKey() }
+    query: { queryKey: getListOutrosQueryKey() },
+  });
+
+  const { data: brands, isLoading: isBrandsLoading } = useListBrands({
+    query: { queryKey: getListBrandsQueryKey() },
   });
 
   const { data: jobWithClips } = useGetJob(selectedJobId as number, {
@@ -148,9 +193,9 @@ export default function Home() {
       queryKey: getGetJobQueryKey(selectedJobId as number),
       refetchInterval: (query) => {
         const status = query.state.data?.status;
-        return status && !['completed', 'failed'].includes(status) ? 2000 : false;
-      }
-    }
+        return status && !["completed", "failed"].includes(status) ? 2000 : false;
+      },
+    },
   });
 
   const createJob = useCreateJob();
@@ -159,6 +204,9 @@ export default function Home() {
   const deleteOutro = useDeleteOutro();
   const setDefaultOutro = useSetDefaultOutro();
   const regenerateContent = useRegenerateJobContent();
+  const createBrand = useCreateBrand();
+  const updateBrand = useUpdateBrand();
+  const deleteBrand = useDeleteBrand();
 
   const { data: jobContent, isLoading: isContentLoading } = useGetJobContent(
     selectedJobId as number,
@@ -170,7 +218,6 @@ export default function Home() {
     }
   );
 
-  // Auto-generate content when a completed job has no content yet
   useEffect(() => {
     if (
       jobWithClips?.status === "completed" &&
@@ -202,7 +249,7 @@ export default function Home() {
         toast({ title: "Content Regenerated", description: "All content has been refreshed." });
       },
       onError: () => {
-        toast({ title: "Error", description: "Could not regenerate content. Transcript may not be available.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not regenerate content.", variant: "destructive" });
       },
     });
   };
@@ -210,15 +257,33 @@ export default function Home() {
   const defaultOutro = outros?.find(o => o.isDefault);
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(formSchema as any),
     defaultValues: {
       youtubeUrl: "",
       clipCount: 9,
-      outroId: defaultOutro ? String(defaultOutro.id) : "none"
-    }
+      clipDurationSeconds: 45,
+      contentCta: "",
+      outroId: "none",
+      brandId: "none",
+      includeShorts: true,
+    },
   });
 
-  // Update default outro selection when loaded
+  const includeShorts = form.watch("includeShorts");
+  const selectedDuration = form.watch("clipDurationSeconds");
+  const selectedBrandId = form.watch("brandId");
+
+  // Auto-fill CTA from selected brand
+  useEffect(() => {
+    if (selectedBrandId && selectedBrandId !== "none") {
+      const brand = brands?.find((b: Brand) => String(b.id) === selectedBrandId);
+      if (brand?.defaultCta && !form.getValues("contentCta")) {
+        form.setValue("contentCta", brand.defaultCta);
+      }
+    }
+  }, [selectedBrandId]);
+
   useEffect(() => {
     if (defaultOutro && form.getValues("outroId") === "none" && !form.formState.isDirty) {
       form.setValue("outroId", String(defaultOutro.id));
@@ -228,31 +293,35 @@ export default function Home() {
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const payload = {
       youtubeUrl: values.youtubeUrl,
-      clipCount: values.clipCount,
-      outroId: values.outroId && values.outroId !== "none" ? parseInt(values.outroId, 10) : null
+      clipCount: values.includeShorts ? (values.clipCount ?? 9) : 0,
+      clipDurationSeconds: values.clipDurationSeconds ?? 45,
+      contentCta: values.contentCta?.trim() || undefined,
+      outroId: values.outroId && values.outroId !== "none" ? parseInt(values.outroId, 10) : null,
+      brandId: values.brandId && values.brandId !== "none" ? parseInt(values.brandId, 10) : null,
     };
-    
+
     createJob.mutate({ data: payload }, {
       onSuccess: (newJob) => {
         form.reset({
           youtubeUrl: "",
           clipCount: 9,
-          outroId: values.outroId
+          clipDurationSeconds: values.clipDurationSeconds,
+          contentCta: values.contentCta,
+          outroId: values.outroId,
+          brandId: values.brandId,
+          includeShorts: values.includeShorts,
         });
         setSelectedJobId(newJob.id);
-        toast({
-          title: "Job Created",
-          description: "Video processing has started.",
-        });
+        toast({ title: "Job Created 🚀", description: "Video processing has started." });
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
       },
-      onError: (error) => {
+      onError: (error: any) => {
         toast({
           title: "Error",
           description: error.error || "Failed to create job.",
-          variant: "destructive"
+          variant: "destructive",
         });
-      }
+      },
     });
   };
 
@@ -264,9 +333,6 @@ export default function Home() {
         toast({ title: "Job Deleted", description: "The job has been removed." });
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
       },
-      onError: () => {
-        toast({ title: "Error", description: "Failed to delete job.", variant: "destructive" });
-      }
     });
   };
 
@@ -276,7 +342,6 @@ export default function Home() {
       toast({ title: "Error", description: "Please select a video file.", variant: "destructive" });
       return;
     }
-    
     setIsUploadingOutro(true);
     try {
       const formData = new FormData();
@@ -285,20 +350,13 @@ export default function Home() {
       formData.append("position", uploadPosition);
       if (uploadCtaText) formData.append("ctaText", uploadCtaText);
       if (uploadCtaStartSeconds !== "") formData.append("ctaStartSeconds", String(uploadCtaStartSeconds));
-      
       const res = await fetch("/api/outros/upload", { method: "POST", body: formData });
       if (!res.ok) throw new Error("Upload failed");
-      
       toast({ title: "Outro Uploaded", description: "Your outro has been added." });
       queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
-      
-      // Reset form
-      setUploadName("");
-      setUploadPosition("end");
-      setUploadCtaText("");
-      setUploadCtaStartSeconds("");
+      setUploadName(""); setUploadPosition("end"); setUploadCtaText(""); setUploadCtaStartSeconds("");
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (err) {
+    } catch {
       toast({ title: "Upload Failed", description: "Failed to upload outro.", variant: "destructive" });
     } finally {
       setIsUploadingOutro(false);
@@ -308,150 +366,192 @@ export default function Home() {
   const handleUpdateOutro = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOutroId) return;
-    
     updateOutro.mutate({
       id: editingOutroId,
       data: {
         name: editName,
         position: editPosition,
         ctaText: editCtaText || null,
-        ctaStartSeconds: editCtaStartSeconds !== "" ? editCtaStartSeconds : null
-      }
+        ctaStartSeconds: editCtaStartSeconds !== "" ? editCtaStartSeconds : null,
+      },
     }, {
       onSuccess: () => {
-        toast({ title: "Outro Updated", description: "Settings saved successfully." });
+        toast({ title: "Outro Updated" });
         setEditingOutroId(null);
         queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
       },
-      onError: () => {
-        toast({ title: "Error", description: "Failed to update outro.", variant: "destructive" });
-      }
     });
   };
 
   const handleDeleteOutro = (id: number) => {
     deleteOutro.mutate({ id }, {
       onSuccess: () => {
-        toast({ title: "Outro Deleted", description: "The outro has been removed." });
+        toast({ title: "Outro Deleted" });
         queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
-      }
+      },
     });
   };
 
   const handleSetDefaultOutro = (id: number) => {
     setDefaultOutro.mutate({ id }, {
       onSuccess: () => {
-        toast({ title: "Default Set", description: "The default outro has been updated." });
+        toast({ title: "Default Outro Set" });
         queryClient.invalidateQueries({ queryKey: getListOutrosQueryKey() });
-      }
+      },
     });
   };
 
-  const openEditModal = (outro: any) => {
-    setEditingOutroId(outro.id);
-    setEditName(outro.name);
-    setEditPosition(outro.position as "beginning" | "end");
-    setEditCtaText(outro.ctaText || "");
-    setEditCtaStartSeconds(outro.ctaStartSeconds !== null ? outro.ctaStartSeconds : "");
+  const handleCreateBrand = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+    createBrand.mutate({
+      data: {
+        name: newBrandName.trim(),
+        voiceStyle: newBrandVoice.trim() || null,
+        defaultCta: newBrandCta.trim() || null,
+      },
+    }, {
+      onSuccess: () => {
+        toast({ title: "Brand Created", description: `${newBrandName} has been added.` });
+        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta("");
+        setIsAddingBrand(false);
+        queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
+      },
+      onError: () => toast({ title: "Error", description: "Failed to create brand.", variant: "destructive" }),
+    });
+  };
+
+  const handleUpdateBrand = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBrandId) return;
+    updateBrand.mutate({
+      id: editingBrandId,
+      data: {
+        name: editBrandName.trim() || undefined,
+        voiceStyle: editBrandVoice.trim() || null,
+        defaultCta: editBrandCta.trim() || null,
+      },
+    }, {
+      onSuccess: () => {
+        toast({ title: "Brand Updated" });
+        setEditingBrandId(null);
+        queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
+      },
+    });
+  };
+
+  const handleDeleteBrand = (id: number) => {
+    deleteBrand.mutate({ id }, {
+      onSuccess: () => {
+        toast({ title: "Brand Deleted" });
+        if (form.getValues("brandId") === String(id)) form.setValue("brandId", "none");
+        queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
+      },
+    });
+  };
+
+  const openEditBrand = (brand: any) => {
+    setEditingBrandId(brand.id);
+    setEditBrandName(brand.name);
+    setEditBrandVoice(brand.voiceStyle ?? "");
+    setEditBrandCta(brand.defaultCta ?? "");
+  };
+
+  const handleBrandFileUpload = async (brandId: number, type: "logo" | "intro-audio" | "outro-audio", file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`/api/brands/${brandId}/${type}`, { method: "POST", body: formData });
+    if (!res.ok) throw new Error("Upload failed");
+    queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
   };
 
   const isHealthy = health?.status === "ok";
 
   return (
-    <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30 selection:text-primary-foreground">
-      {/* Mobile overlay backdrop */}
+    <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30">
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex fixed md:static inset-y-0 left-0 z-40 md:z-10 w-80 border-r border-border bg-card/95 md:bg-card/40 flex-col shrink-0`}>
+      {/* ── Sidebar ─────────────────────────────────────────────── */}
+      <div className={`${sidebarOpen ? "flex" : "hidden"} md:flex fixed md:static inset-y-0 left-0 z-40 md:z-10 w-80 border-r border-border bg-card/95 md:bg-card/40 flex-col shrink-0`}>
+        {/* Logo / header */}
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/taw-logo.png" alt="TAW Media" className="h-12 w-auto object-contain" />
             <div className="flex flex-col leading-tight">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">TAW Media</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">TAW Media</span>
               <span className="text-sm font-bold text-foreground">Content Rocket</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted/50 border border-border">
-                  <Activity className={`w-3.5 h-3.5 ${isHealthy ? 'text-green-500' : 'text-muted-foreground'}`} />
+                <div className="h-6 w-6 flex items-center justify-center rounded-full bg-muted/50 border border-border">
+                  <Activity className={`w-3.5 h-3.5 ${isHealthy ? "text-emerald-500" : "text-muted-foreground"}`} />
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="right">
-                <p className="text-xs">{isHealthy ? 'API Connected' : 'Connecting...'}</p>
-              </TooltipContent>
+              <TooltipContent side="right"><p className="text-xs">{isHealthy ? "API Connected" : "Connecting..."}</p></TooltipContent>
             </Tooltip>
             <Button variant="ghost" size="icon" className="h-7 w-7 md:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
-        
-        <Tabs defaultValue="projects" className="flex-1 flex flex-col">
-          <div className="px-4 pt-4">
-            <TabsList className="w-full grid grid-cols-2 bg-muted/50 border border-border/50">
-              <TabsTrigger value="projects" className="text-xs font-semibold">Projects</TabsTrigger>
-              <TabsTrigger value="outros" className="text-xs font-semibold">Outros</TabsTrigger>
+
+        <Tabs defaultValue="projects" className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-4 pt-4 pb-0">
+            <TabsList className="w-full grid grid-cols-3 bg-muted/50 border border-border/50 h-9">
+              <TabsTrigger value="projects" className="text-[11px] font-semibold">Projects</TabsTrigger>
+              <TabsTrigger value="outros" className="text-[11px] font-semibold">Outros</TabsTrigger>
+              <TabsTrigger value="brands" className="text-[11px] font-semibold">Brands</TabsTrigger>
             </TabsList>
           </div>
-          
+
+          {/* Projects tab */}
           <TabsContent value="projects" className="flex-1 overflow-hidden m-0 border-none outline-none">
             <ScrollArea className="h-full">
               <div className="p-4 space-y-1.5">
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-4 px-2 flex items-center gap-2">
-                  Recent Projects
-                  <div className="h-px bg-border flex-1" />
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-4 px-1 flex items-center gap-2">
+                  Recent Projects <div className="h-px bg-border flex-1" />
                 </div>
-                
                 {isJobsLoading ? (
-                  <div className="flex justify-center p-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
-                  </div>
+                  <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-primary/50" /></div>
                 ) : jobs && jobs.length > 0 ? (
                   jobs.map(job => (
-                    <div 
+                    <div
                       key={job.id}
                       onClick={() => setSelectedJobId(job.id)}
-                      className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
-                        selectedJobId === job.id 
-                          ? 'bg-primary/5 border-primary/30 shadow-[inset_0_0_20px_rgba(242,17,120,0.05)]' 
-                          : 'bg-card/30 border-transparent hover:bg-muted/40 hover:border-border/50'
-                      } group`}
+                      className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border group ${
+                        selectedJobId === job.id
+                          ? "bg-primary/5 border-primary/30 shadow-[inset_0_0_20px_rgba(242,17,120,0.04)]"
+                          : "bg-card/30 border-transparent hover:bg-muted/40 hover:border-border/50"
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-1.5 gap-1">
                         <span className="font-medium text-sm min-w-0 flex-1 text-foreground/90 leading-snug">
-                          {job.videoTitle ? (
-                            job.videoTitle
-                          ) : (
+                          {job.videoTitle || (
                             <span className="text-[11px] font-mono text-muted-foreground break-all">{job.youtubeUrl}</span>
                           )}
                         </span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 -mt-0.5 -mr-1 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                        <Button
+                          variant="ghost" size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 -mt-0.5 -mr-1 hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-opacity"
                           onClick={(e) => handleDeleteJob(e, job.id)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                      <div className="flex items-center justify-between mt-2.5">
+                      <div className="flex items-center justify-between mt-2">
                         <Badge variant="outline" className={`px-1.5 py-0.5 text-[10px] font-medium ${getStatusColor(job.status)}`}>
                           {getStatusLabel(job.status)}
                         </Badge>
-                        <span className="text-[10px] font-mono text-muted-foreground/70">
+                        <span className="text-[10px] font-mono text-muted-foreground/60">
                           {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
                         </span>
                       </div>
-                      {job.status !== 'completed' && job.status !== 'failed' && (
-                        <Progress value={getStatusProgress(job.status)} className="h-1 mt-3 bg-muted/50" indicatorClassName="bg-primary/70" />
+                      {!["completed", "failed"].includes(job.status) && (
+                        <Progress value={getStatusProgress(job.status)} className="h-0.5 mt-3 bg-muted/50" indicatorClassName="bg-primary/70" />
                       )}
                     </div>
                   ))
@@ -460,38 +560,35 @@ export default function Home() {
                     <div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center mb-3">
                       <Layers className="w-5 h-5 opacity-40" />
                     </div>
-                    No projects yet. Create one to get started.
+                    No projects yet.
                   </div>
                 )}
               </div>
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="outros" className="flex-1 overflow-hidden m-0 border-none outline-none flex flex-col">
-            <ScrollArea className="flex-1">
+          {/* Outros tab */}
+          <TabsContent value="outros" className="flex-1 overflow-hidden m-0 border-none outline-none">
+            <ScrollArea className="h-full">
               <div className="p-4 space-y-4">
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-2 flex items-center gap-2">
-                  Outro Library
-                  <div className="h-px bg-border flex-1" />
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1 flex items-center gap-2">
+                  Outro Library <div className="h-px bg-border flex-1" />
                 </div>
-                
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full border-dashed border-2 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all h-auto py-4">
-                      <div className="flex flex-col items-center gap-2 text-muted-foreground group-hover:text-primary">
-                        <Upload className="w-5 h-5" />
+                    <Button variant="outline" className="w-full border-dashed border-2 hover:bg-primary/5 hover:text-primary hover:border-primary/30 h-auto py-3 transition-all">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Upload className="w-4 h-4" />
                         <span className="text-xs font-semibold">Upload Outro</span>
                       </div>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Upload New Outro</DialogTitle>
-                    </DialogHeader>
+                    <DialogHeader><DialogTitle>Upload New Outro</DialogTitle></DialogHeader>
                     <form onSubmit={handleUploadOutro} className="space-y-4 pt-4">
                       <div className="space-y-2">
                         <Label>Video File (MP4 or MOV)</Label>
-                        <Input type="file" accept="video/mp4,video/quicktime,.mp4,.mov" ref={fileInputRef} required className="cursor-pointer file:cursor-pointer file:bg-primary/10 file:text-primary file:border-0 file:rounded-md file:mr-4 file:px-3 file:py-1 hover:file:bg-primary/20 text-sm" />
+                        <Input type="file" accept="video/mp4,video/quicktime,.mp4,.mov" ref={fileInputRef} required className="cursor-pointer file:cursor-pointer file:bg-primary/10 file:text-primary file:border-0 file:rounded-md file:mr-4 file:px-3 file:py-1 text-sm" />
                       </div>
                       <div className="space-y-2">
                         <Label>Name (Optional)</Label>
@@ -499,17 +596,15 @@ export default function Home() {
                       </div>
                       <div className="space-y-2">
                         <Label>Position</Label>
-                        <Select value={uploadPosition} onValueChange={(v: "beginning"|"end") => setUploadPosition(v)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
+                        <Select value={uploadPosition} onValueChange={(v: "beginning" | "end") => setUploadPosition(v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="beginning">Beginning (Intro)</SelectItem>
                             <SelectItem value="end">End (Outro)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
                           <Label>CTA Text</Label>
                           <Input value={uploadCtaText} onChange={e => setUploadCtaText(e.target.value)} placeholder="Subscribe!" />
@@ -519,7 +614,7 @@ export default function Home() {
                           <Input type="number" step="0.5" min="0" value={uploadCtaStartSeconds} onChange={e => setUploadCtaStartSeconds(e.target.value ? parseFloat(e.target.value) : "")} placeholder="2.5" />
                         </div>
                       </div>
-                      <Button type="submit" className="w-full mt-4" disabled={isUploadingOutro}>
+                      <Button type="submit" className="w-full" disabled={isUploadingOutro}>
                         {isUploadingOutro ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
                         {isUploadingOutro ? "Uploading..." : "Upload Outro"}
                       </Button>
@@ -529,25 +624,21 @@ export default function Home() {
 
                 <div className="space-y-2">
                   {isOutrosLoading ? (
-                    <div className="flex justify-center p-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-primary/50" />
-                    </div>
+                    <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-primary/50" /></div>
                   ) : outros && outros.length > 0 ? (
                     outros.map(outro => (
-                      <div key={outro.id} className={`p-3 rounded-lg border bg-card/30 transition-all ${outro.isDefault ? 'border-primary/40 shadow-[0_0_15px_rgba(242,17,120,0.05)]' : 'border-border/50'} relative group`}>
+                      <div key={outro.id} className={`p-3 rounded-lg border bg-card/30 group relative transition-all ${outro.isDefault ? "border-primary/40" : "border-border/50"}`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="text-sm font-semibold truncate pr-2 flex items-center gap-1.5">
-                                <Film className="w-3.5 h-3.5 text-muted-foreground" />
-                                {outro.name}
-                              </h4>
+                              <Film className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <h4 className="text-sm font-semibold truncate">{outro.name}</h4>
                               {outro.isDefault && <Star className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />}
                             </div>
-                            <div className="flex flex-wrap gap-1.5 mb-2">
+                            <div className="flex flex-wrap gap-1">
                               <Badge variant="secondary" className="text-[9px] px-1.5 py-0 uppercase bg-muted/60">{outro.position}</Badge>
                               {outro.ctaText && (
-                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-border/50 text-muted-foreground font-normal truncate max-w-[100px]">
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-border/50 text-muted-foreground truncate max-w-[100px]">
                                   CTA: {outro.ctaText}
                                 </Badge>
                               )}
@@ -562,14 +653,18 @@ export default function Home() {
                           )}
                           <Dialog open={editingOutroId === outro.id} onOpenChange={(open) => !open && setEditingOutroId(null)}>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted" onClick={() => openEditModal(outro)}>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted" onClick={() => {
+                                setEditingOutroId(outro.id);
+                                setEditName(outro.name);
+                                setEditPosition(outro.position as "beginning" | "end");
+                                setEditCtaText(outro.ctaText ?? "");
+                                setEditCtaStartSeconds(outro.ctaStartSeconds != null ? Number(outro.ctaStartSeconds) : "");
+                              }}>
                                 <Edit2 className="w-3 h-3" />
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-[425px]">
-                              <DialogHeader>
-                                <DialogTitle>Edit Outro</DialogTitle>
-                              </DialogHeader>
+                              <DialogHeader><DialogTitle>Edit Outro</DialogTitle></DialogHeader>
                               <form onSubmit={handleUpdateOutro} className="space-y-4 pt-4">
                                 <div className="space-y-2">
                                   <Label>Name</Label>
@@ -577,17 +672,15 @@ export default function Home() {
                                 </div>
                                 <div className="space-y-2">
                                   <Label>Position</Label>
-                                  <Select value={editPosition} onValueChange={(v: "beginning"|"end") => setEditPosition(v)}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
+                                  <Select value={editPosition} onValueChange={(v: "beginning" | "end") => setEditPosition(v)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                       <SelectItem value="beginning">Beginning (Intro)</SelectItem>
                                       <SelectItem value="end">End (Outro)</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-3">
                                   <div className="space-y-2">
                                     <Label>CTA Text</Label>
                                     <Input value={editCtaText} onChange={e => setEditCtaText(e.target.value)} />
@@ -597,22 +690,188 @@ export default function Home() {
                                     <Input type="number" step="0.5" min="0" value={editCtaStartSeconds} onChange={e => setEditCtaStartSeconds(e.target.value ? parseFloat(e.target.value) : "")} />
                                   </div>
                                 </div>
-                                <Button type="submit" className="w-full mt-4" disabled={updateOutro.isPending}>
+                                <Button type="submit" className="w-full" disabled={updateOutro.isPending}>
                                   {updateOutro.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
-                                  {updateOutro.isPending ? "Saving..." : "Save Settings"}
+                                  Save Settings
                                 </Button>
                               </form>
                             </DialogContent>
                           </Dialog>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground" onClick={() => handleDeleteOutro(outro.id)}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteOutro(outro.id)}>
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-6 px-4 text-xs text-muted-foreground/60 bg-card/20 rounded-lg border border-dashed border-border/50">
+                    <div className="text-center py-6 text-xs text-muted-foreground/60 bg-card/20 rounded-lg border border-dashed border-border/50">
                       No outros uploaded.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* Brands tab */}
+          <TabsContent value="brands" className="flex-1 overflow-hidden m-0 border-none outline-none">
+            <ScrollArea className="h-full">
+              <div className="p-4 space-y-4">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1 flex items-center gap-2">
+                  Brand Profiles <div className="h-px bg-border flex-1" />
+                </div>
+
+                {/* Add brand button / form */}
+                {!isAddingBrand ? (
+                  <Button
+                    variant="outline"
+                    className="w-full border-dashed border-2 hover:bg-primary/5 hover:text-primary hover:border-primary/30 h-auto py-3 transition-all"
+                    onClick={() => setIsAddingBrand(true)}
+                  >
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Plus className="w-4 h-4" />
+                      <span className="text-xs font-semibold">Add Brand</span>
+                    </div>
+                  </Button>
+                ) : (
+                  <form onSubmit={handleCreateBrand} className="space-y-3 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                    <p className="text-xs font-semibold text-foreground">New Brand</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Brand Name *</Label>
+                      <Input value={newBrandName} onChange={e => setNewBrandName(e.target.value)} placeholder="e.g. TAW Media" className="h-8 text-xs" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Voice / Tone Style</Label>
+                      <Textarea value={newBrandVoice} onChange={e => setNewBrandVoice(e.target.value)} placeholder="e.g. Direct, no-fluff, motivational. Write like a founder talking to peers." className="text-xs min-h-[60px] resize-none" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Default CTA</Label>
+                      <Input value={newBrandCta} onChange={e => setNewBrandCta(e.target.value)} placeholder="e.g. Book a free strategy call →" className="h-8 text-xs" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" className="flex-1 h-8 text-xs" disabled={createBrand.isPending}>
+                        {createBrand.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
+                        Save Brand
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setIsAddingBrand(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Brand list */}
+                <div className="space-y-2">
+                  {isBrandsLoading ? (
+                    <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-primary/50" /></div>
+                  ) : brands && brands.length > 0 ? (
+                    brands.map((brand: Brand) => (
+                      <div key={brand.id} className="rounded-lg border border-border/50 bg-card/30 overflow-hidden">
+                        {/* Brand header row */}
+                        <div
+                          className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/30 transition-colors group"
+                          onClick={() => setExpandedBrandId(expandedBrandId === brand.id ? null : brand.id)}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/20 to-[#f21178]/20 flex items-center justify-center shrink-0 border border-border/50">
+                            {brand.logoPath ? (
+                              <img src={`/api/brands/${brand.id}/logo`} alt={brand.name} className="w-full h-full rounded-full object-cover" />
+                            ) : (
+                              <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{brand.name}</p>
+                            {brand.voiceStyle && (
+                              <p className="text-[10px] text-muted-foreground truncate">{brand.voiceStyle.slice(0, 40)}{brand.voiceStyle.length > 40 ? "…" : ""}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteBrand(brand.id); }}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                            {expandedBrandId === brand.id ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                          </div>
+                        </div>
+
+                        {/* Expanded brand detail */}
+                        {expandedBrandId === brand.id && (
+                          <div className="border-t border-border/50 p-3 bg-muted/10 space-y-3">
+                            {editingBrandId === brand.id ? (
+                              <form onSubmit={handleUpdateBrand} className="space-y-3">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Name</Label>
+                                  <Input value={editBrandName} onChange={e => setEditBrandName(e.target.value)} className="h-7 text-xs" />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Voice Style</Label>
+                                  <Textarea value={editBrandVoice} onChange={e => setEditBrandVoice(e.target.value)} className="text-xs min-h-[50px] resize-none" />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Default CTA</Label>
+                                  <Input value={editBrandCta} onChange={e => setEditBrandCta(e.target.value)} className="h-7 text-xs" />
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button type="submit" size="sm" className="flex-1 h-7 text-[11px]" disabled={updateBrand.isPending}>
+                                    {updateBrand.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
+                                    Save
+                                  </Button>
+                                  <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setEditingBrandId(null)}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </form>
+                            ) : (
+                              <>
+                                {brand.defaultCta && (
+                                  <div>
+                                    <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Default CTA</p>
+                                    <p className="text-xs text-foreground/80">{brand.defaultCta}</p>
+                                  </div>
+                                )}
+                                <Button size="sm" variant="outline" className="h-7 text-[11px] w-full gap-1.5" onClick={() => openEditBrand(brand)}>
+                                  <Edit2 className="w-3 h-3" /> Edit Settings
+                                </Button>
+                              </>
+                            )}
+
+                            {/* File uploads */}
+                            <div className="space-y-2 pt-1">
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Media Files</p>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {(["logo", "intro-audio", "outro-audio"] as const).map((type) => {
+                                  const icons = { logo: Image, "intro-audio": Mic, "outro-audio": Mic };
+                                  const labels = { logo: "Logo", "intro-audio": "Intro", "outro-audio": "Outro" };
+                                  const accepts = { logo: "image/*", "intro-audio": "audio/*", "outro-audio": "audio/*" };
+                                  const Icon = icons[type];
+                                  const hasFile = type === "logo" ? !!brand.logoPath : type === "intro-audio" ? !!brand.introAudioPath : !!brand.outroAudioPath;
+                                  return (
+                                    <label key={type} className={`flex flex-col items-center gap-1 p-2 rounded border cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/30 ${hasFile ? "border-emerald-500/30 bg-emerald-500/5" : "border-dashed border-border/50 bg-card/30"}`}>
+                                      <Icon className={`w-4 h-4 ${hasFile ? "text-emerald-500" : "text-muted-foreground"}`} />
+                                      <span className="text-[9px] font-medium text-muted-foreground">{labels[type]}</span>
+                                      <input type="file" accept={accepts[type]} className="hidden" onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        try {
+                                          await handleBrandFileUpload(brand.id, type, file);
+                                          toast({ title: `${labels[type]} uploaded` });
+                                        } catch {
+                                          toast({ title: "Upload failed", variant: "destructive" });
+                                        }
+                                        e.target.value = "";
+                                      }} />
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-xs text-muted-foreground/60 bg-card/20 rounded-lg border border-dashed border-border/50">
+                      No brands yet. Add one to customise content voice.
                     </div>
                   )}
                 </div>
@@ -622,7 +881,7 @@ export default function Home() {
         </Tabs>
       </div>
 
-      {/* Main Content Area */}
+      {/* ── Main Content ─────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col relative z-0 bg-background/50 min-w-0">
         {/* Mobile top bar */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card/40 sticky top-0 z-20">
@@ -638,22 +897,25 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
+        {/* ── Form panel ── */}
+        <div className="p-4 md:p-5 border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 max-w-4xl mx-auto w-full">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-3 max-w-4xl mx-auto w-full">
+
+              {/* Row 1: URL + submit button */}
               <div className="flex flex-col sm:flex-row gap-3 items-start w-full">
                 <FormField
                   control={form.control}
                   name="youtubeUrl"
                   render={({ field }) => (
-                    <FormItem className="flex-1 w-full sm:w-auto">
+                    <FormItem className="flex-1 w-full">
                       <FormControl>
                         <div className="relative group">
-                          <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <Input 
-                            placeholder="Paste YouTube URL here..." 
-                            className="pl-12 bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-base h-14 shadow-sm transition-all rounded-xl"
-                            {...field} 
+                          <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                          <Input
+                            placeholder="Paste YouTube URL here..."
+                            className="pl-12 bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-base h-13 shadow-sm transition-all rounded-xl"
+                            {...field}
                           />
                         </div>
                       </FormControl>
@@ -661,66 +923,150 @@ export default function Home() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="clipCount"
-                  render={({ field }) => (
-                    <FormItem className="w-32 shrink-0">
-                      <FormControl>
-                        <div className="relative group">
-                          <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <Input 
-                            type="number" 
-                            min={1} 
-                            max={10} 
-                            className="pl-12 pr-4 bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-base h-14 shadow-sm transition-all rounded-xl font-mono"
-                            {...field} 
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage className="text-xs ml-1" />
-                    </FormItem>
-                  )}
-                />
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   size="lg"
                   disabled={createJob.isPending}
-                  style={{ background: 'linear-gradient(135deg, #fd9601, #f21178)' }}
-                  className="h-14 px-8 text-base shadow-[0_4px_14px_0_rgba(242,17,120,0.2)] hover:shadow-[0_6px_20px_rgba(242,17,120,0.3)] hover:-translate-y-0.5 transition-all rounded-xl font-semibold active:translate-y-0 shrink-0 text-white border-0 w-full sm:w-auto"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #c026d3, #f21178)" }}
+                  className="h-13 px-7 text-base shadow-[0_4px_20px_0_rgba(124,58,237,0.35)] hover:shadow-[0_6px_24px_rgba(242,17,120,0.4)] hover:-translate-y-0.5 transition-all rounded-xl font-bold active:translate-y-0 shrink-0 text-white border-0 w-full sm:w-auto whitespace-nowrap"
                 >
-                  {createJob.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Scissors className="w-5 h-5 mr-2" />}
-                  {createJob.isPending ? "Starting..." : "Extract Clips"}
+                  {createJob.isPending
+                    ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Starting...</>
+                    : <><Zap className="w-5 h-5 mr-2" />Multiply My Content 🚀</>
+                  }
                 </Button>
               </div>
-              
-              <div className="flex gap-4">
+
+              {/* Row 2: Options */}
+              <div className="flex flex-wrap gap-3 items-center">
+
+                {/* Clip duration pills */}
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-xs text-muted-foreground font-medium shrink-0">Clip length:</span>
+                  <div className="flex gap-1">
+                    {CLIP_DURATIONS.map(dur => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => form.setValue("clipDurationSeconds", dur)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+                          selectedDuration === dur
+                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                            : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {dur}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="h-4 w-px bg-border/60 hidden sm:block" />
+
+                {/* Shorts toggle */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => form.setValue("includeShorts", !includeShorts)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${includeShorts ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${includeShorts ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                  <span className="text-xs text-muted-foreground font-medium">Shorts clips</span>
+                  {includeShorts && (
+                    <FormField
+                      control={form.control}
+                      name="clipCount"
+                      render={({ field }) => (
+                        <FormItem className="w-16 m-0">
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={10}
+                              className="h-7 text-xs text-center px-2 font-mono bg-background border-border/60"
+                              {...field}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                <div className="h-4 w-px bg-border/60 hidden sm:block" />
+
+                {/* Outro select */}
                 <FormField
                   control={form.control}
                   name="outroId"
                   render={({ field }) => (
-                    <FormItem className="w-64">
+                    <FormItem className="w-40 m-0">
                       <FormControl>
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10 bg-background border-border/60">
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Film className="w-4 h-4" />
-                              <SelectValue placeholder="Select Outro" />
+                          <SelectTrigger className="h-8 bg-background border-border/60 text-xs">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Film className="w-3.5 h-3.5 shrink-0" />
+                              <SelectValue placeholder="No Outro" />
                             </div>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">No Outro</SelectItem>
-                            {outros && outros.length > 0 && outros.map(outro => (
-                              <SelectItem key={outro.id} value={String(outro.id)}>
-                                {outro.name} {outro.isDefault ? "(Default)" : ""}
+                            {outros?.map(o => (
+                              <SelectItem key={o.id} value={String(o.id)}>
+                                {o.name}{o.isDefault ? " ✦" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </FormControl>
-                      {outros && outros.length === 0 && (
-                        <p className="text-[10px] text-muted-foreground mt-1 ml-1">No outros uploaded yet.</p>
-                      )}
+                    </FormItem>
+                  )}
+                />
+
+                {/* Brand select */}
+                <FormField
+                  control={form.control}
+                  name="brandId"
+                  render={({ field }) => (
+                    <FormItem className="w-40 m-0">
+                      <FormControl>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="h-8 bg-background border-border/60 text-xs">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Building2 className="w-3.5 h-3.5 shrink-0" />
+                              <SelectValue placeholder="No Brand" />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Brand</SelectItem>
+                            {brands?.map((b: Brand) => (
+                              <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {/* CTA input */}
+                <FormField
+                  control={form.control}
+                  name="contentCta"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-w-[180px] m-0">
+                      <FormControl>
+                        <div className="relative group">
+                          <Megaphone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                          <Input
+                            placeholder="CTA text (optional)"
+                            className="pl-9 h-8 text-xs bg-background border-border/60 hover:border-border focus-visible:ring-primary/30"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
                     </FormItem>
                   )}
                 />
@@ -729,102 +1075,134 @@ export default function Home() {
           </Form>
         </div>
 
-        <ScrollArea className="flex-1 p-6 lg:p-10">
+        {/* ── Content area ── */}
+        <ScrollArea className="flex-1 p-5 lg:p-8">
           {!selectedJobId ? (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground max-w-md mx-auto text-center mt-24">
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground max-w-md mx-auto text-center mt-16">
               <div className="w-24 h-24 bg-card/50 rounded-2xl flex items-center justify-center mb-8 border border-border/50 shadow-sm relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-50" />
-                <FileVideo className="w-10 h-10 text-muted-foreground/50 relative z-10" />
+                <div className="absolute inset-0 bg-gradient-to-tr from-violet-500/10 via-transparent to-[#f21178]/10" />
+                <FileVideo className="w-10 h-10 text-muted-foreground/40 relative z-10" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-3 tracking-tight">Workspace Empty</h2>
-              <p className="text-sm text-muted-foreground/80 leading-relaxed">
-                Paste a YouTube URL above and define how many clips you want. Our AI will analyze the video, find the most engaging moments, and render vertical shorts automatically.
+              <h2 className="text-xl font-semibold text-foreground mb-3">Workspace Empty</h2>
+              <p className="text-sm text-muted-foreground/70 leading-relaxed">
+                Paste a YouTube URL and hit <span className="text-foreground font-semibold">Multiply My Content</span>. The AI will analyse the video, extract the best moments as vertical shorts, and generate a full content pack — blog, newsletter, social posts, carousel slides, and more.
               </p>
             </div>
           ) : jobWithClips ? (
             <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="mb-10">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
-                  <div>
+
+              {/* Job header */}
+              <div className="mb-8">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                  <div className="flex-1 min-w-0">
                     <h2 className="text-2xl lg:text-3xl font-bold tracking-tight mb-2 text-foreground">
-                      {jobWithClips.videoTitle || 'Processing Video...'}
+                      {jobWithClips.videoTitle || "Processing Video…"}
                     </h2>
-                    <div className="flex flex-wrap items-center gap-3 text-sm">
-                      <a 
-                        href={jobWithClips.youtubeUrl} 
-                        target="_blank" 
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <a
+                        href={jobWithClips.youtubeUrl}
+                        target="_blank"
                         rel="noreferrer"
-                        className="text-primary/90 hover:text-primary transition-colors flex items-center gap-1.5 bg-primary/10 px-2 py-1 rounded-md font-medium"
+                        className="text-primary/90 hover:text-primary flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-lg font-medium transition-colors text-xs"
                       >
-                        <PlayCircle className="w-4 h-4" /> Source Video
+                        <PlayCircle className="w-3.5 h-3.5" /> Source Video
                       </a>
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Layers className="w-4 h-4" />
-                        Target: <span className="font-mono">{jobWithClips.clipCount}</span> clips
+                      <span className="text-muted-foreground text-xs flex items-center gap-1.5 bg-muted/40 px-2.5 py-1 rounded-lg">
+                        <Layers className="w-3.5 h-3.5" />
+                        {(jobWithClips as any).clipCount === 0 ? "No shorts" : `${(jobWithClips as any).clipCount} clips`}
                       </span>
-                      {jobWithClips.outroId && outros && (
-                        <span className="text-muted-foreground flex items-center gap-1.5">
-                          <Film className="w-4 h-4 text-primary/70" />
-                          Outro: <span className="font-medium text-foreground">{outros.find(o => o.id === jobWithClips.outroId)?.name || 'Unknown'}</span>
-                        </span>
-                      )}
+                      <span className="text-muted-foreground text-xs flex items-center gap-1.5 bg-muted/40 px-2.5 py-1 rounded-lg">
+                        <Clock className="w-3.5 h-3.5" />
+                        {(jobWithClips as any).clipDurationSeconds ?? 45}s clips
+                      </span>
                     </div>
                   </div>
-                  <Badge variant="outline" className={`${getStatusColor(jobWithClips.status)} px-3 py-1.5 text-sm font-medium border shadow-sm`}>
-                    {getStatusLabel(jobWithClips.status)}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Badge variant="outline" className={`${getStatusColor(jobWithClips.status)} px-3 py-1.5 text-xs font-semibold border`}>
+                      {getStatusLabel(jobWithClips.status)}
+                    </Badge>
+                    {/* Export All ZIP */}
+                    {jobWithClips.status === "completed" && (
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-violet-500/40 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300" asChild>
+                        <a href={`/api/jobs/${jobWithClips.id}/download-all`} download>
+                          <Package className="w-3.5 h-3.5" /> Export All (.zip)
+                        </a>
+                      </Button>
+                    )}
+                    {/* Podcast download */}
+                    {(jobWithClips as any).hasPodcast && (
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" asChild>
+                        <a href={`/api/jobs/${jobWithClips.id}/download-podcast`} download>
+                          <Mic className="w-3.5 h-3.5" /> Podcast MP3
+                        </a>
+                      </Button>
+                    )}
+                    {/* Facebook video */}
+                    {(jobWithClips as any).hasFacebookVideo && (
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-[#1877F2]/40 text-[#1877F2] hover:bg-[#1877F2]/10" asChild>
+                        <a href={`/api/jobs/${jobWithClips.id}/download-facebook`} download>
+                          <Download className="w-3.5 h-3.5" /> Facebook 1:1
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                {jobWithClips.status !== 'completed' && jobWithClips.status !== 'failed' && (
-                  <div className="mt-8">
-                    <Progress value={getStatusProgress(jobWithClips.status)} className="h-1.5 bg-muted/50 overflow-hidden" indicatorClassName="bg-gradient-to-r from-[#fd9601] to-[#f21178] shadow-[0_0_10px_rgba(242,17,120,0.4)] transition-all duration-1000" />
+                {!["completed", "failed"].includes(jobWithClips.status) && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground font-medium">{getStatusLabel(jobWithClips.status)}…</span>
+                      <span className="text-xs font-mono text-muted-foreground">{getStatusProgress(jobWithClips.status)}%</span>
+                    </div>
+                    <Progress
+                      value={getStatusProgress(jobWithClips.status)}
+                      className="h-1.5 bg-muted/50"
+                      indicatorClassName="bg-gradient-to-r from-violet-500 via-fuchsia-500 to-[#f21178] transition-all duration-1000"
+                    />
                   </div>
                 )}
 
-                {jobWithClips.status === 'failed' && (
-                  <div className="mt-8 bg-destructive/5 border border-destructive/20 rounded-xl p-6 text-destructive flex gap-4 shadow-sm">
-                    <div className="mt-0.5 bg-destructive/10 p-2 rounded-full h-fit">
+                {jobWithClips.status === "failed" && (
+                  <div className="mt-6 bg-destructive/5 border border-destructive/20 rounded-xl p-5 text-destructive flex gap-4">
+                    <div className="bg-destructive/10 p-2 rounded-full h-fit">
                       <AlertCircle className="w-5 h-5 shrink-0" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-1 text-base">Processing Failed</h4>
-                      <p className="text-sm text-destructive/80 leading-relaxed">{jobWithClips.errorMessage || 'An unknown error occurred during video processing.'}</p>
+                      <h4 className="font-semibold mb-1">Processing Failed</h4>
+                      <p className="text-sm text-destructive/80 leading-relaxed">{jobWithClips.errorMessage || "An unknown error occurred."}</p>
                     </div>
                   </div>
                 )}
               </div>
 
-              {jobWithClips.status === 'completed' && (
-                <div className="mt-12">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
+              {/* Generated Content section */}
+              {jobWithClips.status === "completed" && (
+                <div className="mb-12">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
                       <FileText className="w-5 h-5 text-primary" />
-                      Generated Content
+                      Generated Content Pack
                     </h3>
-                    <div className="flex items-center gap-2">
-                      {jobWithClips.hasContent && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleRegenerateContent}
-                          disabled={regenerateContent.isPending}
-                          className="h-8 text-xs gap-1.5 border-border/60"
-                        >
-                          {regenerateContent.isPending
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <RefreshCw className="w-3.5 h-3.5" />}
-                          Regenerate
-                        </Button>
-                      )}
-                    </div>
+                    {jobWithClips.hasContent && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRegenerateContent}
+                        disabled={regenerateContent.isPending}
+                        className="h-8 text-xs gap-1.5 border-border/60"
+                      >
+                        {regenerateContent.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Regenerate
+                      </Button>
+                    )}
                   </div>
 
                   {!jobWithClips.hasContent ? (
                     <div className="rounded-xl border border-dashed border-border bg-card/20 p-10 flex flex-col items-center text-center gap-4">
                       <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
                       <div>
-                        <p className="font-semibold text-sm mb-1">Generating content...</p>
-                        <p className="text-xs text-muted-foreground max-w-xs">Analysing the transcript to create your blog post, thread, social content, newsletter and quotes.</p>
+                        <p className="font-semibold text-sm mb-1">Generating content…</p>
+                        <p className="text-xs text-muted-foreground max-w-xs">Creating your full content pack: blog, thread, newsletter, social article, quotes, and carousel slides.</p>
                       </div>
                     </div>
                   ) : isContentLoading ? (
@@ -849,27 +1227,24 @@ export default function Home() {
                         <TabsTrigger value="quotes" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
                           <MessageSquareQuote className="w-3.5 h-3.5" /> Quotes
                         </TabsTrigger>
+                        {jobContent.carouselImages?.length > 0 && (
+                          <TabsTrigger value="carousel" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                            <Image className="w-3.5 h-3.5" /> Carousel
+                          </TabsTrigger>
+                        )}
                       </TabsList>
 
+                      {/* Blog */}
                       <TabsContent value="blog" className="m-0">
                         <div className="rounded-xl border border-border bg-card overflow-hidden">
                           {jobContent.thumbnailUrl && (
-                            <img
-                              src={jobContent.thumbnailUrl}
-                              alt={jobContent.videoTitle}
-                              className="w-full h-48 object-cover border-b border-border"
-                            />
+                            <img src={jobContent.thumbnailUrl} alt={jobContent.videoTitle} className="w-full h-44 object-cover border-b border-border" />
                           )}
                           <div className="p-6">
                             <div className="flex items-center justify-between mb-4">
                               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">HTML Blog Post</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs gap-1.5 border-border/60"
-                                onClick={() => copyToClipboard(jobContent.blogPost, "blog")}
-                              >
-                                {copiedKey === "blog" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.blogPost, "blog")}>
+                                {copiedKey === "blog" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                                 {copiedKey === "blog" ? "Copied!" : "Copy HTML"}
                               </Button>
                             </div>
@@ -878,92 +1253,64 @@ export default function Home() {
                                 dangerouslySetInnerHTML={{ __html: jobContent.blogPost }}
                               />
                             ) : (
-                              <pre className="text-sm leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 max-h-96 overflow-y-auto text-foreground/80 border border-border/40">
-                                {jobContent.blogPost}
-                              </pre>
+                              <pre className="text-sm leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 max-h-96 overflow-y-auto text-foreground/80 border border-border/40">{jobContent.blogPost}</pre>
                             )}
                           </div>
                         </div>
                       </TabsContent>
 
+                      {/* Thread */}
                       <TabsContent value="thread" className="m-0">
                         <div className="rounded-xl border border-border bg-card p-6">
                           <div className="flex items-center justify-between mb-5">
                             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">X / Threads Posts</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs gap-1.5 border-border/60"
-                              onClick={() => copyToClipboard(jobContent.threadPosts.map(p => p.replace(/^Post\s+\d+\s*:\s*/i, "").trim()).join("\n\n---\n\n"), "thread-all")}
-                            >
-                              {copiedKey === "thread-all" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                              {copiedKey === "thread-all" ? "Copied!" : "Copy All"}
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.threadPosts.map((p: string) => p.replace(/^Post\s+\d+\s*:\s*/i, "").trim()).join("\n\n---\n\n"), "thread-all")}>
+                              {copiedKey === "thread-all" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                              Copy All
                             </Button>
                           </div>
                           <div className="space-y-3">
-                            {jobContent.threadPosts.map((post, i) => {
-                              const cleanPost = post.replace(/^Post\s+\d+\s*:\s*/i, "").trim();
+                            {jobContent.threadPosts.map((post: string, i: number) => {
+                              const clean = post.replace(/^Post\s+\d+\s*:\s*/i, "").trim();
                               return (
-                              <div key={i} className="bg-muted/30 rounded-lg p-4 border border-border/40 group relative">
-                                <div className="flex items-start gap-3">
-                                  <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
-                                    {i + 1}
-                                  </span>
-                                  <p className="text-sm leading-relaxed flex-1 text-foreground/85">{cleanPost}</p>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => copyToClipboard(cleanPost, `thread-${i}`)}
-                                  >
-                                    {copiedKey === `thread-${i}` ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-                                  </Button>
+                                <div key={i} className="bg-muted/30 rounded-lg p-4 border border-border/40 group relative">
+                                  <div className="flex items-start gap-3">
+                                    <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">{i + 1}</span>
+                                    <p className="text-sm leading-relaxed flex-1 text-foreground/85">{clean}</p>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(clean, `thread-${i}`)}>
+                                      {copiedKey === `thread-${i}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+                                    </Button>
+                                  </div>
+                                  <div className="flex justify-end mt-2">
+                                    <span className={`text-[10px] font-mono ${clean.length > 260 ? "text-orange-500" : "text-muted-foreground/50"}`}>{clean.length} / 280</span>
+                                  </div>
                                 </div>
-                                <div className="flex justify-end mt-2">
-                                  <span className={`text-[10px] font-mono ${cleanPost.length > 260 ? 'text-orange-500' : 'text-muted-foreground/50'}`}>
-                                    {cleanPost.length} / 280
-                                  </span>
-                                </div>
-                              </div>
                               );
                             })}
                           </div>
                         </div>
                       </TabsContent>
 
+                      {/* Social */}
                       <TabsContent value="social" className="m-0">
                         <div className="rounded-xl border border-border bg-card p-6">
                           <div className="flex items-center justify-between mb-4">
                             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Facebook / Quora / LinkedIn</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs gap-1.5 border-border/60"
-                              onClick={() => {
-                                // Strip HTML tags to plain text for pasting into social platforms
-                                const plain = jobContent.socialArticle
-                                  .replace(/<h2[^>]*>/gi, "\n\n")
-                                  .replace(/<\/h2>/gi, "\n")
-                                  .replace(/<\/p>/gi, "\n\n")
-                                  .replace(/<li[^>]*>/gi, "• ")
-                                  .replace(/<\/li>/gi, "\n")
-                                  .replace(/<[^>]+>/g, "")
-                                  .replace(/&amp;/g, "&")
-                                  .replace(/&lt;/g, "<")
-                                  .replace(/&gt;/g, ">")
-                                  .replace(/\n{3,}/g, "\n\n")
-                                  .trim();
-                                copyToClipboard(plain, "social");
-                              }}
-                            >
-                              {copiedKey === "social" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                              {copiedKey === "social" ? "Copied!" : "Copy Article"}
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+                              const plain = jobContent.socialArticle
+                                .replace(/<h2[^>]*>/gi, "\n\n").replace(/<\/h2>/gi, "\n")
+                                .replace(/<\/p>/gi, "\n\n").replace(/<li[^>]*>/gi, "• ").replace(/<\/li>/gi, "\n")
+                                .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+                                .replace(/\n{3,}/g, "\n\n").trim();
+                              copyToClipboard(plain, "social");
+                            }}>
+                              {copiedKey === "social" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                              Copy Article
                             </Button>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-5 border border-border/40 max-h-[500px] overflow-y-auto">
                             {/<(h2|p|strong|ul|li)\b/i.test(jobContent.socialArticle) ? (
-                              <div
-                                className="prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h2:text-base prose-h2:mt-5 prose-h2:mb-2 prose-p:text-foreground/85 prose-p:leading-relaxed prose-p:mb-3 prose-li:text-foreground/85 prose-ul:my-2 prose-strong:text-foreground"
+                              <div className="prose prose-sm prose-invert max-w-none prose-headings:font-bold prose-h2:text-base prose-h2:mt-5 prose-p:text-foreground/85 prose-p:leading-relaxed prose-li:text-foreground/85 prose-strong:text-foreground"
                                 dangerouslySetInnerHTML={{ __html: jobContent.socialArticle }}
                               />
                             ) : (
@@ -973,118 +1320,85 @@ export default function Home() {
                         </div>
                       </TabsContent>
 
+                      {/* Newsletter */}
                       <TabsContent value="newsletter" className="m-0">
-                        <div className="rounded-xl border border-border bg-card p-6">
-                          <div className="mb-5">
+                        <div className="rounded-xl border border-border bg-card p-6 space-y-6">
+                          <div>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Email Subject Line</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs gap-1.5 border-border/60"
-                                onClick={() => copyToClipboard(jobContent.newsletterEmail.subject, "subject")}
-                              >
-                                {copiedKey === "subject" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                {copiedKey === "subject" ? "Copied!" : "Copy"}
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.newsletterEmail.subject, "subject")}>
+                                {copiedKey === "subject" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                Copy
                               </Button>
                             </div>
                             <div className="bg-muted/30 rounded-lg px-4 py-3 border border-border/40">
                               <p className="text-sm font-semibold text-foreground">{jobContent.newsletterEmail.subject}</p>
                             </div>
                           </div>
-
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">HTML Email Body (paste into CRM)</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs gap-1.5 border-border/60"
-                                onClick={() => copyToClipboard(jobContent.newsletterEmail.body, "newsletter")}
-                              >
-                                {copiedKey === "newsletter" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                {copiedKey === "newsletter" ? "Copied!" : "Copy HTML"}
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">HTML Email Body</span>
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.newsletterEmail.body, "newsletter")}>
+                                {copiedKey === "newsletter" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                Copy HTML
                               </Button>
                             </div>
                             <div className="rounded-lg border border-border/40 overflow-hidden">
-                              <div className="bg-muted/60 border-b border-border/40 px-4 py-2 text-[10px] font-mono text-muted-foreground">Preview (as seen in email client)</div>
-                              <div
-                                className="bg-white"
-                                dangerouslySetInnerHTML={{ __html: jobContent.newsletterEmail.body }}
-                              />
+                              <div className="bg-muted/60 border-b border-border/40 px-4 py-2 text-[10px] font-mono text-muted-foreground">Preview (rendered)</div>
+                              <div className="bg-white" dangerouslySetInnerHTML={{ __html: jobContent.newsletterEmail.body }} />
                             </div>
                           </div>
                         </div>
                       </TabsContent>
 
+                      {/* Quotes */}
                       <TabsContent value="quotes" className="m-0">
                         <div className="rounded-xl border border-border bg-card p-6 space-y-4">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                            <h3 className="text-sm font-bold flex items-center gap-2">
                               <MessageSquareQuote className="w-4 h-4 text-[#f21178]" />
                               Quotes &amp; Captions
                             </h3>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs gap-1.5 border-border/60"
-                              onClick={() => {
-                                if (!jobContent.quotes?.length) return;
-                                const rows = jobContent.quotes.map((q, i) => {
-                                  const caption = jobContent.instagramCaptions?.[i] ?? "";
-                                  return `"${q.replace(/"/g, '""')}","${caption.replace(/"/g, '""')}"`;
-                                });
-                                const csv = `"Quote","Instagram / TikTok Caption"\n${rows.join("\n")}`;
-                                const blob = new Blob([csv], { type: "text/csv" });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = `quotes-${jobWithClips.id}.csv`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              }}
-                            >
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+                              if (!jobContent.quotes?.length) return;
+                              const rows = jobContent.quotes.map((q: string, i: number) => {
+                                const caption = jobContent.instagramCaptions?.[i] ?? "";
+                                return `"${q.replace(/"/g, '""')}","${caption.replace(/"/g, '""')}"`;
+                              });
+                              const csv = `"Quote","Instagram / TikTok Caption"\n${rows.join("\n")}`;
+                              const blob = new Blob([csv], { type: "text/csv" });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a"); a.href = url; a.download = `quotes-${jobWithClips.id}.csv`; a.click();
+                              URL.revokeObjectURL(url);
+                            }}>
                               <Download className="w-3 h-3" /> Export CSV
                             </Button>
                           </div>
-
-                          {jobContent.quotes && jobContent.quotes.length > 0 ? (
-                            <div className="space-y-6">
-                              {jobContent.quotes.map((quote, i) => {
+                          {jobContent.quotes?.length > 0 ? (
+                            <div className="space-y-5">
+                              {jobContent.quotes.map((quote: string, i: number) => {
                                 const caption = jobContent.instagramCaptions?.[i] ?? "";
                                 return (
                                   <div key={i} className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden">
-                                    {/* Quote row */}
                                     <div className="p-4 border-b border-border/40">
                                       <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold text-foreground uppercase tracking-widest">Quote</span>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-6 text-[10px] gap-1 border-border/50 px-2"
-                                          onClick={() => copyToClipboard(quote, `quote-${i}`)}
-                                        >
-                                          {copiedKey === `quote-${i}` ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}
-                                          {copiedKey === `quote-${i}` ? "Copied!" : "Copy"}
+                                        <span className="text-xs font-bold text-foreground uppercase tracking-widest">Quote {i + 1}</span>
+                                        <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyToClipboard(quote, `quote-${i}`)}>
+                                          {copiedKey === `quote-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
+                                          Copy
                                         </Button>
                                       </div>
-                                      <p className="text-sm leading-relaxed text-foreground font-medium italic border-l-2 pl-3" style={{ borderColor: i % 2 === 0 ? '#f21178' : '#fd9601' }}>
+                                      <p className="text-sm leading-relaxed text-foreground font-medium italic border-l-2 pl-3" style={{ borderColor: i % 2 === 0 ? "#f21178" : "#7c3aed" }}>
                                         "{quote}"
                                       </p>
                                     </div>
-                                    {/* Instagram / TikTok Caption row */}
                                     {caption && (
                                       <div className="p-4">
                                         <div className="flex items-center justify-between mb-2">
                                           <span className="text-xs font-bold text-foreground uppercase tracking-widest">Instagram / TikTok Caption</span>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 text-[10px] gap-1 border-border/50 px-2"
-                                            onClick={() => copyToClipboard(caption, `caption-${i}`)}
-                                          >
-                                            {copiedKey === `caption-${i}` ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}
-                                            {copiedKey === `caption-${i}` ? "Copied!" : "Copy"}
+                                          <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyToClipboard(caption, `caption-${i}`)}>
+                                            {copiedKey === `caption-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
+                                            Copy
                                           </Button>
                                         </div>
                                         <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{caption}</p>
@@ -1095,90 +1409,136 @@ export default function Home() {
                               })}
                             </div>
                           ) : (
-                            <div className="text-center py-10 text-muted-foreground text-sm">
-                              No quotes available. Regenerate content to include quotes.
-                            </div>
+                            <div className="text-center py-8 text-muted-foreground text-sm">No quotes available.</div>
                           )}
                         </div>
                       </TabsContent>
+
+                      {/* Carousel */}
+                      {jobContent.carouselImages?.length > 0 && (
+                        <TabsContent value="carousel" className="m-0">
+                          <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-sm font-bold flex items-center gap-2">
+                                <Image className="w-4 h-4 text-[#f21178]" />
+                                Carousel Slides
+                                <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0">{jobContent.carouselImages.length} slides</Badge>
+                              </h3>
+                              {jobContent.carouselCaption && (
+                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.carouselCaption, "carousel-caption")}>
+                                  {copiedKey === "carousel-caption" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                  Copy Caption
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Carousel caption */}
+                            {jobContent.carouselCaption && (
+                              <div className="bg-muted/30 rounded-lg p-4 border border-border/40">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Instagram Caption for Carousel</p>
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{jobContent.carouselCaption}</p>
+                              </div>
+                            )}
+
+                            {/* Slide images grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                              {jobContent.carouselImages.map((filename: string, i: number) => (
+                                <div key={i} className="group rounded-xl border border-border/50 bg-muted/20 overflow-hidden">
+                                  <div className="aspect-square relative overflow-hidden bg-black">
+                                    <img
+                                      src={`/api/images/${filename}`}
+                                      alt={`Carousel slide ${i + 1}`}
+                                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                      loading="lazy"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                    <div className="absolute top-2 left-2">
+                                      <Badge className="bg-black/60 text-white border-none text-[10px] px-1.5 py-0.5 font-mono">
+                                        {i + 1}/{jobContent.carouselImages.length}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  <div className="p-2">
+                                    <Button size="sm" variant="outline" className="w-full h-7 text-[11px] gap-1.5 border-border/50" asChild>
+                                      <a href={`/api/images/${filename}`} download={`slide_${i + 1}.png`}>
+                                        <Download className="w-3 h-3" /> Download
+                                      </a>
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </TabsContent>
+                      )}
                     </Tabs>
                   ) : null}
                 </div>
               )}
 
+              {/* Clips grid */}
               {jobWithClips.clips && jobWithClips.clips.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
-                      Generated Clips
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Scissors className="w-5 h-5 text-primary" />
+                      Vertical Shorts
                       <Badge variant="secondary" className="font-mono text-xs bg-muted/50 text-muted-foreground">
-                        {jobWithClips.clips.filter(c => c.status === 'completed').length} / {jobWithClips.clips.length}
+                        {jobWithClips.clips.filter(c => c.status === "completed").length} / {jobWithClips.clips.length}
                       </Badge>
                     </h3>
-                    {(jobWithClips as any).hasFacebookVideo && (
-                      <Button size="sm" variant="outline" className="gap-2 border-[#1877F2]/40 text-[#1877F2] hover:bg-[#1877F2]/10" asChild>
-                        <a href={`/api/jobs/${jobWithClips.id}/download-facebook`} download>
-                          <Download className="w-3.5 h-3.5" /> Full Facebook Video (1:1)
-                        </a>
-                      </Button>
-                    )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {jobWithClips.clips.map((clip, index) => (
-                      <Card key={clip.id} className="overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-all duration-300 bg-card group relative flex flex-col">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {jobWithClips.clips.map((clip) => (
+                      <Card key={clip.id} className="overflow-hidden border-border/60 shadow-sm hover:shadow-lg transition-all duration-300 bg-card group relative flex flex-col">
                         <div className="aspect-[9/16] bg-black/90 relative flex items-center justify-center overflow-hidden border-b border-border/30">
-                          {clip.status === 'completed' ? (
+                          {clip.status === "completed" ? (
                             <>
-                              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-background/5 z-10 opacity-60 group-hover:opacity-80 transition-opacity" />
-                              <div className="absolute inset-0 z-20 flex flex-col justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-95 group-hover:scale-100">
-                                <div className="w-14 h-14 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center shadow-lg border border-white/20 backdrop-blur-sm cursor-pointer">
-                                  <PlayCircle className="w-7 h-7 ml-1" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent z-10 opacity-60 group-hover:opacity-90 transition-opacity" />
+                              <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                <div className="w-14 h-14 rounded-full bg-primary/90 text-white flex items-center justify-center shadow-xl border border-white/20">
+                                  <PlayCircle className="w-7 h-7 ml-0.5" />
                                 </div>
                               </div>
                             </>
                           ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-card/5 z-10 backdrop-blur-[2px]">
-                              <div className="relative">
-                                <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
-                                <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary relative z-10" />
-                              </div>
-                              <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground/70">{getStatusLabel(clip.status)}</span>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground z-10">
+                              <Loader2 className="w-8 h-8 animate-spin mb-3 text-primary" />
+                              <span className="text-[10px] font-semibold uppercase tracking-widest">{getStatusLabel(clip.status)}</span>
                             </div>
                           )}
                           <div className="absolute top-3 right-3 z-30 flex flex-col items-end gap-1.5">
-                             <Badge className="bg-background/80 hover:bg-background text-foreground border border-border/50 font-mono text-[10px] px-2 py-0.5 backdrop-blur-md shadow-sm">
-                               {clip.durationSeconds}s
-                             </Badge>
-                             {jobWithClips.outroId && (
-                               <Badge className="bg-primary/90 hover:bg-primary text-primary-foreground border-none text-[9px] px-1.5 py-0.5 backdrop-blur-md shadow-sm uppercase">
-                                 + Outro
-                               </Badge>
-                             )}
+                            <Badge className="bg-background/80 text-foreground border border-border/50 font-mono text-[10px] px-2 py-0.5 backdrop-blur-md">
+                              {Math.round(clip.durationSeconds)}s
+                            </Badge>
+                            {jobWithClips.outroId && (
+                              <Badge className="bg-primary/90 text-white border-none text-[9px] px-1.5 py-0.5 uppercase">
+                                + Outro
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                        <CardHeader className="p-4 pb-3 relative z-20 bg-card flex-1">
-                          <CardTitle className="text-sm font-semibold line-clamp-2 leading-snug group-hover:text-primary transition-colors h-10">
-                            {clip.title}
-                          </CardTitle>
-                          <CardDescription className="text-xs font-mono text-muted-foreground/60 mt-2 flex items-center gap-1.5">
+                        <CardHeader className="p-4 pb-2 flex-1">
+                          <CardTitle className="text-sm font-semibold line-clamp-2 leading-snug group-hover:text-primary transition-colors">{clip.title}</CardTitle>
+                          <CardDescription className="text-xs font-mono text-muted-foreground/60 mt-1.5 flex items-center gap-1">
                             <Scissors className="w-3 h-3" />
-                            {Math.floor(clip.startSeconds / 60)}:{(Math.floor(clip.startSeconds % 60)).toString().padStart(2, '0')} - 
-                            {Math.floor(clip.endSeconds / 60)}:{(Math.floor(clip.endSeconds % 60)).toString().padStart(2, '0')}
+                            {Math.floor(clip.startSeconds / 60)}:{String(Math.floor(clip.startSeconds % 60)).padStart(2, "0")} –
+                            {Math.floor(clip.endSeconds / 60)}:{String(Math.floor(clip.endSeconds % 60)).padStart(2, "0")}
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-4 pt-0 mt-auto relative z-20 bg-card">
-                          {clip.status === 'completed' && clip.filePath ? (
-                            <Button className="w-full shadow-sm hover:shadow transition-all gap-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 font-medium" asChild>
+                        <CardContent className="p-4 pt-0">
+                          {clip.status === "completed" && clip.filePath ? (
+                            <Button className="w-full gap-2 h-9 font-medium text-sm" asChild>
                               <a href={`/api/clips/${clip.id}/download`} download>
-                                <Download className="w-4 h-4" /> Download Clip (9:16)
+                                <Download className="w-4 h-4" /> Download (9:16)
                               </a>
                             </Button>
-                          ) : clip.status === 'failed' ? (
-                            <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive h-10" disabled>
+                          ) : clip.status === "failed" ? (
+                            <Button variant="outline" className="w-full text-destructive border-destructive/30 h-9" disabled>
                               <AlertCircle className="w-4 h-4 mr-2" /> Failed
                             </Button>
                           ) : (
-                            <Button variant="secondary" className="w-full h-10 bg-muted/50 text-muted-foreground cursor-wait" disabled>
+                            <Button variant="secondary" className="w-full h-9 bg-muted/50 text-muted-foreground cursor-wait" disabled>
                               <Loader2 className="w-4 h-4 animate-spin mr-2" /> Processing
                             </Button>
                           )}
@@ -1186,6 +1546,14 @@ export default function Home() {
                       </Card>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* No clips info */}
+              {jobWithClips.status === "completed" && jobWithClips.clips && jobWithClips.clips.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border/50 bg-card/20 p-8 text-center text-sm text-muted-foreground">
+                  <Scissors className="w-8 h-8 mx-auto mb-3 opacity-30" />
+                  <p>No shorts were requested for this job — content only mode.</p>
                 </div>
               )}
             </div>
@@ -1199,4 +1567,3 @@ export default function Home() {
     </div>
   );
 }
-

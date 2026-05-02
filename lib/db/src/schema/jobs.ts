@@ -2,6 +2,21 @@ import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export const brandsTable = pgTable("brands", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  logoPath: text("logo_path"),
+  voiceStyle: text("voice_style"),
+  defaultCta: text("default_cta"),
+  introAudioPath: text("intro_audio_path"),
+  outroAudioPath: text("outro_audio_path"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBrandSchema = createInsertSchema(brandsTable).omit({ id: true, createdAt: true });
+export type InsertBrand = z.infer<typeof insertBrandSchema>;
+export type Brand = typeof brandsTable.$inferSelect;
+
 export const outrosTable = pgTable("outros", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -24,7 +39,10 @@ export const jobsTable = pgTable("jobs", {
   status: text("status").notNull().default("pending"),
   errorMessage: text("error_message"),
   clipCount: integer("clip_count").notNull().default(3),
+  clipDurationSeconds: integer("clip_duration_seconds").notNull().default(45),
+  contentCta: text("content_cta"),
   outroId: integer("outro_id").references(() => outrosTable.id, { onDelete: "set null" }),
+  brandId: integer("brand_id").references(() => brandsTable.id, { onDelete: "set null" }),
   transcript: text("transcript"),
   generatedContent: text("generated_content"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

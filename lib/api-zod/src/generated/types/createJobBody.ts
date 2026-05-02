@@ -8,7 +8,20 @@
 
 export interface CreateJobBody {
   youtubeUrl: string;
+  /**
+   * @minimum 0
+   * @maximum 10
+   */
   clipCount?: number;
+  /** Target duration in seconds for each short clip (15, 30, 45, 60, 90) */
+  clipDurationSeconds?: number;
+  /**
+   * Call-to-action text to append to all text content
+   * @nullable
+   */
+  contentCta?: string | null;
   /** @nullable */
   outroId?: number | null;
+  /** @nullable */
+  brandId?: number | null;
 }

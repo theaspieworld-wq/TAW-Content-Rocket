@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./brand";
 export * from "./clip";
 export * from "./clipStatus";
+export * from "./createBrandBody";
 export * from "./createJobBody";
 export * from "./errorResponse";
 export * from "./generatedContent";
@@ -18,5 +20,6 @@ export * from "./jobWithClips";
 export * from "./newsletterEmail";
 export * from "./outro";
 export * from "./outroPosition";
+export * from "./updateBrandBody";
 export * from "./updateOutroBody";
 export * from "./updateOutroBodyPosition";
