@@ -552,6 +552,15 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
               appearance={{
                 elements: {
                   avatarBox: "h-7 w-7",
+                  userButtonPopoverCard: "bg-[#0d0920] border border-[#2a1e4a] shadow-2xl shadow-black/60",
+                  userButtonPopoverMain: "bg-[#0d0920]",
+                  userButtonPopoverFooter: "bg-[#090717] border-t border-[#2a1e4a]",
+                  userButtonPopoverActionButton: "hover:bg-[#16102a] text-white",
+                  userButtonPopoverActionButtonText: "!text-white font-medium",
+                  userButtonPopoverActionButtonIcon: "text-slate-400",
+                  userButtonPopoverUserPreview: "border-b border-[#2a1e4a]",
+                  userPreviewMainIdentifier: "!text-white font-semibold",
+                  userPreviewSecondaryIdentifier: "!text-slate-400",
                 },
               }}
             />
@@ -1111,7 +1120,20 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
             <UserButton
               userProfileUrl={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/app/profile`}
               userProfileMode="navigation"
-              appearance={{ elements: { avatarBox: "h-8 w-8" } }}
+              appearance={{
+                elements: {
+                  avatarBox: "h-8 w-8",
+                  userButtonPopoverCard: "bg-[#0d0920] border border-[#2a1e4a] shadow-2xl shadow-black/60",
+                  userButtonPopoverMain: "bg-[#0d0920]",
+                  userButtonPopoverFooter: "bg-[#090717] border-t border-[#2a1e4a]",
+                  userButtonPopoverActionButton: "hover:bg-[#16102a] text-white",
+                  userButtonPopoverActionButtonText: "!text-white font-medium",
+                  userButtonPopoverActionButtonIcon: "text-slate-400",
+                  userButtonPopoverUserPreview: "border-b border-[#2a1e4a]",
+                  userPreviewMainIdentifier: "!text-white font-semibold",
+                  userPreviewSecondaryIdentifier: "!text-slate-400",
+                },
+              }}
             />
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSidebarOpen(true)}>
               <Menu className="w-5 h-5" />

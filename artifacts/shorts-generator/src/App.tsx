@@ -79,6 +79,17 @@ const clerkAppearance = {
     otpCodeFieldInput: "bg-[#16102a] border-[#2a1e4a] text-white",
     formFieldRow: "",
     main: "",
+    // UserButton popover dropdown
+    userButtonPopoverCard: "bg-[#0d0920] border border-[#2a1e4a] shadow-2xl shadow-black/60",
+    userButtonPopoverMain: "bg-[#0d0920]",
+    userButtonPopoverFooter: "bg-[#090717] border-t border-[#2a1e4a]",
+    userButtonPopoverActionButton: "hover:bg-[#16102a] text-white",
+    userButtonPopoverActionButtonText: "text-white font-medium",
+    userButtonPopoverActionButtonIcon: "text-slate-400",
+    userButtonPopoverUserPreview: "border-b border-[#2a1e4a]",
+    userButtonPopoverUserPreviewTextContainer: "text-white",
+    userPreviewMainIdentifier: "text-white font-semibold",
+    userPreviewSecondaryIdentifier: "text-slate-400",
   },
 };
 
