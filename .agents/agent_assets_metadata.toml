@@ -30,6 +30,66 @@ uri = "file://attached_assets/logo_concept_5.png"
 type = "image"
 title = "content_rocket_logo_hybrid_v2"
 
+[[generated]]
+id = "bcPKvsXU7e8YJpoY7htZn"
+uri = "file://artifacts/meta-campaign/public/creative-01-before-after.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "lSwFx3xMmoF7Ipez58b_I"
+uri = "file://artifacts/meta-campaign/public/creative-02-one-video-7-formats.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Z_ssQQF62EbGWsvlQ4bBw"
+uri = "file://artifacts/meta-campaign/public/creative-03-time-saving.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "ELFJUgkP84WFNyRQOAuYs"
+uri = "file://artifacts/meta-campaign/public/creative-04-product-demo.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "cDL4erlvP3nK1xfw9gSbc"
+uri = "file://artifacts/meta-campaign/public/creative-05-testimonial.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "bZwqSY5y0fzT78uGTljRi"
+uri = "file://artifacts/meta-campaign/public/creative-06-comparison.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "NFD4GzyQ7HNoYONUqRcu2"
+uri = "file://artifacts/meta-campaign/public/creative-07-lifestyle.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "VtBF7oQPrZp4HPrhrvas0"
+uri = "file://artifacts/meta-campaign/public/creative-08-roi-value.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "I6KdQwvVfAFltMMJPWxVO"
+uri = "file://artifacts/meta-campaign/public/creative-09-hook-scroll-stopper.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "7g_n_mfxpqXC-mKAYO7Mo"
+uri = "file://artifacts/meta-campaign/public/creative-10-brand-launch.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "TYAfV71mG0F40LI5Ppi2c"
 uri = "file://attached_assets/logo_concept_1.png"
