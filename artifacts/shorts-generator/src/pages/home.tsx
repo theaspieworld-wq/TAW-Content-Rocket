@@ -67,6 +67,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { UserButton } from "@clerk/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -524,7 +525,7 @@ export default function Home() {
         {/* Logo / header */}
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/taw-logo.png" alt="TAW Media" className="h-12 w-auto object-contain" />
+            <img src="/logo.png" alt="Content Rocket" className="h-10 w-10 rounded-xl object-cover" />
             <div className="flex flex-col leading-tight">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">TAW Media</span>
               <span className="text-sm font-bold text-foreground">Content Rocket</span>
@@ -539,6 +540,15 @@ export default function Home() {
               </TooltipTrigger>
               <TooltipContent side="right"><p className="text-xs">{isHealthy ? "API Connected" : "Connecting..."}</p></TooltipContent>
             </Tooltip>
+            <UserButton
+              userProfileUrl={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/app/profile`}
+              userProfileMode="navigation"
+              appearance={{
+                elements: {
+                  avatarBox: "h-7 w-7",
+                },
+              }}
+            />
             <Button variant="ghost" size="icon" className="h-7 w-7 md:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="w-4 h-4" />
             </Button>
@@ -1051,15 +1061,22 @@ export default function Home() {
         {/* Mobile top bar */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card/40 sticky top-0 z-20">
           <div className="flex items-center gap-2.5">
-            <img src="/taw-logo.png" alt="TAW Media" className="h-9 w-auto object-contain" />
+            <img src="/logo.png" alt="Content Rocket" className="h-8 w-8 rounded-lg object-cover" />
             <div className="flex flex-col leading-tight">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">TAW Media</span>
               <span className="text-xs font-bold text-foreground">Content Rocket</span>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSidebarOpen(true)}>
-            <Menu className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <UserButton
+              userProfileUrl={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/app/profile`}
+              userProfileMode="navigation"
+              appearance={{ elements: { avatarBox: "h-8 w-8" } }}
+            />
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSidebarOpen(true)}>
+              <Menu className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* ── Form panel ── */}

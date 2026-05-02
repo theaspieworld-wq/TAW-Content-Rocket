@@ -3,7 +3,7 @@ import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wo
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, UserProfile, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Button } from "@/components/ui/button";
@@ -186,6 +186,44 @@ function AppPage() {
   );
 }
 
+function ProfilePage() {
+  return (
+    <>
+      <Show when="signed-in">
+        <div className="min-h-[100dvh] bg-[#080614] flex items-start justify-center px-4 py-10">
+          <div className="w-full max-w-3xl">
+            <UserProfile
+              routing="path"
+              path={`${basePath}/app/profile`}
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  cardBox: "w-full bg-[#0d0920] rounded-2xl border border-[#2a1e4a] shadow-2xl shadow-black/60",
+                  card: "!shadow-none !border-0 !bg-transparent",
+                  navbar: "border-r border-[#2a1e4a]",
+                  navbarButton: "text-slate-300 hover:text-white hover:bg-[#16102a]",
+                  navbarButtonActive: "text-[#f21178] bg-[#1e0a1e]",
+                  pageScrollBox: "bg-transparent",
+                  profileSectionTitle: "text-white font-semibold",
+                  profileSectionContent: "text-slate-300",
+                  formButtonPrimary: "bg-[#f21178] hover:bg-[#d91068] text-white",
+                  formFieldInput: "bg-[#16102a] border-[#2a1e4a] text-white",
+                  formFieldLabel: "text-slate-300",
+                  headerTitle: "text-white",
+                  headerSubtitle: "text-slate-400",
+                },
+              }}
+            />
+          </div>
+        </div>
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const qc = useQueryClient();
@@ -244,6 +282,7 @@ function ClerkProviderWithRoutes() {
           <Switch>
             <Route path="/" component={HomeRedirect} />
             <Route path="/app" component={AppPage} />
+            <Route path="/app/profile/*?" component={ProfilePage} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route component={NotFound} />
