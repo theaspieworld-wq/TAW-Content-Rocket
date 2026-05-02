@@ -966,12 +966,12 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                     </div>
                                   </div>
                                 </div>
-                                <div className="flex gap-2">
-                                  <Button type="submit" size="sm" className="flex-1 h-7 text-[11px]" disabled={updateBrand.isPending}>
-                                    {updateBrand.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
-                                    Save
+                                <div className="flex gap-2 pt-1">
+                                  <Button type="submit" size="sm" className="flex-1 h-9 text-xs font-semibold bg-[#f21178] hover:bg-[#d91068] text-white border-0 shadow-md shadow-[#f21178]/20" disabled={updateBrand.isPending}>
+                                    {updateBrand.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Check className="w-3.5 h-3.5 mr-1.5" />}
+                                    {updateBrand.isPending ? "Saving…" : "Save Brand"}
                                   </Button>
-                                  <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setEditingBrandId(null)}>
+                                  <Button type="button" size="sm" variant="ghost" className="h-9 text-xs px-3" onClick={() => setEditingBrandId(null)}>
                                     Cancel
                                   </Button>
                                 </div>
