@@ -9,6 +9,11 @@ export class StripeStorage {
     return user ?? null;
   }
 
+  async getUserByStripeCustomerId(stripeCustomerId: string) {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.stripeCustomerId, stripeCustomerId));
+    return user ?? null;
+  }
+
   async upsertUser(clerkUserId: string, email: string | null) {
     const [user] = await db
       .insert(usersTable)
@@ -20,7 +25,7 @@ export class StripeStorage {
 
   async updateUserStripeInfo(
     clerkUserId: string,
-    info: { stripeCustomerId?: string; stripeSubscriptionId?: string }
+    info: { stripeCustomerId?: string; stripeSubscriptionId?: string | null }
   ) {
     const [user] = await db
       .update(usersTable)
@@ -28,6 +33,13 @@ export class StripeStorage {
       .where(eq(usersTable.id, clerkUserId))
       .returning();
     return user;
+  }
+
+  async setSubscriptionByCustomerId(stripeCustomerId: string, subscriptionId: string | null) {
+    await db
+      .update(usersTable)
+      .set({ stripeSubscriptionId: subscriptionId })
+      .where(eq(usersTable.stripeCustomerId, stripeCustomerId));
   }
 
   async listProductsWithPrices() {
