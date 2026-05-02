@@ -47,6 +47,11 @@ export interface Brand {
    */
   website?: string | null;
   /**
+   * Google Drive or Dropbox folder URL for exports
+   * @nullable
+   */
+  exportFolderUrl?: string | null;
+  /**
    * Path to short-form outro video file
    * @nullable
    */
@@ -68,6 +73,8 @@ export interface CreateBrandBody {
   secondaryColor?: string | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  exportFolderUrl?: string | null;
 }
 
 export interface UpdateBrandBody {
@@ -84,6 +91,8 @@ export interface UpdateBrandBody {
   secondaryColor?: string | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  exportFolderUrl?: string | null;
 }
 
 export interface CreateJobBody {

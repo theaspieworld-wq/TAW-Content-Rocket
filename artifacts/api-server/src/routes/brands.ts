@@ -90,6 +90,7 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
     primaryColor: b.primaryColor ?? null,
     secondaryColor: b.secondaryColor ?? null,
     website: b.website ?? null,
+    exportFolderUrl: b.exportFolderUrl ?? null,
     shortFormOutroPath: b.shortFormOutroPath ?? null,
     createdAt: b.createdAt.toISOString(),
   };
@@ -115,6 +116,7 @@ router.post("/brands", async (req, res): Promise<void> => {
     primaryColor: parsed.data.primaryColor ?? null,
     secondaryColor: parsed.data.secondaryColor ?? null,
     website: parsed.data.website ?? null,
+    exportFolderUrl: parsed.data.exportFolderUrl ?? null,
   }).returning();
 
   res.status(201).json(brandToJson(brand));
@@ -147,6 +149,7 @@ router.patch("/brands/:id", async (req, res): Promise<void> => {
     ...(body.data.primaryColor !== undefined ? { primaryColor: body.data.primaryColor } : {}),
     ...(body.data.secondaryColor !== undefined ? { secondaryColor: body.data.secondaryColor } : {}),
     ...(body.data.website !== undefined ? { website: body.data.website } : {}),
+    ...(body.data.exportFolderUrl !== undefined ? { exportFolderUrl: body.data.exportFolderUrl } : {}),
   }).where(eq(brandsTable.id, params.data.id)).returning();
 
   res.json(brandToJson(updated));

@@ -400,6 +400,9 @@ components:
         website:
           type: ["string", "null"]
           description: Brand website URL e.g. "https://tawmedia.com"
+        exportFolderUrl:
+          type: ["string", "null"]
+          description: Google Drive or Dropbox folder URL for exports
         shortFormOutroPath:
           type: ["string", "null"]
           description: Path to short-form outro video file
@@ -427,6 +430,8 @@ components:
           type: ["string", "null"]
         website:
           type: ["string", "null"]
+        exportFolderUrl:
+          type: ["string", "null"]
       required:
         - name
     UpdateBrandBody:
@@ -445,6 +450,8 @@ components:
         secondaryColor:
           type: ["string", "null"]
         website:
+          type: ["string", "null"]
+        exportFolderUrl:
           type: ["string", "null"]
     CreateJobBody:
       type: object

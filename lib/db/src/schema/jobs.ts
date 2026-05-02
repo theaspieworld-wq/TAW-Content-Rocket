@@ -14,6 +14,7 @@ export const brandsTable = pgTable("brands", {
   primaryColor: text("primary_color"),
   secondaryColor: text("secondary_color"),
   website: text("website"),
+  exportFolderUrl: text("export_folder_url"),
   shortFormOutroPath: text("short_form_outro_path"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -40,6 +40,11 @@ export interface Brand {
    */
   website?: string | null;
   /**
+   * Google Drive or Dropbox folder URL for exports
+   * @nullable
+   */
+  exportFolderUrl?: string | null;
+  /**
    * Path to short-form outro video file
    * @nullable
    */

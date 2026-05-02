@@ -64,6 +64,7 @@ import {
   ChevronUp,
   Plus,
   Megaphone,
+  FolderOpen,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -102,7 +103,7 @@ const formSchema = z.object({
   clipDurationSeconds: z.coerce.number().default(45),
   contentCta: z.string().optional(),
   outroId: z.string().optional(),
-  brandId: z.string().optional(),
+  brandId: z.string().min(1, { message: "Please select a brand before running" }),
   includeShorts: z.boolean().default(true),
 });
 
@@ -160,6 +161,7 @@ export default function Home() {
   const [newBrandVoice, setNewBrandVoice] = useState("");
   const [newBrandCta, setNewBrandCta] = useState("");
   const [newBrandWebsite, setNewBrandWebsite] = useState("");
+  const [newBrandExportFolder, setNewBrandExportFolder] = useState("");
   const [newBrandFont, setNewBrandFont] = useState("Poppins");
   const [newBrandPrimary, setNewBrandPrimary] = useState("#f21178");
   const [newBrandSecondary, setNewBrandSecondary] = useState("#7c3aed");
@@ -167,6 +169,7 @@ export default function Home() {
   const [editBrandVoice, setEditBrandVoice] = useState("");
   const [editBrandCta, setEditBrandCta] = useState("");
   const [editBrandWebsite, setEditBrandWebsite] = useState("");
+  const [editBrandExportFolder, setEditBrandExportFolder] = useState("");
   const [editBrandFont, setEditBrandFont] = useState("Poppins");
   const [editBrandPrimary, setEditBrandPrimary] = useState("#f21178");
   const [editBrandSecondary, setEditBrandSecondary] = useState("#7c3aed");
@@ -279,7 +282,7 @@ export default function Home() {
       clipDurationSeconds: 45,
       contentCta: "",
       outroId: "none",
-      brandId: "none",
+      brandId: "",
       includeShorts: true,
     },
   });
@@ -437,6 +440,7 @@ export default function Home() {
         voiceStyle: newBrandVoice.trim() || null,
         defaultCta: newBrandCta.trim() || null,
         website: newBrandWebsite.trim() || null,
+        exportFolderUrl: newBrandExportFolder.trim() || null,
         fontFamily: newBrandFont,
         primaryColor: newBrandPrimary,
         secondaryColor: newBrandSecondary,
@@ -444,7 +448,7 @@ export default function Home() {
     }, {
       onSuccess: () => {
         toast({ title: "Brand Created", description: `${newBrandName} has been added.` });
-        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta(""); setNewBrandWebsite("");
+        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta(""); setNewBrandWebsite(""); setNewBrandExportFolder("");
         setNewBrandFont("Poppins"); setNewBrandPrimary("#f21178"); setNewBrandSecondary("#7c3aed");
         setIsAddingBrand(false);
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
@@ -463,6 +467,7 @@ export default function Home() {
         voiceStyle: editBrandVoice.trim() || null,
         defaultCta: editBrandCta.trim() || null,
         website: editBrandWebsite.trim() || null,
+        exportFolderUrl: editBrandExportFolder.trim() || null,
         fontFamily: editBrandFont,
         primaryColor: editBrandPrimary,
         secondaryColor: editBrandSecondary,
@@ -480,7 +485,7 @@ export default function Home() {
     deleteBrand.mutate({ id }, {
       onSuccess: () => {
         toast({ title: "Brand Deleted" });
-        if (form.getValues("brandId") === String(id)) form.setValue("brandId", "none");
+        if (form.getValues("brandId") === String(id)) form.setValue("brandId", "");
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
       },
     });
@@ -492,6 +497,7 @@ export default function Home() {
     setEditBrandVoice(brand.voiceStyle ?? "");
     setEditBrandCta(brand.defaultCta ?? "");
     setEditBrandWebsite(brand.website ?? "");
+    setEditBrandExportFolder((brand as any).exportFolderUrl ?? "");
     setEditBrandFont(brand.fontFamily ?? "Poppins");
     setEditBrandPrimary(brand.primaryColor ?? "#f21178");
     setEditBrandSecondary(brand.secondaryColor ?? "#7c3aed");
@@ -785,6 +791,10 @@ export default function Home() {
                       <Input value={newBrandWebsite} onChange={e => setNewBrandWebsite(e.target.value)} placeholder="e.g. https://tawmedia.com" className="h-8 text-xs" type="url" />
                     </div>
                     <div className="space-y-2">
+                      <Label className="text-xs">Export Folder URL</Label>
+                      <Input value={newBrandExportFolder} onChange={e => setNewBrandExportFolder(e.target.value)} placeholder="Google Drive or Dropbox folder link" className="h-8 text-xs" type="url" />
+                    </div>
+                    <div className="space-y-2">
                       <Label className="text-xs">Voice / Tone Style</Label>
                       <Textarea value={newBrandVoice} onChange={e => setNewBrandVoice(e.target.value)} placeholder="e.g. Direct, no-fluff, motivational. Write like a founder talking to peers." className="text-xs min-h-[60px] resize-none" />
                     </div>
@@ -886,6 +896,10 @@ export default function Home() {
                                   <Input value={editBrandWebsite} onChange={e => setEditBrandWebsite(e.target.value)} placeholder="https://tawmedia.com" className="h-7 text-xs" type="url" />
                                 </div>
                                 <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Export Folder URL</Label>
+                                  <Input value={editBrandExportFolder} onChange={e => setEditBrandExportFolder(e.target.value)} placeholder="Google Drive or Dropbox folder link" className="h-7 text-xs" type="url" />
+                                </div>
+                                <div className="space-y-1">
                                   <Label className="text-[10px] text-muted-foreground uppercase">Voice Style</Label>
                                   <Textarea value={editBrandVoice} onChange={e => setEditBrandVoice(e.target.value)} className="text-xs min-h-[50px] resize-none" />
                                 </div>
@@ -943,6 +957,14 @@ export default function Home() {
                                   <div>
                                     <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Website</p>
                                     <a href={brand.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate block">{brand.website}</a>
+                                  </div>
+                                )}
+                                {(brand as any).exportFolderUrl && (
+                                  <div>
+                                    <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Export Folder</p>
+                                    <a href={(brand as any).exportFolderUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 hover:underline truncate block flex items-center gap-1">
+                                      <FolderOpen className="w-3 h-3 shrink-0" /> Open Folder
+                                    </a>
                                   </div>
                                 )}
                                 {(brand.primaryColor || brand.secondaryColor || brand.fontFamily) && (
@@ -1168,28 +1190,31 @@ export default function Home() {
                   )}
                 />
 
-                {/* Brand select */}
+                {/* Brand select — required */}
                 <FormField
                   control={form.control}
                   name="brandId"
                   render={({ field }) => (
-                    <FormItem className="w-40 m-0">
+                    <FormItem className="w-44 m-0">
                       <FormControl>
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-8 bg-background border-border/60 text-xs">
+                          <SelectTrigger className={`h-8 bg-background text-xs transition-colors ${!field.value ? "border-[#f21178]/60 ring-1 ring-[#f21178]/30" : "border-border/60"}`}>
                             <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <Building2 className="w-3.5 h-3.5 shrink-0" />
-                              <SelectValue placeholder="No Brand" />
+                              <Building2 className={`w-3.5 h-3.5 shrink-0 ${!field.value ? "text-[#f21178]" : ""}`} />
+                              <SelectValue placeholder="Select Brand *" />
                             </div>
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">No Brand</SelectItem>
                             {brands?.map((b: Brand) => (
                               <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
                             ))}
+                            {!brands?.length && (
+                              <div className="px-3 py-2 text-xs text-muted-foreground">No brands yet — add one in the Brands tab</div>
+                            )}
                           </SelectContent>
                         </Select>
                       </FormControl>
+                      <FormMessage className="text-[10px] ml-0.5" />
                     </FormItem>
                   )}
                 />
@@ -1288,6 +1313,18 @@ export default function Home() {
                         </a>
                       </Button>
                     )}
+                    {/* Open Export Folder */}
+                    {(() => {
+                      const jobBrand = brands?.find((b: Brand) => String(b.id) === String((jobWithClips as any).brandId));
+                      const folderUrl = (jobBrand as any)?.exportFolderUrl;
+                      return folderUrl ? (
+                        <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" asChild>
+                          <a href={folderUrl} target="_blank" rel="noopener noreferrer">
+                            <FolderOpen className="w-3.5 h-3.5" /> Export Folder
+                          </a>
+                        </Button>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
 
@@ -1373,6 +1410,11 @@ export default function Home() {
                         {jobContent.carouselImages?.length > 0 && (
                           <TabsTrigger value="carousel" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
                             <Image className="w-3.5 h-3.5" /> Carousel
+                          </TabsTrigger>
+                        )}
+                        {(jobWithClips as any).hasPodcast && (
+                          <TabsTrigger value="podcast" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
+                            <Mic className="w-3.5 h-3.5" /> Podcast
                           </TabsTrigger>
                         )}
                       </TabsList>
@@ -1610,6 +1652,39 @@ export default function Home() {
                                   </div>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        </TabsContent>
+                      )}
+
+                      {/* Podcast */}
+                      {(jobWithClips as any).hasPodcast && (
+                        <TabsContent value="podcast" className="m-0">
+                          <div className="rounded-xl border border-border bg-card p-6 space-y-5">
+                            <div className="flex items-center gap-2">
+                              <div className="bg-emerald-500/10 p-2 rounded-lg">
+                                <Mic className="w-5 h-5 text-emerald-400" />
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold">Podcast Audio</h3>
+                                <p className="text-xs text-muted-foreground">Full-length MP3 with brand intro &amp; outro audio</p>
+                              </div>
+                            </div>
+                            <div className="bg-muted/30 rounded-lg border border-border/40 p-4 flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                  <Mic className="w-4 h-4 text-emerald-400" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold truncate">{(jobWithClips as any).videoTitle ?? "Podcast Episode"}</p>
+                                  <p className="text-xs text-muted-foreground">MP3 Audio File</p>
+                                </div>
+                              </div>
+                              <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" asChild>
+                                <a href={`/api/jobs/${jobWithClips.id}/download-podcast`} download>
+                                  <Download className="w-4 h-4" /> Download MP3
+                                </a>
+                              </Button>
                             </div>
                           </div>
                         </TabsContent>

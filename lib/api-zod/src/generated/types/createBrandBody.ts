@@ -20,4 +20,6 @@ export interface CreateBrandBody {
   secondaryColor?: string | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  exportFolderUrl?: string | null;
 }

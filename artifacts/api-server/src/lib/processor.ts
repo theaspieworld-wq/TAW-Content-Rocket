@@ -609,36 +609,20 @@ function transcriptToSrt(transcript: TranscriptSegment[]): string {
 
 async function renderFullFacebookVideo(
   videoPath: string,
-  jobId: number,
-  transcript: TranscriptSegment[],
+  _jobId: number,
+  _transcript: TranscriptSegment[],
   outputPath: string,
 ): Promise<void> {
   const squareCrop = "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080";
-  const captionFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
-  const fontDir = path.dirname(captionFont);
 
-  const srtPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.srt`);
-  fs.writeFileSync(srtPath, transcriptToSrt(transcript), "utf8");
-
-  const forceStyle = "FontName=Poppins Bold,Fontsize=22,PrimaryColour=&H00FFFFFF,Bold=1,Outline=3,OutlineColour=&H00000000,BackColour=&H40000000,Alignment=2,MarginV=60";
-
-  const vf = [
-    squareCrop,
-    `subtitles=${srtPath}:fontsdir=${fontDir}:force_style='${forceStyle}'`,
-  ].join(",");
-
-  try {
-    await execFileAsync("ffmpeg", [
-      "-i", videoPath,
-      "-vf", vf,
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-c:a", "aac", "-b:a", "128k",
-      "-movflags", "+faststart",
-      outputPath, "-y",
-    ], { timeout: 3600000 });
-  } finally {
-    try { fs.unlinkSync(srtPath); } catch (_) {}
-  }
+  await execFileAsync("ffmpeg", [
+    "-i", videoPath,
+    "-vf", squareCrop,
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart",
+    outputPath, "-y",
+  ], { timeout: 3600000 });
 }
 
 async function prepareOutroWithCta(
@@ -1092,9 +1076,17 @@ export async function processJob(jobId: number): Promise<void> {
     if (insertedClips.length > 0) {
       await updateJobStatus(jobId, "rendering");
 
+      // Brand's own short-form outro takes priority over the global outro library
       let processedOutroPath: string | null = null;
-      if (outro) {
+      let outroPosition = "end";
+
+      if (brand?.shortFormOutroPath && fs.existsSync(brand.shortFormOutroPath)) {
+        processedOutroPath = brand.shortFormOutroPath;
+        outroPosition = "end";
+        logger.info({ jobId }, "Using brand short-form outro video");
+      } else if (outro) {
         processedOutroPath = path.join(tempDir, "outro_cta.mp4");
+        outroPosition = outro.position;
         await prepareOutroWithCta(
           outro.filePath,
           outro.ctaText ?? null,
@@ -1120,11 +1112,11 @@ export async function processJob(jobId: number): Promise<void> {
 
           const finalPath = path.join(CLIPS_DIR, `clip_${clip.id}.mp4`);
 
-          if (processedOutroPath && outro) {
+          if (processedOutroPath) {
             await concatenateClipWithOutro(
               mainClipPath,
               processedOutroPath,
-              outro.position,
+              outroPosition,
               finalPath,
               tempDir,
             );

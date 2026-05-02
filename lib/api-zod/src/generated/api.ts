@@ -41,6 +41,10 @@ export const ListBrandsResponseItem = zod.object({
     .string()
     .nullish()
     .describe('Brand website URL e.g. \"https:\/\/tawmedia.com\"'),
+  exportFolderUrl: zod
+    .string()
+    .nullish()
+    .describe("Google Drive or Dropbox folder URL for exports"),
   shortFormOutroPath: zod
     .string()
     .nullish()
@@ -60,6 +64,7 @@ export const CreateBrandBody = zod.object({
   primaryColor: zod.string().nullish(),
   secondaryColor: zod.string().nullish(),
   website: zod.string().nullish(),
+  exportFolderUrl: zod.string().nullish(),
 });
 
 /**
@@ -77,6 +82,7 @@ export const UpdateBrandBody = zod.object({
   primaryColor: zod.string().nullish(),
   secondaryColor: zod.string().nullish(),
   website: zod.string().nullish(),
+  exportFolderUrl: zod.string().nullish(),
 });
 
 export const UpdateBrandResponse = zod.object({
@@ -103,6 +109,10 @@ export const UpdateBrandResponse = zod.object({
     .string()
     .nullish()
     .describe('Brand website URL e.g. \"https:\/\/tawmedia.com\"'),
+  exportFolderUrl: zod
+    .string()
+    .nullish()
+    .describe("Google Drive or Dropbox folder URL for exports"),
   shortFormOutroPath: zod
     .string()
     .nullish()
