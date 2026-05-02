@@ -40,15 +40,28 @@ export class StripeService {
     return session;
   }
 
+  isAdmin(clerkUserId: string): boolean {
+    const adminIds = (process.env.ADMIN_USER_IDS ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    return adminIds.includes(clerkUserId);
+  }
+
   async getUserSubscriptionStatus(clerkUserId: string) {
+    // Admin bypass — no subscription required
+    if (this.isAdmin(clerkUserId)) {
+      return { active: true, isAdmin: true, subscription: null };
+    }
+
     const user = await stripeStorage.getUser(clerkUserId);
-    if (!user?.stripeCustomerId) return { active: false, subscription: null };
+    if (!user?.stripeCustomerId) return { active: false, isAdmin: false, subscription: null };
 
     // Primary path: trust the DB value kept in sync by Stripe webhooks.
     // This avoids a live Stripe API call on every page load and is resilient
     // to brief Stripe outages.
     if (user.stripeSubscriptionId) {
-      return { active: true, subscription: { id: user.stripeSubscriptionId } };
+      return { active: true, isAdmin: false, subscription: { id: user.stripeSubscriptionId } };
     }
 
     // Fallback: live Stripe check in case a webhook was missed (e.g. during
@@ -57,10 +70,10 @@ export class StripeService {
     const sub = await stripeStorage.getActiveSubscriptionForCustomer(user.stripeCustomerId);
     if (sub) {
       await stripeStorage.setSubscriptionByCustomerId(user.stripeCustomerId, sub.id);
-      return { active: true, subscription: sub };
+      return { active: true, isAdmin: false, subscription: sub };
     }
 
-    return { active: false, subscription: null };
+    return { active: false, isAdmin: false, subscription: null };
   }
 }
 

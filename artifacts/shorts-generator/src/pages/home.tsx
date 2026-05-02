@@ -151,7 +151,7 @@ function getStatusLabel(status: string) {
   return labels[status] ?? status;
 }
 
-export default function Home() {
+export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [, setLocation] = useLocation();
   const { user } = useUser();
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
@@ -1077,9 +1077,16 @@ export default function Home() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate leading-tight">
-                {user?.fullName || user?.username || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Account"}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-foreground truncate leading-tight">
+                  {user?.fullName || user?.username || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Account"}
+                </p>
+                {isAdmin && (
+                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase bg-[#f21178]/15 text-[#f21178] border border-[#f21178]/25">
+                    Admin
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-muted-foreground truncate leading-tight">
                 {user?.primaryEmailAddress?.emailAddress ?? "Manage account"}
               </p>

@@ -6,6 +6,7 @@ import outrosRouter from "./outros";
 import brandsRouter from "./brands";
 import stripeRouter from "./stripe";
 import webhookRouter from "./webhook";
+import meRouter from "./me";
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const auth = getAuth(req);
@@ -23,6 +24,7 @@ router.use(healthRouter);
 router.use(webhookRouter);  // webhook before requireAuth — verified by Stripe signature, not Clerk
 router.use(stripeRouter);
 router.use(requireAuth);
+router.use(meRouter);
 router.use(jobsRouter);
 router.use(outrosRouter);
 router.use(brandsRouter);

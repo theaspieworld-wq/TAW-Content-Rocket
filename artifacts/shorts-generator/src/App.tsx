@@ -7,7 +7,7 @@ import { ClerkProvider, SignIn, SignUp, UserProfile, Show, useClerk, useUser } f
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, User, LogOut } from "lucide-react";
+import { Loader2, ArrowLeft, User, LogOut, Copy, Check } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import PricingPage from "@/pages/pricing";
@@ -178,20 +178,24 @@ function HomeRedirect() {
 function useSubscriptionStatus() {
   const { user } = useUser();
   const [status, setStatus] = useState<"loading" | "active" | "inactive">("loading");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     fetch(`${basePath}/api/stripe/subscription`)
       .then((r) => r.json())
-      .then((d) => setStatus(d.active ? "active" : "inactive"))
+      .then((d) => {
+        setStatus(d.active ? "active" : "inactive");
+        setIsAdmin(!!d.isAdmin);
+      })
       .catch(() => setStatus("inactive"));
   }, [user?.id]);
 
-  return status;
+  return { status, isAdmin };
 }
 
 function AppPage() {
-  const subStatus = useSubscriptionStatus();
+  const { status: subStatus, isAdmin } = useSubscriptionStatus();
   const [, setLocation] = useLocation();
 
   return (
@@ -223,7 +227,7 @@ function AppPage() {
             </div>
           </div>
         ) : (
-          <Home />
+          <Home isAdmin={isAdmin} />
         )}
       </Show>
     </>
@@ -234,6 +238,15 @@ function ProfilePage() {
   const [, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const { isAdmin } = useSubscriptionStatus();
+  const [copied, setCopied] = useState(false);
+
+  function copyUserId() {
+    if (!user?.id) return;
+    navigator.clipboard.writeText(user.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <>
@@ -300,6 +313,36 @@ function ProfilePage() {
                   },
                 }}
               />
+
+              {/* Admin / User ID panel */}
+              <div className="rounded-2xl border border-[#2a1e4a] bg-[#0d0920] p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-white">Account info</p>
+                  {isAdmin && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase bg-[#f21178]/15 text-[#f21178] border border-[#f21178]/25">
+                      Admin
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1.5">Your user ID</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-[#16102a] border border-[#2a1e4a] rounded-lg px-3 py-2 text-xs text-slate-300 font-mono truncate select-all">
+                      {user?.id ?? "—"}
+                    </code>
+                    <button
+                      onClick={copyUserId}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#16102a] border border-[#2a1e4a] text-xs text-slate-400 hover:text-white hover:border-[#f21178]/40 transition-all"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                  {!isAdmin && (
+                    <p className="text-[11px] text-slate-600 mt-1.5">Share this ID with your admin to grant full access.</p>
+                  )}
+                </div>
+              </div>
 
               {/* Sign out */}
               <div className="flex justify-end pb-4">
