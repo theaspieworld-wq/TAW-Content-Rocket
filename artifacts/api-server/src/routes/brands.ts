@@ -3,7 +3,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { db, brandsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
 import {
   CreateBrandBody,
   UpdateBrandParams,
@@ -96,12 +97,16 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
   };
 }
 
-router.get("/brands", async (_req, res): Promise<void> => {
-  const brands = await db.select().from(brandsTable).orderBy(brandsTable.createdAt);
+router.get("/brands", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const brands = await db.select().from(brandsTable)
+    .where(eq(brandsTable.userId, userId))
+    .orderBy(brandsTable.createdAt);
   res.json(brands.map(brandToJson));
 });
 
 router.post("/brands", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const parsed = CreateBrandBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -109,6 +114,7 @@ router.post("/brands", async (req, res): Promise<void> => {
   }
 
   const [brand] = await db.insert(brandsTable).values({
+    userId,
     name: parsed.data.name,
     voiceStyle: parsed.data.voiceStyle ?? null,
     defaultCta: parsed.data.defaultCta ?? null,
@@ -123,6 +129,7 @@ router.post("/brands", async (req, res): Promise<void> => {
 });
 
 router.patch("/brands/:id", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = UpdateBrandParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -135,7 +142,8 @@ router.patch("/brands/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, params.data.id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, params.data.id), eq(brandsTable.userId, userId)));
   if (!brand) {
     res.status(404).json({ error: "Brand not found" });
     return;
@@ -150,80 +158,71 @@ router.patch("/brands/:id", async (req, res): Promise<void> => {
     ...(body.data.secondaryColor !== undefined ? { secondaryColor: body.data.secondaryColor } : {}),
     ...(body.data.website !== undefined ? { website: body.data.website } : {}),
     ...(body.data.exportFolderUrl !== undefined ? { exportFolderUrl: body.data.exportFolderUrl } : {}),
-  }).where(eq(brandsTable.id, params.data.id)).returning();
+  }).where(and(eq(brandsTable.id, params.data.id), eq(brandsTable.userId, userId))).returning();
 
   res.json(brandToJson(updated));
 });
 
 router.delete("/brands/:id", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = DeleteBrandParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, params.data.id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, params.data.id), eq(brandsTable.userId, userId)));
   if (!brand) {
     res.status(404).json({ error: "Brand not found" });
     return;
   }
 
-  // Clean up files
   for (const filePath of [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath]) {
     if (filePath && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (e) { logger.warn({ e }, "Could not delete brand file"); }
     }
   }
 
-  await db.delete(brandsTable).where(eq(brandsTable.id, params.data.id));
+  await db.delete(brandsTable)
+    .where(and(eq(brandsTable.id, params.data.id), eq(brandsTable.userId, userId)));
   res.status(204).send();
 });
 
 router.post("/brands/:id/logo", uploadLogo.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid brand ID" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No logo file provided" }); return; }
 
-  if (!req.file) {
-    res.status(400).json({ error: "No logo file provided" });
-    return;
-  }
-
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
   if (!brand) {
     fs.unlinkSync(req.file.path);
     res.status(404).json({ error: "Brand not found" });
     return;
   }
 
-  // Remove old logo
   if (brand.logoPath && fs.existsSync(brand.logoPath)) {
     try { fs.unlinkSync(brand.logoPath); } catch (_) {}
   }
 
   const [updated] = await db.update(brandsTable)
     .set({ logoPath: req.file.path })
-    .where(eq(brandsTable.id, id))
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
     .returning();
 
   res.json(brandToJson(updated));
 });
 
 router.post("/brands/:id/intro-audio", uploadAudio.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid brand ID" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No audio file provided" }); return; }
 
-  if (!req.file) {
-    res.status(400).json({ error: "No audio file provided" });
-    return;
-  }
-
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
   if (!brand) {
     fs.unlinkSync(req.file.path);
     res.status(404).json({ error: "Brand not found" });
@@ -236,25 +235,20 @@ router.post("/brands/:id/intro-audio", uploadAudio.single("file"), async (req, r
 
   const [updated] = await db.update(brandsTable)
     .set({ introAudioPath: req.file.path })
-    .where(eq(brandsTable.id, id))
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
     .returning();
 
   res.json(brandToJson(updated));
 });
 
 router.post("/brands/:id/outro-audio", uploadAudio.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid brand ID" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No audio file provided" }); return; }
 
-  if (!req.file) {
-    res.status(400).json({ error: "No audio file provided" });
-    return;
-  }
-
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
   if (!brand) {
     fs.unlinkSync(req.file.path);
     res.status(404).json({ error: "Brand not found" });
@@ -267,25 +261,20 @@ router.post("/brands/:id/outro-audio", uploadAudio.single("file"), async (req, r
 
   const [updated] = await db.update(brandsTable)
     .set({ outroAudioPath: req.file.path })
-    .where(eq(brandsTable.id, id))
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
     .returning();
 
   res.json(brandToJson(updated));
 });
 
 router.post("/brands/:id/short-form-outro", uploadVideo.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid brand ID" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No video file provided" }); return; }
 
-  if (!req.file) {
-    res.status(400).json({ error: "No video file provided" });
-    return;
-  }
-
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
   if (!brand) {
     fs.unlinkSync(req.file.path);
     res.status(404).json({ error: "Brand not found" });
@@ -298,21 +287,19 @@ router.post("/brands/:id/short-form-outro", uploadVideo.single("file"), async (r
 
   const [updated] = await db.update(brandsTable)
     .set({ shortFormOutroPath: req.file.path })
-    .where(eq(brandsTable.id, id))
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
     .returning();
 
   res.json(brandToJson(updated));
 });
 
-// Serve brand logo files
 router.get("/brands/:id/logo", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid brand ID" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
 
-  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
   if (!brand || !brand.logoPath || !fs.existsSync(brand.logoPath)) {
     res.status(404).json({ error: "Logo not found" });
     return;

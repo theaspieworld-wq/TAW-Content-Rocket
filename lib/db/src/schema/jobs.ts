@@ -12,6 +12,7 @@ export const usersTable = pgTable("users", {
 
 export const brandsTable = pgTable("brands", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   name: text("name").notNull(),
   logoPath: text("logo_path"),
   voiceStyle: text("voice_style"),
@@ -33,6 +34,7 @@ export type Brand = typeof brandsTable.$inferSelect;
 
 export const outrosTable = pgTable("outros", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   name: text("name").notNull(),
   filePath: text("file_path").notNull(),
   isDefault: text("is_default").notNull().default("false"),
@@ -48,6 +50,7 @@ export type Outro = typeof outrosTable.$inferSelect;
 
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   youtubeUrl: text("youtube_url").notNull(),
   videoTitle: text("video_title"),
   status: text("status").notNull().default("pending"),

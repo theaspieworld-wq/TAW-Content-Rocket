@@ -3,7 +3,8 @@ import path from "path";
 import fs from "fs";
 import archiver from "archiver";
 import { db, jobsTable, clipsTable, outrosTable, brandsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
 import {
   CreateJobBody,
   GetJobParams,
@@ -37,12 +38,16 @@ function jobToJson(j: typeof jobsTable.$inferSelect) {
   };
 }
 
-router.get("/jobs", async (_req, res): Promise<void> => {
-  const jobs = await db.select().from(jobsTable).orderBy(jobsTable.createdAt);
+router.get("/jobs", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const jobs = await db.select().from(jobsTable)
+    .where(eq(jobsTable.userId, userId))
+    .orderBy(jobsTable.createdAt);
   res.json(jobs.map(jobToJson));
 });
 
 router.post("/jobs", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const parsed = CreateJobBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -54,7 +59,8 @@ router.post("/jobs", async (req, res): Promise<void> => {
   const clipDur = clipDurationSeconds ?? 45;
 
   if (outroId != null) {
-    const [outro] = await db.select().from(outrosTable).where(eq(outrosTable.id, outroId));
+    const [outro] = await db.select().from(outrosTable)
+      .where(and(eq(outrosTable.id, outroId), eq(outrosTable.userId, userId)));
     if (!outro) {
       res.status(400).json({ error: "Specified outro not found" });
       return;
@@ -62,7 +68,8 @@ router.post("/jobs", async (req, res): Promise<void> => {
   }
 
   if (brandId != null) {
-    const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
+    const [brand] = await db.select().from(brandsTable)
+      .where(and(eq(brandsTable.id, brandId), eq(brandsTable.userId, userId)));
     if (!brand) {
       res.status(400).json({ error: "Specified brand not found" });
       return;
@@ -70,6 +77,7 @@ router.post("/jobs", async (req, res): Promise<void> => {
   }
 
   const [job] = await db.insert(jobsTable).values({
+    userId,
     youtubeUrl,
     clipCount: count,
     clipDurationSeconds: clipDur,
@@ -85,13 +93,15 @@ router.post("/jobs", async (req, res): Promise<void> => {
 });
 
 router.get("/jobs/:id", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -116,13 +126,16 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/jobs/:id", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = DeleteJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.delete(jobsTable).where(eq(jobsTable.id, params.data.id)).returning();
+  const [job] = await db.delete(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)))
+    .returning();
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -132,13 +145,15 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
 });
 
 router.get("/jobs/:id/content", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -153,13 +168,15 @@ router.get("/jobs/:id/content", async (req, res): Promise<void> => {
 });
 
 router.post("/jobs/:id/content", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -170,10 +187,10 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
     return;
   }
 
-  // Load brand if set
   let brand: typeof brandsTable.$inferSelect | null = null;
   if (job.brandId) {
-    const [foundBrand] = await db.select().from(brandsTable).where(eq(brandsTable.id, job.brandId));
+    const [foundBrand] = await db.select().from(brandsTable)
+      .where(and(eq(brandsTable.id, job.brandId), eq(brandsTable.userId, userId)));
     if (foundBrand) brand = foundBrand;
   }
 
@@ -209,6 +226,7 @@ router.get("/images/:filename", (req, res): void => {
 });
 
 router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = DownloadClipParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -218,6 +236,14 @@ router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
   const [clip] = await db.select().from(clipsTable).where(eq(clipsTable.id, params.data.clipId));
   if (!clip || !clip.filePath) {
     res.status(404).json({ error: "Clip not found or not ready" });
+    return;
+  }
+
+  // Verify clip belongs to a job owned by this user
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, clip.jobId), eq(jobsTable.userId, userId)));
+  if (!job) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
 
@@ -233,13 +259,15 @@ router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
 });
 
 router.get("/jobs/:id/download-facebook", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -259,13 +287,15 @@ router.get("/jobs/:id/download-facebook", async (req, res): Promise<void> => {
 });
 
 router.get("/jobs/:id/download-podcast", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -285,13 +315,15 @@ router.get("/jobs/:id/download-podcast", async (req, res): Promise<void> => {
 });
 
 router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = GetJobParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)));
   if (!job || job.status !== "completed") {
     res.status(404).json({ error: "Job not found or not yet completed" });
     return;
@@ -314,7 +346,6 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
 
   const folder = safeTitle;
 
-  // Shorts
   const completedClips = clips.filter(c => c.status === "completed" && c.filePath && fs.existsSync(c.filePath));
   if (completedClips.length > 0) {
     for (const clip of completedClips) {
@@ -323,19 +354,16 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
     }
   }
 
-  // Facebook video
   const fbPath = path.join(CLIPS_DIR, `job_${job.id}_facebook.mp4`);
   if (fs.existsSync(fbPath)) {
     archive.file(fbPath, { name: `${folder}/facebook_1x1.mp4` });
   }
 
-  // Podcast
   const podcastPath = path.join(CLIPS_DIR, `job_${job.id}_podcast.mp3`);
   if (fs.existsSync(podcastPath)) {
     archive.file(podcastPath, { name: `${folder}/podcast.mp3` });
   }
 
-  // Carousel images
   if (content?.carouselImages?.length > 0) {
     for (let i = 0; i < content.carouselImages.length; i++) {
       const imgPath = path.join(CLIPS_DIR, content.carouselImages[i]);
@@ -345,28 +373,23 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
     }
   }
 
-  // Text content files
   if (content) {
     if (content.blogPost) {
       archive.append(content.blogPost, { name: `${folder}/content/blog.html` });
     }
-
     if (content.socialArticle) {
       archive.append(content.socialArticle, { name: `${folder}/content/social_article.html` });
     }
-
     if (content.newsletterEmail?.subject && content.newsletterEmail?.body) {
       archive.append(`Subject: ${content.newsletterEmail.subject}\n\n`, { name: `${folder}/content/newsletter_subject.txt` });
       archive.append(content.newsletterEmail.body, { name: `${folder}/content/newsletter.html` });
     }
-
     if (content.threadPosts?.length > 0) {
       const threadText = content.threadPosts
         .map((p: string, i: number) => `Post ${i + 1}:\n${p.replace(/^Post\s+\d+\s*:\s*/i, "").trim()}`)
         .join("\n\n---\n\n");
       archive.append(threadText, { name: `${folder}/content/thread_posts.txt` });
     }
-
     if (content.quotes?.length > 0) {
       const csvRows = content.quotes.map((q: string, i: number) => {
         const caption = content.instagramCaptions?.[i] ?? "";
@@ -375,7 +398,6 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
       const csv = `"Quote","Instagram / TikTok Caption"\n${csvRows.join("\n")}`;
       archive.append(csv, { name: `${folder}/content/quotes_and_captions.csv` });
     }
-
     if (content.carouselCaption) {
       archive.append(content.carouselCaption, { name: `${folder}/content/carousel_caption.txt` });
     }

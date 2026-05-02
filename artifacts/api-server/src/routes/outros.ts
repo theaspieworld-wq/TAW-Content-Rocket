@@ -3,7 +3,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { db, outrosTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
 import {
   UpdateOutroParams,
   UpdateOutroBody,
@@ -25,7 +26,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"];
     if (allowed.includes(file.mimetype) || file.originalname.match(/\.(mp4|mov|avi|webm|mkv)$/i)) {
@@ -51,12 +52,16 @@ function outroToJson(o: typeof outrosTable.$inferSelect) {
 
 const router: IRouter = Router();
 
-router.get("/outros", async (_req, res): Promise<void> => {
-  const outros = await db.select().from(outrosTable).orderBy(outrosTable.createdAt);
+router.get("/outros", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const outros = await db.select().from(outrosTable)
+    .where(eq(outrosTable.userId, userId))
+    .orderBy(outrosTable.createdAt);
   res.json(outros.map(outroToJson));
 });
 
 router.post("/outros/upload", upload.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   if (!req.file) {
     res.status(400).json({ error: "No video file uploaded" });
     return;
@@ -73,6 +78,7 @@ router.post("/outros/upload", upload.single("file"), async (req, res): Promise<v
   const outroPosition = validPositions.includes(position) ? position : "end";
 
   const [outro] = await db.insert(outrosTable).values({
+    userId,
     name: name.trim(),
     filePath: req.file.path,
     isDefault: "false",
@@ -86,6 +92,7 @@ router.post("/outros/upload", upload.single("file"), async (req, res): Promise<v
 });
 
 router.patch("/outros/:id", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = UpdateOutroParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -98,7 +105,8 @@ router.patch("/outros/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [existing] = await db.select().from(outrosTable).where(eq(outrosTable.id, params.data.id));
+  const [existing] = await db.select().from(outrosTable)
+    .where(and(eq(outrosTable.id, params.data.id), eq(outrosTable.userId, userId)));
   if (!existing) {
     res.status(404).json({ error: "Outro not found" });
     return;
@@ -112,28 +120,30 @@ router.patch("/outros/:id", async (req, res): Promise<void> => {
   if (d.ctaStartSeconds !== undefined) updates.ctaStartSeconds = d.ctaStartSeconds !== null ? d.ctaStartSeconds.toString() : undefined;
   if (d.isDefault !== undefined) updates.isDefault = d.isDefault ? "true" : "false";
 
-  const [updated] = await db.update(outrosTable).set(updates).where(eq(outrosTable.id, params.data.id)).returning();
+  const [updated] = await db.update(outrosTable).set(updates)
+    .where(and(eq(outrosTable.id, params.data.id), eq(outrosTable.userId, userId)))
+    .returning();
   res.json(outroToJson(updated));
 });
 
 router.delete("/outros/:id", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = DeleteOutroParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [outro] = await db.delete(outrosTable).where(eq(outrosTable.id, params.data.id)).returning();
+  const [outro] = await db.delete(outrosTable)
+    .where(and(eq(outrosTable.id, params.data.id), eq(outrosTable.userId, userId)))
+    .returning();
   if (!outro) {
     res.status(404).json({ error: "Outro not found" });
     return;
   }
 
-  // Delete file from disk
   try {
-    if (fs.existsSync(outro.filePath)) {
-      fs.unlinkSync(outro.filePath);
-    }
+    if (fs.existsSync(outro.filePath)) fs.unlinkSync(outro.filePath);
   } catch (e) {
     logger.warn({ e }, "Could not delete outro file");
   }
@@ -142,21 +152,25 @@ router.delete("/outros/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/outros/:id/set-default", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const params = SetDefaultOutroParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [existing] = await db.select().from(outrosTable).where(eq(outrosTable.id, params.data.id));
+  const [existing] = await db.select().from(outrosTable)
+    .where(and(eq(outrosTable.id, params.data.id), eq(outrosTable.userId, userId)));
   if (!existing) {
     res.status(404).json({ error: "Outro not found" });
     return;
   }
 
-  // Clear all defaults first, then set this one
-  await db.update(outrosTable).set({ isDefault: "false" });
-  const [updated] = await db.update(outrosTable).set({ isDefault: "true" }).where(eq(outrosTable.id, params.data.id)).returning();
+  // Clear defaults only for this user, then set this one
+  await db.update(outrosTable).set({ isDefault: "false" }).where(eq(outrosTable.userId, userId));
+  const [updated] = await db.update(outrosTable).set({ isDefault: "true" })
+    .where(and(eq(outrosTable.id, params.data.id), eq(outrosTable.userId, userId)))
+    .returning();
 
   res.json(outroToJson(updated));
 });
