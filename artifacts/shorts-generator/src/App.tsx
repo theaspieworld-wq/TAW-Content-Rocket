@@ -37,7 +37,7 @@ const clerkAppearance = {
   options: {
     logoPlacement: "inside" as const,
     logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    logoImageUrl: `${window.location.origin}${basePath}/logo.png`,
   },
   variables: {
     colorPrimary: "#f21178",
@@ -111,11 +111,11 @@ function LandingPage() {
       <div className="absolute bottom-1/4 left-1/4 w-[350px] h-[350px] bg-violet-700/5 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10 text-center max-w-2xl w-full">
-        <div className="flex items-center justify-center gap-3 mb-10">
-          <img src={`${basePath}/taw-logo.png`} alt="TAW Media" className="h-10 w-10 rounded-lg object-cover" />
-          <div className="text-left">
+        <div className="flex flex-col items-center gap-3 mb-10">
+          <img src={`${basePath}/logo.png`} alt="Content Rocket" className="h-28 w-28 rounded-2xl object-cover shadow-xl shadow-[#f21178]/20" />
+          <div className="text-center">
             <p className="text-[10px] font-semibold tracking-[0.25em] text-slate-500 uppercase">TAW Media</p>
-            <p className="text-lg font-bold text-white leading-tight">Content Rocket 🚀</p>
+            <p className="text-xl font-bold text-white leading-tight">Content Rocket</p>
           </div>
         </div>
 
