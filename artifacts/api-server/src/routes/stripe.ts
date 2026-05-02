@@ -33,6 +33,14 @@ router.get('/stripe/subscription', async (req, res) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    // Ensure a DB row exists for this user on first visit so we can attach
+    // Stripe customer/subscription data later. Email may not be in the JWT
+    // by default, so we upsert with null and let checkout populate it.
+    const claims = auth.sessionClaims as any;
+    const email: string | null =
+      claims?.email ?? claims?.emailAddress ?? claims?.primary_email_address ?? null;
+    await stripeStorage.upsertUser(userId, email);
+
     const status = await stripeService.getUserSubscriptionStatus(userId);
     res.json(status);
   } catch (err: any) {

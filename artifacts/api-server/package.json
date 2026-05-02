@@ -26,6 +26,7 @@
     "openai": "^6.27.0",
     "pino": "^9",
     "pino-http": "^10",
+    "resend": "^6.12.2",
     "stripe": "^22.1.0",
     "stripe-replit-sync": "^1.0.0"
   },
