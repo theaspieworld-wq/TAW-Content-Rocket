@@ -544,6 +544,9 @@ components:
         status:
           type: string
           enum: [pending, rendering, completed, failed]
+        instagramCaption:
+          type: ["string", "null"]
+          description: Ready-to-paste Instagram caption for this clip
         createdAt:
           type: string
           format: date-time

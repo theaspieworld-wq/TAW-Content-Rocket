@@ -79,6 +79,7 @@ export const clipsTable = pgTable("clips", {
   durationSeconds: text("duration_seconds").notNull(),
   filePath: text("file_path"),
   status: text("status").notNull().default("pending"),
+  instagramCaption: text("instagram_caption"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

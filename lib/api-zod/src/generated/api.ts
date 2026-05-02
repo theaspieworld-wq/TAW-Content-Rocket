@@ -236,6 +236,10 @@ export const GetJobResponse = zod
           durationSeconds: zod.number(),
           filePath: zod.string().nullish(),
           status: zod.enum(["pending", "rendering", "completed", "failed"]),
+          instagramCaption: zod
+            .string()
+            .nullish()
+            .describe("Ready-to-paste Instagram caption for this clip"),
           createdAt: zod.coerce.date(),
         }),
       ),

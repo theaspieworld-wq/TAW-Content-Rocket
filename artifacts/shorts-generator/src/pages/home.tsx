@@ -1837,7 +1837,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                             {Math.floor(clip.endSeconds / 60)}:{String(Math.floor(clip.endSeconds % 60)).padStart(2, "0")}
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-4 pt-0">
+                        <CardContent className="p-4 pt-0 flex flex-col gap-2">
                           {clip.status === "completed" && clip.filePath ? (
                             <Button className="w-full gap-2 h-9 font-medium text-sm" asChild>
                               <a href={`/api/clips/${clip.id}/download`} download>
@@ -1852,6 +1852,30 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                             <Button variant="secondary" className="w-full h-9 bg-muted/50 text-muted-foreground cursor-wait" disabled>
                               <Loader2 className="w-4 h-4 animate-spin mr-2" /> Processing
                             </Button>
+                          )}
+                          {clip.instagramCaption && (
+                            <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Instagram Caption</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[10px] gap-1 hover:bg-primary/10 hover:text-primary"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(clip.instagramCaption!);
+                                    setCopiedKey(`ig-${clip.id}`);
+                                    setTimeout(() => setCopiedKey(null), 2000);
+                                  }}
+                                >
+                                  {copiedKey === `ig-${clip.id}` ? (
+                                    <><Check className="w-3 h-3" /> Copied</>
+                                  ) : (
+                                    <><Copy className="w-3 h-3" /> Copy</>
+                                  )}
+                                </Button>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-4">{clip.instagramCaption}</p>
+                            </div>
                           )}
                         </CardContent>
                       </Card>

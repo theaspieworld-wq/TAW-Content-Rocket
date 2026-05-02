@@ -170,6 +170,11 @@ export interface Clip {
   /** @nullable */
   filePath?: string | null;
   status: ClipStatus;
+  /**
+   * Ready-to-paste Instagram caption for this clip
+   * @nullable
+   */
+  instagramCaption?: string | null;
   createdAt: string;
 }
 

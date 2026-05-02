@@ -101,6 +101,7 @@ interface ClipSegment {
   startSeconds: number;
   endSeconds: number;
   reasoning: string;
+  instagramCaption: string;
 }
 
 interface NewsletterEmail {
@@ -259,6 +260,7 @@ function makeFallbackClips(clipCount: number, videoDuration: number, clipDuratio
     startSeconds: Math.max(0, step * (i + 1) - clipDuration / 2),
     endSeconds: Math.min(videoDuration, step * (i + 1) + clipDuration / 2),
     reasoning: "Fallback evenly-spaced clip",
+    instagramCaption: "",
   }));
 }
 
@@ -298,7 +300,8 @@ Return ONLY a valid JSON array with exactly ${clipCount} clips:
     "title": "ENGAGING TITLE IN ALL CAPS (5-8 words)",
     "startSeconds": 12.5,
     "endSeconds": 45.0,
-    "reasoning": "Why this segment works well"
+    "reasoning": "Why this segment works well",
+    "instagramCaption": "Ready-to-post Instagram caption for this specific clip. Hook line (no emoji). 2-3 short punchy paragraphs expanding on the clip's insight in first person. Relatable question for engagement. 6-8 relevant hashtags on their own line. 150-220 words total."
   }
 ]
 
@@ -539,42 +542,20 @@ async function renderMainClip(
   outputPath: string,
 ): Promise<void> {
   const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
-  const logoExists = fs.existsSync(LOGO_PATH);
 
-  if (logoExists) {
-    const filterComplex = [
-      `[0:v]${portraitCrop}[bg]`,
-      `[1:v]scale=280:-1[logo]`,
-      `[bg][logo]overlay=x=(W-w)/2:y=30[v]`,
-    ].join(";");
+  await execFileAsync("ffmpeg", [
+    "-ss", startSeconds.toString(),
+    "-i", videoPath,
+    "-t", (endSeconds - startSeconds).toString(),
+    "-vf", portraitCrop,
+    "-sn",
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
+    "-metadata", `title=${title}`,
+    "-movflags", "+faststart",
+    outputPath, "-y",
+  ], { timeout: 300000 });
 
-    await execFileAsync("ffmpeg", [
-      "-ss", startSeconds.toString(),
-      "-i", videoPath,
-      "-loop", "1", "-i", LOGO_PATH,
-      "-t", (endSeconds - startSeconds).toString(),
-      "-filter_complex", filterComplex,
-      "-map", "[v]",
-      "-map", "0:a",
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-c:a", "aac", "-b:a", "128k",
-      "-metadata", `title=${title}`,
-      "-movflags", "+faststart",
-      outputPath, "-y",
-    ], { timeout: 300000 });
-  } else {
-    await execFileAsync("ffmpeg", [
-      "-ss", startSeconds.toString(),
-      "-i", videoPath,
-      "-t", (endSeconds - startSeconds).toString(),
-      "-vf", portraitCrop,
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-c:a", "aac", "-b:a", "128k",
-      "-metadata", `title=${title}`,
-      "-movflags", "+faststart",
-      outputPath, "-y",
-    ], { timeout: 300000 });
-  }
   void clipId;
 }
 
@@ -1049,6 +1030,7 @@ export async function processJob(jobId: number): Promise<void> {
           endSeconds: seg.endSeconds.toString(),
           durationSeconds: (seg.endSeconds - seg.startSeconds).toString(),
           status: "pending",
+          instagramCaption: seg.instagramCaption || null,
         }))
       ).returning();
     } else {
