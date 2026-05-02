@@ -41,6 +41,11 @@ export interface Brand {
    * @nullable
    */
   secondaryColor?: string | null;
+  /**
+   * Brand website URL e.g. "https://tawmedia.com"
+   * @nullable
+   */
+  website?: string | null;
   createdAt: string;
 }
 
@@ -56,6 +61,8 @@ export interface CreateBrandBody {
   primaryColor?: string | null;
   /** @nullable */
   secondaryColor?: string | null;
+  /** @nullable */
+  website?: string | null;
 }
 
 export interface UpdateBrandBody {
@@ -70,6 +77,8 @@ export interface UpdateBrandBody {
   primaryColor?: string | null;
   /** @nullable */
   secondaryColor?: string | null;
+  /** @nullable */
+  website?: string | null;
 }
 
 export interface CreateJobBody {

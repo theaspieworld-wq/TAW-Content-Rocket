@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "codegen": "orval --config ./orval.config.ts"
+    "codegen": "orval --config ./orval.config.ts && node -e \"require('fs').writeFileSync(require('path').resolve(__dirname, '../api-zod/src/index.ts'), \\\"export * from \\\\\\\"./generated/api\\\\\\\";\\\\n\\\")\"",
+    "codegen:libs": "pnpm run codegen && pnpm --filter @workspace/api-zod run build"
   },
   "devDependencies": {
     "orval": "^8.5.2"

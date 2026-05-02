@@ -791,6 +791,7 @@ export async function generateContent(
     brandVoice?: string | null;
     contentCta?: string | null;
     brandName?: string | null;
+    brandWebsite?: string | null;
     jobId?: number;
     brand?: typeof brandsTable.$inferSelect | null;
     tempDir?: string;
@@ -886,7 +887,8 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
 
 {
   "blogPost": "SEO-OPTIMISED HTML BLOG POST. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. STRUCTURE: (1) <h1> SEO title. (2) 2-3 <p> hook paragraphs. (3) 6-8 <h2> sections each with 2-3 <p> paragraphs; use <h3> for sub-steps followed by <ul><li>. (4) LAST: <p><strong>TL;DR:</strong> 3-4 sentence summary</p>.${ctaSuffix} TARGET: minimum 1500 words.",
-  "socialArticle": "HTML article for Facebook, Quora, LinkedIn. ALLOWED TAGS: <h2> <p> <strong> <em> <ul> <li> only. TARGET: 500 words. STRUCTURE: <p> hook. 2-3 <h2> sections. One <ul><li> list. Final <p> ending with: 'FREE autism life hacks book — link in comments.'"
+  "socialArticle": "HTML article for Facebook, Quora, LinkedIn. ALLOWED TAGS: <h2> <p> <strong> <em> <ul> <li> only. TARGET: 500 words. STRUCTURE: <p> hook. 2-3 <h2> sections. One <ul><li> list. Final <p> ending with: 'FREE autism life hacks book — link in comments.'",
+  "faqItems": [{"question": "FREQUENTLY ASKED QUESTION about the topic", "answer": "CLEAR, HELPFUL ANSWER (2-3 sentences)"}]
 }`;
 
   const [responseA, responseB] = await Promise.all([
@@ -910,6 +912,57 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
 
   const a = parseJson(responseA.choices[0]?.message?.content ?? "{}");
   const b = parseJson(responseB.choices[0]?.message?.content ?? "{}");
+
+  // ── Blog post: append FAQ + schema markup ─────────────────────────────
+  const rawBlogHtml = (b.blogPost as string) ?? "";
+  const faqItems = Array.isArray(b.faqItems)
+    ? (b.faqItems as Array<{ question: string; answer: string }>).filter(
+        (item) => typeof item?.question === "string" && typeof item?.answer === "string"
+      )
+    : [];
+
+  const faqHtml = faqItems.length > 0
+    ? `\n<h2>Frequently Asked Questions</h2>\n` +
+      faqItems.map((item) => `<h3>${item.question}</h3>\n<p>${item.answer}</p>`).join("\n")
+    : "";
+
+  const h1Match = rawBlogHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const blogHeadline = h1Match
+    ? h1Match[1].replace(/<[^>]+>/g, "").trim()
+    : videoTitle;
+  const brandName = options?.brandName ?? "TAW Media";
+  const brandWebsite = options?.brandWebsite ?? null;
+
+  const schemaGraph: Record<string, unknown>[] = [
+    {
+      "@type": "Article",
+      headline: blogHeadline,
+      datePublished: new Date().toISOString().split("T")[0],
+      url: brandWebsite ?? youtubeUrl,
+      publisher: {
+        "@type": "Organization",
+        name: brandName,
+        ...(brandWebsite ? { url: brandWebsite } : {}),
+      },
+    },
+  ];
+  if (faqItems.length > 0) {
+    schemaGraph.push({
+      "@type": "FAQPage",
+      mainEntity: faqItems.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
+    });
+  }
+  const schemaScript = `\n<script type="application/ld+json">\n${JSON.stringify(
+    { "@context": "https://schema.org", "@graph": schemaGraph },
+    null,
+    2,
+  )}\n</script>`;
+
+  const finalBlogPost = rawBlogHtml + faqHtml + schemaScript;
 
   const newsletterHtml = buildNewsletterHtml({
     videoTitle,
@@ -936,7 +989,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     videoTitle,
     thumbnailUrl,
     youtubeUrl,
-    blogPost: (b.blogPost as string) ?? "",
+    blogPost: finalBlogPost,
     threadPosts: Array.isArray(a.threadPosts) ? (a.threadPosts as string[]) : [],
     socialArticle: (b.socialArticle as string) ?? "",
     newsletterEmail: {
@@ -1024,6 +1077,7 @@ export async function processJob(jobId: number): Promise<void> {
         brandVoice: brand?.voiceStyle ?? null,
         contentCta: job.contentCta ?? null,
         brandName: brand?.name ?? null,
+        brandWebsite: brand?.website ?? null,
         jobId,
         brand,
         tempDir,

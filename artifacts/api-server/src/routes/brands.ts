@@ -69,6 +69,7 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
     fontFamily: b.fontFamily ?? null,
     primaryColor: b.primaryColor ?? null,
     secondaryColor: b.secondaryColor ?? null,
+    website: b.website ?? null,
     createdAt: b.createdAt.toISOString(),
   };
 }
@@ -92,6 +93,7 @@ router.post("/brands", async (req, res): Promise<void> => {
     fontFamily: parsed.data.fontFamily ?? null,
     primaryColor: parsed.data.primaryColor ?? null,
     secondaryColor: parsed.data.secondaryColor ?? null,
+    website: parsed.data.website ?? null,
   }).returning();
 
   res.status(201).json(brandToJson(brand));
@@ -123,6 +125,7 @@ router.patch("/brands/:id", async (req, res): Promise<void> => {
     ...(body.data.fontFamily !== undefined ? { fontFamily: body.data.fontFamily } : {}),
     ...(body.data.primaryColor !== undefined ? { primaryColor: body.data.primaryColor } : {}),
     ...(body.data.secondaryColor !== undefined ? { secondaryColor: body.data.secondaryColor } : {}),
+    ...(body.data.website !== undefined ? { website: body.data.website } : {}),
   }).where(eq(brandsTable.id, params.data.id)).returning();
 
   res.json(brandToJson(updated));

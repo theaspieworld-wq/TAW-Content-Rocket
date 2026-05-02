@@ -13,6 +13,7 @@ export const brandsTable = pgTable("brands", {
   fontFamily: text("font_family"),
   primaryColor: text("primary_color"),
   secondaryColor: text("secondary_color"),
+  website: text("website"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

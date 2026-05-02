@@ -159,12 +159,14 @@ export default function Home() {
   const [newBrandName, setNewBrandName] = useState("");
   const [newBrandVoice, setNewBrandVoice] = useState("");
   const [newBrandCta, setNewBrandCta] = useState("");
+  const [newBrandWebsite, setNewBrandWebsite] = useState("");
   const [newBrandFont, setNewBrandFont] = useState("Poppins");
   const [newBrandPrimary, setNewBrandPrimary] = useState("#f21178");
   const [newBrandSecondary, setNewBrandSecondary] = useState("#7c3aed");
   const [editBrandName, setEditBrandName] = useState("");
   const [editBrandVoice, setEditBrandVoice] = useState("");
   const [editBrandCta, setEditBrandCta] = useState("");
+  const [editBrandWebsite, setEditBrandWebsite] = useState("");
   const [editBrandFont, setEditBrandFont] = useState("Poppins");
   const [editBrandPrimary, setEditBrandPrimary] = useState("#f21178");
   const [editBrandSecondary, setEditBrandSecondary] = useState("#7c3aed");
@@ -434,6 +436,7 @@ export default function Home() {
         name: newBrandName.trim(),
         voiceStyle: newBrandVoice.trim() || null,
         defaultCta: newBrandCta.trim() || null,
+        website: newBrandWebsite.trim() || null,
         fontFamily: newBrandFont,
         primaryColor: newBrandPrimary,
         secondaryColor: newBrandSecondary,
@@ -441,7 +444,7 @@ export default function Home() {
     }, {
       onSuccess: () => {
         toast({ title: "Brand Created", description: `${newBrandName} has been added.` });
-        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta("");
+        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta(""); setNewBrandWebsite("");
         setNewBrandFont("Poppins"); setNewBrandPrimary("#f21178"); setNewBrandSecondary("#7c3aed");
         setIsAddingBrand(false);
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
@@ -459,6 +462,7 @@ export default function Home() {
         name: editBrandName.trim() || undefined,
         voiceStyle: editBrandVoice.trim() || null,
         defaultCta: editBrandCta.trim() || null,
+        website: editBrandWebsite.trim() || null,
         fontFamily: editBrandFont,
         primaryColor: editBrandPrimary,
         secondaryColor: editBrandSecondary,
@@ -487,6 +491,7 @@ export default function Home() {
     setEditBrandName(brand.name);
     setEditBrandVoice(brand.voiceStyle ?? "");
     setEditBrandCta(brand.defaultCta ?? "");
+    setEditBrandWebsite(brand.website ?? "");
     setEditBrandFont(brand.fontFamily ?? "Poppins");
     setEditBrandPrimary(brand.primaryColor ?? "#f21178");
     setEditBrandSecondary(brand.secondaryColor ?? "#7c3aed");
@@ -776,6 +781,10 @@ export default function Home() {
                       <Input value={newBrandName} onChange={e => setNewBrandName(e.target.value)} placeholder="e.g. TAW Media" className="h-8 text-xs" required />
                     </div>
                     <div className="space-y-2">
+                      <Label className="text-xs">Website URL</Label>
+                      <Input value={newBrandWebsite} onChange={e => setNewBrandWebsite(e.target.value)} placeholder="e.g. https://tawmedia.com" className="h-8 text-xs" type="url" />
+                    </div>
+                    <div className="space-y-2">
                       <Label className="text-xs">Voice / Tone Style</Label>
                       <Textarea value={newBrandVoice} onChange={e => setNewBrandVoice(e.target.value)} placeholder="e.g. Direct, no-fluff, motivational. Write like a founder talking to peers." className="text-xs min-h-[60px] resize-none" />
                     </div>
@@ -873,6 +882,10 @@ export default function Home() {
                                   <Input value={editBrandName} onChange={e => setEditBrandName(e.target.value)} className="h-7 text-xs" />
                                 </div>
                                 <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground uppercase">Website URL</Label>
+                                  <Input value={editBrandWebsite} onChange={e => setEditBrandWebsite(e.target.value)} placeholder="https://tawmedia.com" className="h-7 text-xs" type="url" />
+                                </div>
+                                <div className="space-y-1">
                                   <Label className="text-[10px] text-muted-foreground uppercase">Voice Style</Label>
                                   <Textarea value={editBrandVoice} onChange={e => setEditBrandVoice(e.target.value)} className="text-xs min-h-[50px] resize-none" />
                                 </div>
@@ -926,6 +939,12 @@ export default function Home() {
                               </form>
                             ) : (
                               <>
+                                {brand.website && (
+                                  <div>
+                                    <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Website</p>
+                                    <a href={brand.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate block">{brand.website}</a>
+                                  </div>
+                                )}
                                 {(brand.primaryColor || brand.secondaryColor || brand.fontFamily) && (
                                   <div className="flex items-center gap-2 flex-wrap">
                                     {brand.primaryColor && (

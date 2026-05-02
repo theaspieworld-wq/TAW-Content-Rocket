@@ -37,6 +37,10 @@ export const ListBrandsResponseItem = zod.object({
     .string()
     .nullish()
     .describe('Brand secondary color as hex e.g. \"#7c3aed\"'),
+  website: zod
+    .string()
+    .nullish()
+    .describe('Brand website URL e.g. \"https:\/\/tawmedia.com\"'),
   createdAt: zod.coerce.date(),
 });
 export const ListBrandsResponse = zod.array(ListBrandsResponseItem);
@@ -51,6 +55,7 @@ export const CreateBrandBody = zod.object({
   fontFamily: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
   secondaryColor: zod.string().nullish(),
+  website: zod.string().nullish(),
 });
 
 /**
@@ -67,6 +72,7 @@ export const UpdateBrandBody = zod.object({
   fontFamily: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
   secondaryColor: zod.string().nullish(),
+  website: zod.string().nullish(),
 });
 
 export const UpdateBrandResponse = zod.object({
@@ -89,6 +95,10 @@ export const UpdateBrandResponse = zod.object({
     .string()
     .nullish()
     .describe('Brand secondary color as hex e.g. \"#7c3aed\"'),
+  website: zod
+    .string()
+    .nullish()
+    .describe('Brand website URL e.g. \"https:\/\/tawmedia.com\"'),
   createdAt: zod.coerce.date(),
 });
 

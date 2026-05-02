@@ -18,4 +18,6 @@ export interface UpdateBrandBody {
   primaryColor?: string | null;
   /** @nullable */
   secondaryColor?: string | null;
+  /** @nullable */
+  website?: string | null;
 }

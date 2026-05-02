@@ -34,5 +34,10 @@ export interface Brand {
    * @nullable
    */
   secondaryColor?: string | null;
+  /**
+   * Brand website URL e.g. "https://tawmedia.com"
+   * @nullable
+   */
+  website?: string | null;
   createdAt: Date;
 }

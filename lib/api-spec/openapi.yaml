@@ -397,6 +397,9 @@ components:
         secondaryColor:
           type: ["string", "null"]
           description: Brand secondary color as hex e.g. "#7c3aed"
+        website:
+          type: ["string", "null"]
+          description: Brand website URL e.g. "https://tawmedia.com"
         createdAt:
           type: string
           format: date-time
@@ -419,6 +422,8 @@ components:
           type: ["string", "null"]
         secondaryColor:
           type: ["string", "null"]
+        website:
+          type: ["string", "null"]
       required:
         - name
     UpdateBrandBody:
@@ -435,6 +440,8 @@ components:
         primaryColor:
           type: ["string", "null"]
         secondaryColor:
+          type: ["string", "null"]
+        website:
           type: ["string", "null"]
     CreateJobBody:
       type: object
