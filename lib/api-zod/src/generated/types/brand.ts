@@ -15,6 +15,8 @@ export interface Brand {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  /** When true, the brand CTA is automatically appended to all copied text */
+  appendCtaToCopies?: boolean;
   /** @nullable */
   introAudioPath?: string | null;
   /** @nullable */

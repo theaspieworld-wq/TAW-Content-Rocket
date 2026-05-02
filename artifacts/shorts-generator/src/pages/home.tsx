@@ -159,6 +159,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [appendCta, setAppendCta] = useState(false);
   const [expandedBrandId, setExpandedBrandId] = useState<number | null>(null);
   const [editingBrandId, setEditingBrandId] = useState<number | null>(null);
   const [isAddingBrand, setIsAddingBrand] = useState(false);
@@ -167,6 +168,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [newBrandName, setNewBrandName] = useState("");
   const [newBrandVoice, setNewBrandVoice] = useState("");
   const [newBrandCta, setNewBrandCta] = useState("");
+  const [newBrandAppendCta, setNewBrandAppendCta] = useState(false);
   const [newBrandWebsite, setNewBrandWebsite] = useState("");
   const [newBrandExportFolder, setNewBrandExportFolder] = useState("");
   const [newBrandFont, setNewBrandFont] = useState("Poppins");
@@ -175,6 +177,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [editBrandName, setEditBrandName] = useState("");
   const [editBrandVoice, setEditBrandVoice] = useState("");
   const [editBrandCta, setEditBrandCta] = useState("");
+  const [editBrandAppendCta, setEditBrandAppendCta] = useState(false);
   const [editBrandWebsite, setEditBrandWebsite] = useState("");
   const [editBrandExportFolder, setEditBrandExportFolder] = useState("");
   const [editBrandFont, setEditBrandFont] = useState("Poppins");
@@ -258,11 +261,24 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     }
   }, [jobWithClips?.id, jobWithClips?.status, jobWithClips?.hasContent]);
 
+  // Auto-set appendCta from the job's brand preference when switching jobs
+  useEffect(() => {
+    if (!jobWithClips || !brands) return;
+    const jobBrand = brands.find((b: Brand) => String(b.id) === String((jobWithClips as any).brandId));
+    setAppendCta((jobBrand as any)?.appendCtaToCopies === true);
+  }, [jobWithClips?.id, brands]);
+
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopiedKey(key);
       setTimeout(() => setCopiedKey(null), 2000);
     });
+  };
+
+  const copyWithCta = (text: string, key: string) => {
+    const cta = (jobWithClips as any)?.contentCta as string | null | undefined;
+    const final = appendCta && cta?.trim() ? `${text}\n\n${cta.trim()}` : text;
+    copyToClipboard(final, key);
   };
 
   const handleRegenerateContent = () => {
@@ -457,6 +473,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         name: newBrandName.trim(),
         voiceStyle: newBrandVoice.trim() || null,
         defaultCta: newBrandCta.trim() || null,
+        appendCtaToCopies: newBrandAppendCta,
         website: newBrandWebsite.trim() || null,
         exportFolderUrl: newBrandExportFolder.trim() || null,
         fontFamily: newBrandFont,
@@ -466,7 +483,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     }, {
       onSuccess: () => {
         toast({ title: "Brand Created", description: `${newBrandName} has been added.` });
-        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta(""); setNewBrandWebsite(""); setNewBrandExportFolder("");
+        setNewBrandName(""); setNewBrandVoice(""); setNewBrandCta(""); setNewBrandAppendCta(false); setNewBrandWebsite(""); setNewBrandExportFolder("");
         setNewBrandFont("Poppins"); setNewBrandPrimary("#f21178"); setNewBrandSecondary("#7c3aed");
         setIsAddingBrand(false);
         queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
@@ -485,6 +502,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         name: editBrandName.trim() || undefined,
         voiceStyle: editBrandVoice.trim() || null,
         defaultCta: editBrandCta.trim() || null,
+        appendCtaToCopies: editBrandAppendCta,
         website: editBrandWebsite.trim() || null,
         exportFolderUrl: editBrandExportFolder.trim() || null,
         fontFamily: editBrandFont,
@@ -517,6 +535,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     setEditBrandName(brand.name);
     setEditBrandVoice(brand.voiceStyle ?? "");
     setEditBrandCta(brand.defaultCta ?? "");
+    setEditBrandAppendCta((brand as any).appendCtaToCopies === true);
     setEditBrandWebsite(brand.website ?? "");
     setEditBrandExportFolder((brand as any).exportFolderUrl ?? "");
     setEditBrandFont(brand.fontFamily ?? "Poppins");
@@ -840,6 +859,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                     <div className="space-y-2">
                       <Label className="text-xs">Default CTA</Label>
                       <Input value={newBrandCta} onChange={e => setNewBrandCta(e.target.value)} placeholder="e.g. Book a free strategy call →" className="h-8 text-xs" />
+                      <label className="flex items-center gap-2 cursor-pointer select-none pt-0.5">
+                        <input type="checkbox" checked={newBrandAppendCta} onChange={e => setNewBrandAppendCta(e.target.checked)} className="w-3.5 h-3.5 accent-[#f21178] cursor-pointer" />
+                        <span className="text-[11px] text-muted-foreground">Auto-append CTA to all copied text</span>
+                      </label>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs">Font Family</Label>
@@ -945,6 +968,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                 <div className="space-y-1">
                                   <Label className="text-[10px] text-muted-foreground uppercase">Default CTA</Label>
                                   <Input value={editBrandCta} onChange={e => setEditBrandCta(e.target.value)} className="h-7 text-xs" />
+                                  <label className="flex items-center gap-2 cursor-pointer select-none pt-0.5">
+                                    <input type="checkbox" checked={editBrandAppendCta} onChange={e => setEditBrandAppendCta(e.target.checked)} className="w-3.5 h-3.5 accent-[#f21178] cursor-pointer" />
+                                    <span className="text-[11px] text-muted-foreground">Auto-append CTA to all copied text</span>
+                                  </label>
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-[10px] text-muted-foreground uppercase">Font Family</Label>
@@ -1031,6 +1058,11 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                   <div>
                                     <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Default CTA</p>
                                     <p className="text-xs text-foreground/80">{brand.defaultCta}</p>
+                                    {(brand as any).appendCtaToCopies && (
+                                      <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 py-0.5">
+                                        <Zap className="w-2.5 h-2.5" /> Auto-appended to copies
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                                 <Button size="sm" variant="outline" className="h-7 text-[11px] w-full gap-1.5" onClick={() => openEditBrand(brand)}>
@@ -1457,16 +1489,30 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       Generated Content Pack
                     </h3>
                     {jobWithClips.hasContent && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRegenerateContent}
-                        disabled={regenerateContent.isPending}
-                        className="h-8 text-xs gap-1.5 border-border/60"
-                      >
-                        {regenerateContent.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                        Regenerate
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {(jobWithClips as any)?.contentCta && (
+                          <Button
+                            variant={appendCta ? "default" : "outline"}
+                            size="sm"
+                            className={`h-8 text-xs gap-1.5 transition-all ${appendCta ? "bg-[#f21178] hover:bg-[#d91068] text-white border-[#f21178] shadow-sm shadow-[#f21178]/20" : "border-border/60 text-muted-foreground"}`}
+                            onClick={() => setAppendCta(prev => !prev)}
+                            title={appendCta ? "CTA will be appended to copied text — click to disable" : "Click to auto-append your CTA to copied text"}
+                          >
+                            <Megaphone className="w-3.5 h-3.5" />
+                            CTA {appendCta ? "On" : "Off"}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRegenerateContent}
+                          disabled={regenerateContent.isPending}
+                          className="h-8 text-xs gap-1.5 border-border/60"
+                        >
+                          {regenerateContent.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          Regenerate
+                        </Button>
+                      </div>
                     )}
                   </div>
 
@@ -1521,7 +1567,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                           <div className="p-6">
                             <div className="flex items-center justify-between mb-4">
                               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">HTML Blog Post</span>
-                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.blogPost, "blog")}>
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyWithCta(jobContent.blogPost, "blog")}>
                                 {copiedKey === "blog" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                                 {copiedKey === "blog" ? "Copied!" : "Copy HTML"}
                               </Button>
@@ -1542,7 +1588,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                         <div className="rounded-xl border border-border bg-card p-6">
                           <div className="flex items-center justify-between mb-5">
                             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">X / Threads Posts</span>
-                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.threadPosts.map((p: string) => p.replace(/^Post\s+\d+\s*:\s*/i, "").trim()).join("\n\n---\n\n"), "thread-all")}>
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyWithCta(jobContent.threadPosts.map((p: string) => p.replace(/^Post\s+\d+\s*:\s*/i, "").trim()).join("\n\n---\n\n"), "thread-all")}>
                               {copiedKey === "thread-all" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                               Copy All
                             </Button>
@@ -1555,7 +1601,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                   <div className="flex items-start gap-3">
                                     <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">{i + 1}</span>
                                     <p className="text-sm leading-relaxed flex-1 text-foreground/85">{clean}</p>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(clean, `thread-${i}`)}>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyWithCta(clean, `thread-${i}`)}>
                                       {copiedKey === `thread-${i}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
                                     </Button>
                                   </div>
@@ -1580,7 +1626,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                 .replace(/<\/p>/gi, "\n\n").replace(/<li[^>]*>/gi, "• ").replace(/<\/li>/gi, "\n")
                                 .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
                                 .replace(/\n{3,}/g, "\n\n").trim();
-                              copyToClipboard(plain, "social");
+                              copyWithCta(plain, "social");
                             }}>
                               {copiedKey === "social" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                               Copy Article
@@ -1661,7 +1707,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                     <div className="p-4 border-b border-border/40">
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs font-bold text-foreground uppercase tracking-widest">Quote {i + 1}</span>
-                                        <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyToClipboard(quote, `quote-${i}`)}>
+                                        <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyWithCta(quote, `quote-${i}`)}>
                                           {copiedKey === `quote-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
                                           Copy
                                         </Button>
@@ -1674,7 +1720,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                       <div className="p-4">
                                         <div className="flex items-center justify-between mb-2">
                                           <span className="text-xs font-bold text-foreground uppercase tracking-widest">Instagram / TikTok Caption</span>
-                                          <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyToClipboard(caption, `caption-${i}`)}>
+                                          <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyWithCta(caption, `caption-${i}`)}>
                                             {copiedKey === `caption-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
                                             Copy
                                           </Button>
@@ -1703,7 +1749,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                 <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0">{jobContent.carouselImages.length} slides</Badge>
                               </h3>
                               {jobContent.carouselCaption && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyToClipboard(jobContent.carouselCaption, "carousel-caption")}>
+                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => copyWithCta(jobContent.carouselCaption, "carousel-caption")}>
                                   {copiedKey === "carousel-caption" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                                   Copy Caption
                                 </Button>
@@ -1861,11 +1907,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                   variant="ghost"
                                   size="sm"
                                   className="h-6 px-2 text-[10px] gap-1 hover:bg-primary/10 hover:text-primary"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(clip.instagramCaption!);
-                                    setCopiedKey(`ig-${clip.id}`);
-                                    setTimeout(() => setCopiedKey(null), 2000);
-                                  }}
+                                  onClick={() => copyWithCta(clip.instagramCaption!, `ig-${clip.id}`)}
                                 >
                                   {copiedKey === `ig-${clip.id}` ? (
                                     <><Check className="w-3 h-3" /> Copied</>

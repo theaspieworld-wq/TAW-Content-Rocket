@@ -22,6 +22,8 @@ export interface Brand {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  /** When true, the brand CTA is automatically appended to all copied text */
+  appendCtaToCopies?: boolean;
   /** @nullable */
   introAudioPath?: string | null;
   /** @nullable */
@@ -65,6 +67,7 @@ export interface CreateBrandBody {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  appendCtaToCopies?: boolean;
   /** @nullable */
   fontFamily?: string | null;
   /** @nullable */
@@ -83,6 +86,7 @@ export interface UpdateBrandBody {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  appendCtaToCopies?: boolean;
   /** @nullable */
   fontFamily?: string | null;
   /** @nullable */

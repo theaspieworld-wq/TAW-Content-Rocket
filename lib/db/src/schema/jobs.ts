@@ -17,6 +17,7 @@ export const brandsTable = pgTable("brands", {
   logoPath: text("logo_path"),
   voiceStyle: text("voice_style"),
   defaultCta: text("default_cta"),
+  appendCtaToCopies: text("append_cta_to_copies").notNull().default("false"),
   introAudioPath: text("intro_audio_path"),
   outroAudioPath: text("outro_audio_path"),
   fontFamily: text("font_family"),

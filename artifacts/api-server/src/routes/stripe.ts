@@ -32,7 +32,7 @@ router.get('/stripe/products', async (_req, res) => {
 router.get('/stripe/subscription', async (req, res) => {
   const auth = getAuth(req);
   const userId = auth?.userId;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
   try {
     const claims = auth.sessionClaims as any;
@@ -66,10 +66,10 @@ router.get('/stripe/subscription', async (req, res) => {
 router.post('/stripe/checkout', async (req, res) => {
   const auth = getAuth(req);
   const userId = auth?.userId;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
   const { priceId } = req.body;
-  if (!priceId) return res.status(400).json({ error: 'priceId required' });
+  if (!priceId) { res.status(400).json({ error: 'priceId required' }); return; }
 
   try {
     const claims = auth.sessionClaims as any;
@@ -87,12 +87,13 @@ router.post('/stripe/checkout', async (req, res) => {
 router.post('/stripe/portal', async (req, res) => {
   const auth = getAuth(req);
   const userId = auth?.userId;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
   try {
     const user = await stripeStorage.getUser(userId);
     if (!user?.stripeCustomerId) {
-      return res.status(400).json({ error: 'No billing account found' });
+      res.status(400).json({ error: 'No billing account found' });
+      return;
     }
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const session = await stripeService.createPortalSession(user.stripeCustomerId, baseUrl);

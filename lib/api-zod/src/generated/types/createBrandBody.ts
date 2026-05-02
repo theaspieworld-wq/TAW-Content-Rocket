@@ -12,6 +12,7 @@ export interface CreateBrandBody {
   voiceStyle?: string | null;
   /** @nullable */
   defaultCta?: string | null;
+  appendCtaToCopies?: boolean;
   /** @nullable */
   fontFamily?: string | null;
   /** @nullable */

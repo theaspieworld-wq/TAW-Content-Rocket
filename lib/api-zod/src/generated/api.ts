@@ -23,6 +23,12 @@ export const ListBrandsResponseItem = zod.object({
   logoPath: zod.string().nullish(),
   voiceStyle: zod.string().nullish(),
   defaultCta: zod.string().nullish(),
+  appendCtaToCopies: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, the brand CTA is automatically appended to all copied text",
+    ),
   introAudioPath: zod.string().nullish(),
   outroAudioPath: zod.string().nullish(),
   fontFamily: zod
@@ -60,6 +66,7 @@ export const CreateBrandBody = zod.object({
   name: zod.string(),
   voiceStyle: zod.string().nullish(),
   defaultCta: zod.string().nullish(),
+  appendCtaToCopies: zod.boolean().optional(),
   fontFamily: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
   secondaryColor: zod.string().nullish(),
@@ -78,6 +85,7 @@ export const UpdateBrandBody = zod.object({
   name: zod.string().optional(),
   voiceStyle: zod.string().nullish(),
   defaultCta: zod.string().nullish(),
+  appendCtaToCopies: zod.boolean().optional(),
   fontFamily: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
   secondaryColor: zod.string().nullish(),
@@ -91,6 +99,12 @@ export const UpdateBrandResponse = zod.object({
   logoPath: zod.string().nullish(),
   voiceStyle: zod.string().nullish(),
   defaultCta: zod.string().nullish(),
+  appendCtaToCopies: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, the brand CTA is automatically appended to all copied text",
+    ),
   introAudioPath: zod.string().nullish(),
   outroAudioPath: zod.string().nullish(),
   fontFamily: zod
