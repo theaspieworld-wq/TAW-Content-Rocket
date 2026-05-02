@@ -7,7 +7,7 @@ import { ClerkProvider, SignIn, SignUp, UserProfile, Show, useClerk, useUser } f
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft, User, LogOut } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import PricingPage from "@/pages/pricing";
@@ -231,33 +231,87 @@ function AppPage() {
 }
 
 function ProfilePage() {
+  const [, setLocation] = useLocation();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+
   return (
     <>
       <Show when="signed-in">
-        <div className="min-h-[100dvh] bg-[#080614] flex items-start justify-center px-4 py-10">
-          <div className="w-full max-w-3xl">
-            <UserProfile
-              routing="path"
-              path={`${basePath}/app/profile`}
-              appearance={{
-                elements: {
-                  rootBox: "w-full",
-                  cardBox: "w-full bg-[#0d0920] rounded-2xl border border-[#2a1e4a] shadow-2xl shadow-black/60",
-                  card: "!shadow-none !border-0 !bg-transparent",
-                  navbar: "border-r border-[#2a1e4a]",
-                  navbarButton: "text-slate-300 hover:text-white hover:bg-[#16102a]",
-                  navbarButtonActive: "text-[#f21178] bg-[#1e0a1e]",
-                  pageScrollBox: "bg-transparent",
-                  profileSectionTitle: "text-white font-semibold",
-                  profileSectionContent: "text-slate-300",
-                  formButtonPrimary: "bg-[#f21178] hover:bg-[#d91068] text-white",
-                  formFieldInput: "bg-[#16102a] border-[#2a1e4a] text-white",
-                  formFieldLabel: "text-slate-300",
-                  headerTitle: "text-white",
-                  headerSubtitle: "text-slate-400",
-                },
-              }}
-            />
+        <div className="min-h-[100dvh] bg-[#080614] flex flex-col">
+          {/* Header */}
+          <div className="sticky top-0 z-20 bg-[#080614]/95 backdrop-blur-md border-b border-[#2a1e4a]">
+            <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setLocation("/app")}
+                  className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-sm font-medium"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to app
+                </button>
+              </div>
+              <div className="flex items-center gap-2.5">
+                {user?.imageUrl ? (
+                  <img src={user.imageUrl} alt="avatar" className="h-7 w-7 rounded-full object-cover ring-2 ring-[#2a1e4a]" />
+                ) : (
+                  <div className="h-7 w-7 rounded-full bg-[#f21178]/10 flex items-center justify-center ring-2 ring-[#2a1e4a]">
+                    <User className="w-3.5 h-3.5 text-[#f21178]/70" />
+                  </div>
+                )}
+                <span className="text-sm text-slate-300 font-medium hidden sm:block">
+                  {user?.fullName || user?.username || user?.primaryEmailAddress?.emailAddress?.split("@")[0]}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Profile panel */}
+          <div className="flex-1 flex flex-col items-center px-4 py-8">
+            <div className="w-full max-w-3xl space-y-4">
+              <div>
+                <h1 className="text-xl font-bold text-white">Account settings</h1>
+                <p className="text-slate-400 text-sm mt-0.5">Update your profile picture, name, email, and password.</p>
+              </div>
+
+              <UserProfile
+                routing="path"
+                path={`${basePath}/app/profile`}
+                appearance={{
+                  elements: {
+                    rootBox: "w-full",
+                    cardBox: "w-full bg-[#0d0920] rounded-2xl border border-[#2a1e4a] shadow-2xl shadow-black/60",
+                    card: "!shadow-none !border-0 !bg-transparent",
+                    navbar: "border-r border-[#2a1e4a]",
+                    navbarButton: "text-slate-300 hover:text-white hover:bg-[#16102a]",
+                    navbarButtonActive: "text-[#f21178] bg-[#1e0a1e]",
+                    pageScrollBox: "bg-transparent",
+                    profileSectionTitle: "text-white font-semibold",
+                    profileSectionContent: "text-slate-300",
+                    formButtonPrimary: "bg-[#f21178] hover:bg-[#d91068] text-white",
+                    formFieldInput: "bg-[#16102a] border-[#2a1e4a] text-white placeholder:text-slate-600",
+                    formFieldLabel: "text-slate-300 text-sm",
+                    headerTitle: "text-white",
+                    headerSubtitle: "text-slate-400",
+                    profileSectionPrimaryButton: "text-[#f21178] hover:text-[#f21178]",
+                    accordionTriggerButton: "text-slate-300 hover:text-white",
+                    badge: "bg-[#f21178]/10 text-[#f21178] border-[#f21178]/20",
+                    avatarImageActionsUpload: "bg-[#f21178] hover:bg-[#d91068] text-white",
+                  },
+                }}
+              />
+
+              {/* Sign out */}
+              <div className="flex justify-end pb-4">
+                <button
+                  onClick={() => signOut(() => setLocation("/"))}
+                  className="flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign out
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </Show>

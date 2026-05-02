@@ -65,9 +65,13 @@ import {
   Plus,
   Megaphone,
   FolderOpen,
+  User,
+  LogOut,
+  ChevronRight,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UserButton } from "@clerk/react";
+import { UserButton, useUser } from "@clerk/react";
+import { useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -148,6 +152,8 @@ function getStatusLabel(status: string) {
 }
 
 export default function Home() {
+  const [, setLocation] = useLocation();
+  const { user } = useUser();
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
@@ -1054,6 +1060,33 @@ export default function Home() {
             </ScrollArea>
           </TabsContent>
         </Tabs>
+
+        {/* ── Account footer ─────────────────────────────────────── */}
+        <div className="border-t border-border p-3 shrink-0">
+          <button
+            onClick={() => setLocation("/app/profile")}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-all group text-left"
+          >
+            <div className="relative shrink-0">
+              {user?.imageUrl ? (
+                <img src={user.imageUrl} alt="avatar" className="h-8 w-8 rounded-full object-cover ring-2 ring-border group-hover:ring-primary/40 transition-all" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-border group-hover:ring-primary/40 transition-all">
+                  <User className="w-4 h-4 text-primary/70" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate leading-tight">
+                {user?.fullName || user?.username || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Account"}
+              </p>
+              <p className="text-[11px] text-muted-foreground truncate leading-tight">
+                {user?.primaryEmailAddress?.emailAddress ?? "Manage account"}
+              </p>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
+          </button>
+        </div>
       </div>
 
       {/* ── Main Content ─────────────────────────────────────────── */}
