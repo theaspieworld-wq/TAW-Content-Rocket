@@ -46,6 +46,11 @@ export interface Brand {
    * @nullable
    */
   website?: string | null;
+  /**
+   * Path to short-form outro video file
+   * @nullable
+   */
+  shortFormOutroPath?: string | null;
   createdAt: string;
 }
 

@@ -57,6 +57,26 @@ const uploadAudio = multer({
   },
 });
 
+const videoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, BRANDS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".mp4";
+    cb(null, `video_${Date.now()}${ext}`);
+  },
+});
+
+const uploadVideo = multer({
+  storage: videoStorage,
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("video/") || file.originalname.match(/\.(mp4|mov|webm|avi|mkv)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only video files are allowed"));
+    }
+  },
+});
+
 function brandToJson(b: typeof brandsTable.$inferSelect) {
   return {
     id: b.id,
@@ -70,6 +90,7 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
     primaryColor: b.primaryColor ?? null,
     secondaryColor: b.secondaryColor ?? null,
     website: b.website ?? null,
+    shortFormOutroPath: b.shortFormOutroPath ?? null,
     createdAt: b.createdAt.toISOString(),
   };
 }
@@ -145,7 +166,7 @@ router.delete("/brands/:id", async (req, res): Promise<void> => {
   }
 
   // Clean up files
-  for (const filePath of [brand.logoPath, brand.introAudioPath, brand.outroAudioPath]) {
+  for (const filePath of [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath]) {
     if (filePath && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (e) { logger.warn({ e }, "Could not delete brand file"); }
     }
@@ -243,6 +264,37 @@ router.post("/brands/:id/outro-audio", uploadAudio.single("file"), async (req, r
 
   const [updated] = await db.update(brandsTable)
     .set({ outroAudioPath: req.file.path })
+    .where(eq(brandsTable.id, id))
+    .returning();
+
+  res.json(brandToJson(updated));
+});
+
+router.post("/brands/:id/short-form-outro", uploadVideo.single("file"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid brand ID" });
+    return;
+  }
+
+  if (!req.file) {
+    res.status(400).json({ error: "No video file provided" });
+    return;
+  }
+
+  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
+  if (!brand) {
+    fs.unlinkSync(req.file.path);
+    res.status(404).json({ error: "Brand not found" });
+    return;
+  }
+
+  if (brand.shortFormOutroPath && fs.existsSync(brand.shortFormOutroPath)) {
+    try { fs.unlinkSync(brand.shortFormOutroPath); } catch (_) {}
+  }
+
+  const [updated] = await db.update(brandsTable)
+    .set({ shortFormOutroPath: req.file.path })
     .where(eq(brandsTable.id, id))
     .returning();
 

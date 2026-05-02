@@ -400,6 +400,9 @@ components:
         website:
           type: ["string", "null"]
           description: Brand website URL e.g. "https://tawmedia.com"
+        shortFormOutroPath:
+          type: ["string", "null"]
+          description: Path to short-form outro video file
         createdAt:
           type: string
           format: date-time

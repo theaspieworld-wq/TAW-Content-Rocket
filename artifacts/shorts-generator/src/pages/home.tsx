@@ -497,7 +497,7 @@ export default function Home() {
     setEditBrandSecondary(brand.secondaryColor ?? "#7c3aed");
   };
 
-  const handleBrandFileUpload = async (brandId: number, type: "logo" | "intro-audio" | "outro-audio", file: File) => {
+  const handleBrandFileUpload = async (brandId: number, type: "logo" | "short-form-outro" | "intro-audio" | "outro-audio", file: File) => {
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch(`/api/brands/${brandId}/${type}`, { method: "POST", body: formData });
@@ -981,17 +981,17 @@ export default function Home() {
                             {/* File uploads */}
                             <div className="space-y-2 pt-1">
                               <p className="text-[10px] font-semibold text-muted-foreground uppercase">Media Files</p>
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {(["logo", "intro-audio", "outro-audio"] as const).map((type) => {
-                                  const icons = { logo: Image, "intro-audio": Mic, "outro-audio": Mic };
-                                  const labels = { logo: "Logo", "intro-audio": "Intro", "outro-audio": "Outro" };
-                                  const accepts = { logo: "image/*", "intro-audio": "audio/*", "outro-audio": "audio/*" };
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {(["logo", "short-form-outro", "intro-audio", "outro-audio"] as const).map((type) => {
+                                  const icons = { logo: Image, "short-form-outro": Film, "intro-audio": Mic, "outro-audio": Mic };
+                                  const labels = { logo: "Logo", "short-form-outro": "Short Form Outro", "intro-audio": "Podcast Intro", "outro-audio": "Podcast Outro" };
+                                  const accepts = { logo: "image/*", "short-form-outro": "video/*", "intro-audio": "audio/*", "outro-audio": "audio/*" };
                                   const Icon = icons[type];
-                                  const hasFile = type === "logo" ? !!brand.logoPath : type === "intro-audio" ? !!brand.introAudioPath : !!brand.outroAudioPath;
+                                  const hasFile = type === "logo" ? !!brand.logoPath : type === "short-form-outro" ? !!(brand as any).shortFormOutroPath : type === "intro-audio" ? !!brand.introAudioPath : !!brand.outroAudioPath;
                                   return (
                                     <label key={type} className={`flex flex-col items-center gap-1 p-2 rounded border cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/30 ${hasFile ? "border-emerald-500/30 bg-emerald-500/5" : "border-dashed border-border/50 bg-card/30"}`}>
                                       <Icon className={`w-4 h-4 ${hasFile ? "text-emerald-500" : "text-muted-foreground"}`} />
-                                      <span className="text-[9px] font-medium text-muted-foreground">{labels[type]}</span>
+                                      <span className="text-[9px] font-medium text-muted-foreground text-center leading-tight">{labels[type]}</span>
                                       <input type="file" accept={accepts[type]} className="hidden" onChange={async (e) => {
                                         const file = e.target.files?.[0];
                                         if (!file) return;

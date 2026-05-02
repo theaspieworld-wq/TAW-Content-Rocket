@@ -41,6 +41,10 @@ export const ListBrandsResponseItem = zod.object({
     .string()
     .nullish()
     .describe('Brand website URL e.g. \"https:\/\/tawmedia.com\"'),
+  shortFormOutroPath: zod
+    .string()
+    .nullish()
+    .describe("Path to short-form outro video file"),
   createdAt: zod.coerce.date(),
 });
 export const ListBrandsResponse = zod.array(ListBrandsResponseItem);
@@ -99,6 +103,10 @@ export const UpdateBrandResponse = zod.object({
     .string()
     .nullish()
     .describe('Brand website URL e.g. \"https:\/\/tawmedia.com\"'),
+  shortFormOutroPath: zod
+    .string()
+    .nullish()
+    .describe("Path to short-form outro video file"),
   createdAt: zod.coerce.date(),
 });
 
