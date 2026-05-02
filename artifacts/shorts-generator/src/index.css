@@ -264,3 +264,12 @@
     inset: -1px;
   }
 }
+
+/* ── Hide Clerk "Development mode" banner ───────────────────────────────── */
+[class*="cl-devMode"],
+[class*="cl-DevMode"],
+[class*="cl-internal"][class*="devMode"],
+[data-localization-key*="developmentMode"],
+[data-localization-key*="devMode"] {
+  display: none !important;
+}

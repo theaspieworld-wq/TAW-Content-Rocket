@@ -85,6 +85,34 @@ const clerkAppearance = {
 function ThemeEnforcer() {
   useEffect(() => {
     document.documentElement.classList.add("dark");
+
+    // Hide Clerk's "Development mode" badge (injected by Clerk's own script).
+    // We observe DOM mutations so it stays hidden even if Clerk re-renders it.
+    function hideClerkDevBanner() {
+      // Match by text content — works regardless of hashed class names
+      document.querySelectorAll<HTMLElement>('[class*="cl-"]').forEach((el) => {
+        if (
+          el.children.length === 0 &&
+          (el.textContent ?? "").trim().toLowerCase() === "development mode"
+        ) {
+          let node: HTMLElement | null = el;
+          // Walk up to the nearest fixed-position ancestor and hide that
+          while (node && node !== document.body) {
+            if (window.getComputedStyle(node).position === "fixed") {
+              node.style.setProperty("display", "none", "important");
+              return;
+            }
+            node = node.parentElement;
+          }
+          el.style.setProperty("display", "none", "important");
+        }
+      });
+    }
+
+    hideClerkDevBanner();
+    const observer = new MutationObserver(hideClerkDevBanner);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, []);
   return null;
 }
