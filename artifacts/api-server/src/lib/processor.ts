@@ -18,6 +18,22 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
 // YouTube's signature challenges (required since yt-dlp deprecated no-JS extraction).
 const YTDLP_JS_RUNTIME = `node:${process.execPath}`;
 
+// Write YOUTUBE_COOKIES (base64-encoded Netscape cookies.txt) to a temp file
+// and return its path, or null if the env var is not set.
+function writeCookiesFile(): string | null {
+  const b64 = process.env.YOUTUBE_COOKIES;
+  if (!b64) return null;
+  try {
+    const content = Buffer.from(b64, "base64").toString("utf8");
+    const cookiePath = path.join(os.tmpdir(), `yt_cookies_${process.pid}.txt`);
+    fs.writeFileSync(cookiePath, content, { mode: 0o600 });
+    return cookiePath;
+  } catch (e) {
+    logger.warn({ e }, "Failed to write YouTube cookies file — proceeding without cookies");
+    return null;
+  }
+}
+
 const CLIPS_DIR = path.join(process.cwd(), "clips");
 fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
@@ -142,13 +158,18 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
 }
 
 async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
-  const infoArgs = [
-    "--print", "%(title)s",
+  const cookiesFile = writeCookiesFile();
+  const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
+
+  const baseArgs = [
     "--no-playlist",
     "--js-runtimes", YTDLP_JS_RUNTIME,
     "--extractor-args", "youtube:player_client=web",
-    youtubeUrl,
+    "--add-headers", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    ...cookiesArgs,
   ];
+
+  const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
   try {
     const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000 });
@@ -159,15 +180,21 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   const videoPath = path.join(outputDir, "video.mp4");
   const dlArgs = [
-    "--no-playlist",
-    "--js-runtimes", YTDLP_JS_RUNTIME,
-    "--extractor-args", "youtube:player_client=web",
+    ...baseArgs,
     "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
     "--merge-output-format", "mp4",
     "-o", videoPath,
     youtubeUrl,
   ];
-  await execFileAsync(YTDLP, dlArgs, { timeout: 300000 });
+
+  try {
+    await execFileAsync(YTDLP, dlArgs, { timeout: 300000 });
+  } finally {
+    // Clean up temp cookies file
+    if (cookiesFile) {
+      try { fs.unlinkSync(cookiesFile); } catch { /* ignore */ }
+    }
+  }
 
   if (!fs.existsSync(videoPath)) {
     throw new Error("Video download failed — output file not found");
