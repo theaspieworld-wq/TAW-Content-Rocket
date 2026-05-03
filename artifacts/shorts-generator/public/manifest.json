@@ -1,0 +1,32 @@
+{
+  "name": "Content Rocket",
+  "short_name": "Content Rocket",
+  "description": "Turn one YouTube video into a full content pack — Shorts, blog posts, newsletters, carousels, podcast audio, and social threads.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080614",
+  "theme_color": "#f21178",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "business"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

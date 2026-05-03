@@ -68,6 +68,7 @@ import {
   User,
   LogOut,
   ChevronRight,
+  Smartphone,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserButton, useUser } from "@clerk/react";
@@ -96,6 +97,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -182,6 +184,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [editingBrandId, setEditingBrandId] = useState<number | null>(null);
   const [isAddingBrand, setIsAddingBrand] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<number | null>(null);
+  const [showIosInstall, setShowIosInstall] = useState(false);
+  const { canInstall, isIos, isInStandaloneMode, isInstalled, triggerInstall } = usePwaInstall();
 
   // Brand form state
   const [newBrandName, setNewBrandName] = useState("");
@@ -1164,6 +1168,19 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
         {/* ── Account footer ─────────────────────────────────────── */}
         <div className="border-t border-border p-3 shrink-0">
+          {(canInstall || isIos) && !isInStandaloneMode && !isInstalled && (
+            <button
+              onClick={isIos ? () => setShowIosInstall(true) : triggerInstall}
+              className="w-full flex items-center gap-2.5 px-3 py-2 mb-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary transition-all text-left group"
+            >
+              <Smartphone className="w-4 h-4 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold leading-tight">Install App</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">Add to your home screen</p>
+              </div>
+              <Plus className="w-3.5 h-3.5 shrink-0 opacity-40 group-hover:opacity-80 transition-opacity" />
+            </button>
+          )}
           <button
             onClick={() => setLocation("/app/profile")}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-all group text-left"
@@ -1995,6 +2012,35 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         </ScrollArea>
       </div>
     </div>
+      {/* ── iOS Install Instructions ────────────────────────────── */}
+      <Dialog open={showIosInstall} onOpenChange={setShowIosInstall}>
+        <DialogContent className="max-w-sm bg-[#0d0920] border-[#2a1e4a]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Smartphone className="w-5 h-5 text-[#f21178]" />
+              Add to Home Screen
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-slate-400">
+            <p>Install Content Rocket on your iPhone or iPad in 3 quick steps:</p>
+            <ol className="space-y-3">
+              <li className="flex items-start gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-[#f21178]/10 text-[#f21178] text-xs font-bold flex items-center justify-center">1</span>
+                <span>Tap the <strong className="text-white">Share</strong> button <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-500/15 text-blue-400 rounded text-xs font-bold">⬆</span> in Safari's bottom toolbar</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-[#f21178]/10 text-[#f21178] text-xs font-bold flex items-center justify-center">2</span>
+                <span>Scroll down and tap <strong className="text-white">"Add to Home Screen"</strong></span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-[#f21178]/10 text-[#f21178] text-xs font-bold flex items-center justify-center">3</span>
+                <span>Tap <strong className="text-white">"Add"</strong> in the top-right corner</span>
+              </li>
+            </ol>
+            <p className="text-xs text-slate-500 border-t border-[#2a1e4a] pt-3">Content Rocket will appear as a native-feeling app icon on your home screen.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
