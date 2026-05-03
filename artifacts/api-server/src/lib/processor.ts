@@ -381,22 +381,22 @@ async function generateCarouselSlides(
   const primaryFf = hexToFfmpeg(primary);
   const secondaryFf = hexToFfmpeg(secondary);
   const brandLabel = brand?.name ?? "Content Rocket";
-  const filenames: string[] = [];
 
-  for (let i = 0; i < slides.length; i++) {
-    try {
-      const slide = slides[i];
+  // Step A: generate all AI backgrounds in parallel — independent API calls
+  const bgPaths = await Promise.all(
+    slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir))
+  );
+
+  // Step B: render all slides in parallel — each ffmpeg call is fully independent
+  const results = await Promise.allSettled(
+    slides.map(async (slide, i) => {
+      const bgPath = bgPaths[i];
       const filename = `carousel_${jobId}_${i + 1}.png`;
       const outputPath = path.join(CLIPS_DIR, filename);
 
-      // Try to generate an AI background image for this slide
-      const bgPath = await generateSlideBackground(slide.title, slide.bullets, primary, tempDir);
-
-      // Wrap title at 20 chars per line
       const titleLines = wrapText(slide.title.toUpperCase(), 20);
       const bullets = slide.bullets.slice(0, 4).map(b => wrapText(b, 26)[0] || b);
 
-      // Base filters differ based on whether we have an AI background
       const filters: string[] = bgPath
         ? [
             `scale=1080:1080:force_original_aspect_ratio=fill`,
@@ -408,25 +408,19 @@ async function generateCarouselSlides(
             `drawbox=x=0:y=0:w=1080:h=400:color=0x140a28@0.5:t=fill`,
           ];
 
-      // Brand accent bar (left edge) using primary color
       filters.push(`drawbox=x=0:y=0:w=10:h=1080:color=${primaryFf}@1:t=fill`);
-      // Bottom brand bar
       filters.push(`drawbox=x=0:y=940:w=1080:h=140:color=black@0.75:t=fill`);
-      // Slide counter top-right
       filters.push(`drawtext=fontfile=${fontFile}:text='${i + 1} / ${slides.length}':fontsize=34:fontcolor=${primaryFf}:x=980:y=50:shadowx=2:shadowy=2:shadowcolor=black@0.8`);
 
-      // Title lines
       titleLines.slice(0, 3).forEach((line, j) => {
         filters.push(
           `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=68:fontcolor=white:x=50:y=${130 + j * 85}:shadowx=3:shadowy=3:shadowcolor=black@0.9`
         );
       });
 
-      // Horizontal divider in secondary color
       const dividerY = 130 + Math.min(titleLines.length, 3) * 85 + 15;
       filters.push(`drawbox=x=50:y=${dividerY}:w=200:h=4:color=${secondaryFf}@1:t=fill`);
 
-      // Bullet points
       bullets.forEach((bullet, j) => {
         const bulletY = dividerY + 45 + j * 72;
         if (bulletY < 910) {
@@ -436,7 +430,6 @@ async function generateCarouselSlides(
         }
       });
 
-      // Brand label in bottom bar using primary color
       filters.push(
         `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(brandLabel)}':fontsize=30:fontcolor=${primaryFf}:x=(w-text_w)/2:y=970:shadowx=1:shadowy=1:shadowcolor=black@0.8`
       );
@@ -451,14 +444,16 @@ async function generateCarouselSlides(
         try { fs.unlinkSync(bgPath); } catch (_) {}
       }
 
-      filenames.push(filename);
       logger.info({ jobId, slideIndex: i + 1, hasBg: !!bgPath }, "Carousel slide rendered");
-    } catch (err) {
-      logger.warn({ jobId, slideIndex: i + 1, err }, "Failed to render carousel slide — skipping");
-    }
-  }
+      return filename;
+    })
+  );
 
-  return filenames;
+  return results.flatMap(r => {
+    if (r.status === "fulfilled") return [r.value];
+    logger.warn({ jobId, err: (r as PromiseRejectedResult).reason }, "Failed to render carousel slide — skipping");
+    return [];
+  });
 }
 
 export async function generatePodcastAudio(
@@ -643,6 +638,7 @@ async function concatenateClipWithOutro(
   position: string,
   finalOutputPath: string,
   tempDir: string,
+  uniqueId: number | string,
 ): Promise<void> {
   const { stdout } = await execFileAsync("ffprobe", [
     "-v", "quiet", "-print_format", "json", "-show_streams",
@@ -654,7 +650,8 @@ async function concatenateClipWithOutro(
   const width = stream?.width || 1280;
   const height = stream?.height || 720;
 
-  const scaledOutroPath = path.join(tempDir, "outro_scaled.mp4");
+  // Use uniqueId in temp filenames to prevent collisions when clips render in parallel
+  const scaledOutroPath = path.join(tempDir, `outro_scaled_${uniqueId}.mp4`);
   await execFileAsync("ffmpeg", [
     "-i", outroPath,
     "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
@@ -664,7 +661,7 @@ async function concatenateClipWithOutro(
     scaledOutroPath, "-y",
   ], { timeout: 120000 });
 
-  const concatListPath = path.join(tempDir, "concat_list.txt");
+  const concatListPath = path.join(tempDir, `concat_list_${uniqueId}.txt`);
   const concatContent = position === "beginning"
     ? `file '${scaledOutroPath}'\nfile '${mainClipPath}'\n`
     : `file '${mainClipPath}'\nfile '${scaledOutroPath}'\n`;
@@ -1012,18 +1009,36 @@ export async function processJob(jobId: number): Promise<void> {
     const transcript = await transcribeAudio(audioPath, videoDuration);
     await db.update(jobsTable).set({ transcript: JSON.stringify(transcript) }).where(eq(jobsTable.id, jobId));
 
-    // Step 3: AI clip selection (skip if clipCount === 0)
-    let clipSegments: ClipSegment[] = [];
+    // Steps 3 & 4: AI clip selection + written content generation run in parallel
+    // Both only need the transcript — no reason to wait for one before starting the other
+    await updateJobStatus(jobId, "analyzing");
+
     let insertedClips: (typeof clipsTable.$inferSelect)[] = [];
 
-    if (job.clipCount > 0) {
-      await updateJobStatus(jobId, "analyzing");
-      clipSegments = await selectBestClips(transcript, job.clipCount, videoDuration, clipDuration);
+    const [clipsResult, contentResult] = await Promise.allSettled([
+      job.clipCount > 0
+        ? selectBestClips(transcript, job.clipCount, videoDuration, clipDuration)
+        : Promise.resolve([] as ClipSegment[]),
+      generateContent(job.youtubeUrl, title, transcript, {
+        brandVoice: brand?.voiceStyle ?? null,
+        contentCta: job.contentCta ?? null,
+        brandName: brand?.name ?? null,
+        brandWebsite: brand?.website ?? null,
+        jobId,
+        brand,
+        tempDir,
+      }),
+    ]);
 
-      if (clipSegments.length === 0) {
-        throw new Error("No clip segments were selected — the video may be too short or have no audio");
-      }
-
+    // Handle clip selection result
+    if (clipsResult.status === "rejected") {
+      throw clipsResult.reason as Error;
+    }
+    const clipSegments = clipsResult.value;
+    if (job.clipCount > 0 && clipSegments.length === 0) {
+      throw new Error("No clip segments were selected — the video may be too short or have no audio");
+    }
+    if (clipSegments.length > 0) {
       insertedClips = await db.insert(clipsTable).values(
         clipSegments.map((seg) => ({
           jobId,
@@ -1035,28 +1050,18 @@ export async function processJob(jobId: number): Promise<void> {
           instagramCaption: seg.instagramCaption || null,
         }))
       ).returning();
-    } else {
-      await updateJobStatus(jobId, "analyzing");
     }
 
-    // Step 4: Generate written content (non-fatal)
-    try {
-      const content = await generateContent(job.youtubeUrl, title, transcript, {
-        brandVoice: brand?.voiceStyle ?? null,
-        contentCta: job.contentCta ?? null,
-        brandName: brand?.name ?? null,
-        brandWebsite: brand?.website ?? null,
-        jobId,
-        brand,
-        tempDir,
-      });
-      await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
+    // Handle content generation result (non-fatal)
+    if (contentResult.status === "fulfilled") {
+      await db.update(jobsTable).set({ generatedContent: JSON.stringify(contentResult.value) }).where(eq(jobsTable.id, jobId));
       logger.info({ jobId }, "Content generation completed");
-    } catch (contentErr) {
-      logger.warn({ jobId, err: contentErr }, "Content generation failed — rendering will continue");
+    } else {
+      logger.warn({ jobId, err: contentResult.reason }, "Content generation failed — rendering will continue");
     }
 
-    // Step 5: Render clips (skip if none)
+    // Step 5: Render clips in parallel batches of 3 (skip if none)
+    const CLIP_BATCH_SIZE = 3;
     if (insertedClips.length > 0) {
       await updateJobStatus(jobId, "rendering", { errorMessage: `Preparing to render ${insertedClips.length} clip${insertedClips.length !== 1 ? "s" : ""}…` });
 
@@ -1079,68 +1084,84 @@ export async function processJob(jobId: number): Promise<void> {
         );
       }
 
-      for (let clipIdx = 0; clipIdx < insertedClips.length; clipIdx++) {
-        const clip = insertedClips[clipIdx];
+      for (let batchStart = 0; batchStart < insertedClips.length; batchStart += CLIP_BATCH_SIZE) {
+        const batch = insertedClips.slice(batchStart, batchStart + CLIP_BATCH_SIZE);
+        const batchEnd = Math.min(batchStart + CLIP_BATCH_SIZE, insertedClips.length);
         await updateJobStatus(jobId, "rendering", {
-          errorMessage: `Rendering clip ${clipIdx + 1} of ${insertedClips.length}…`,
+          errorMessage: `Rendering clip${batch.length > 1 ? "s" : ""} ${batchStart + 1}${batch.length > 1 ? `–${batchEnd}` : ""} of ${insertedClips.length}…`,
         });
-        try {
-          await db.update(clipsTable).set({ status: "rendering" }).where(eq(clipsTable.id, clip.id));
 
-          const mainClipPath = path.join(tempDir, `main_clip_${clip.id}.mp4`);
-          await renderMainClip(
-            videoPath,
-            clip.id,
-            clip.title,
-            parseFloat(clip.startSeconds),
-            parseFloat(clip.endSeconds),
-            transcript,
-            mainClipPath,
-          );
+        await Promise.all(batch.map(async (clip) => {
+          try {
+            await db.update(clipsTable).set({ status: "rendering" }).where(eq(clipsTable.id, clip.id));
 
-          const finalPath = path.join(CLIPS_DIR, `clip_${clip.id}.mp4`);
-
-          if (processedOutroPath) {
-            await concatenateClipWithOutro(
+            const mainClipPath = path.join(tempDir, `main_clip_${clip.id}.mp4`);
+            await renderMainClip(
+              videoPath,
+              clip.id,
+              clip.title,
+              parseFloat(clip.startSeconds),
+              parseFloat(clip.endSeconds),
+              transcript,
               mainClipPath,
-              processedOutroPath,
-              outroPosition,
-              finalPath,
-              tempDir,
             );
-          } else {
-            fs.copyFileSync(mainClipPath, finalPath);
+
+            const finalPath = path.join(CLIPS_DIR, `clip_${clip.id}.mp4`);
+
+            if (processedOutroPath) {
+              await concatenateClipWithOutro(
+                mainClipPath,
+                processedOutroPath,
+                outroPosition,
+                finalPath,
+                tempDir,
+                clip.id,
+              );
+            } else {
+              fs.copyFileSync(mainClipPath, finalPath);
+            }
+
+            await db.update(clipsTable).set({
+              status: "completed",
+              filePath: finalPath,
+            }).where(eq(clipsTable.id, clip.id));
+
+            logger.info({ clipId: clip.id }, "Clip rendered successfully");
+          } catch (clipErr) {
+            logger.error({ clipId: clip.id, err: clipErr }, "Failed to render clip");
+            await db.update(clipsTable).set({ status: "failed" }).where(eq(clipsTable.id, clip.id));
           }
-
-          await db.update(clipsTable).set({
-            status: "completed",
-            filePath: finalPath,
-          }).where(eq(clipsTable.id, clip.id));
-
-          logger.info({ clipId: clip.id }, "Clip rendered successfully");
-        } catch (clipErr) {
-          logger.error({ clipId: clip.id, err: clipErr }, "Failed to render clip");
-          await db.update(clipsTable).set({ status: "failed" }).where(eq(clipsTable.id, clip.id));
-        }
+        }));
       }
 
-      // Step 6: Render full Facebook 1:1 video (non-fatal)
+      // Steps 6 & 7: Facebook square video + podcast audio run in parallel — both only need the source video
+      await updateJobStatus(jobId, "rendering", { errorMessage: "Rendering Facebook video & podcast audio…" });
+      await Promise.allSettled([
+        (async () => {
+          try {
+            const facebookPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.mp4`);
+            await renderFullFacebookVideo(videoPath, jobId, transcript, facebookPath);
+            logger.info({ jobId }, "Full Facebook 1:1 video rendered");
+          } catch (fbErr) {
+            logger.warn({ jobId, err: fbErr }, "Full Facebook video render failed — skipping");
+          }
+        })(),
+        (async () => {
+          try {
+            await generatePodcastAudio(jobId, videoPath, brand);
+          } catch (podErr) {
+            logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
+          }
+        })(),
+      ]);
+    } else {
+      // No clips — still generate podcast audio
       try {
-        await updateJobStatus(jobId, "rendering", { errorMessage: "Rendering Facebook square video…" });
-        const facebookPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.mp4`);
-        await renderFullFacebookVideo(videoPath, jobId, transcript, facebookPath);
-        logger.info({ jobId }, "Full Facebook 1:1 video rendered");
-      } catch (fbErr) {
-        logger.warn({ jobId, err: fbErr }, "Full Facebook video render failed — skipping");
+        await updateJobStatus(jobId, "rendering", { errorMessage: "Generating podcast audio…" });
+        await generatePodcastAudio(jobId, videoPath, brand);
+      } catch (podErr) {
+        logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
       }
-    }
-
-    // Step 7: Generate podcast audio (non-fatal)
-    try {
-      await updateJobStatus(jobId, "rendering", { errorMessage: "Generating podcast audio…" });
-      await generatePodcastAudio(jobId, videoPath, brand);
-    } catch (podErr) {
-      logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
     }
 
     await updateJobStatus(jobId, "completed");
