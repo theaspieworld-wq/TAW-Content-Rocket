@@ -14,6 +14,10 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
   ? "/home/runner/workspace/bin/yt-dlp"
   : "yt-dlp";
 
+// Use the running Node.js binary as the JS runtime for yt-dlp so it can solve
+// YouTube's signature challenges (required since yt-dlp deprecated no-JS extraction).
+const YTDLP_JS_RUNTIME = `node:${process.execPath}`;
+
 const CLIPS_DIR = path.join(process.cwd(), "clips");
 fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
@@ -141,7 +145,8 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const infoArgs = [
     "--print", "%(title)s",
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=tv_embedded",
+    "--js-runtimes", YTDLP_JS_RUNTIME,
+    "--extractor-args", "youtube:player_client=web",
     youtubeUrl,
   ];
   let title = "Untitled Video";
@@ -155,7 +160,8 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const videoPath = path.join(outputDir, "video.mp4");
   const dlArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=tv_embedded",
+    "--js-runtimes", YTDLP_JS_RUNTIME,
+    "--extractor-args", "youtube:player_client=web",
     "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
     "--merge-output-format", "mp4",
     "-o", videoPath,
