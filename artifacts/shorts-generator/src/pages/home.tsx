@@ -69,6 +69,7 @@ import {
   LogOut,
   ChevronRight,
   Smartphone,
+  LayoutGrid,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserButton, useUser } from "@clerk/react";
@@ -597,7 +598,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     setEditBrandSecondary(brand.secondaryColor ?? "#7c3aed");
   };
 
-  const handleBrandFileUpload = async (brandId: number, type: "logo" | "short-form-outro" | "intro-audio" | "outro-audio", file: File) => {
+  const handleBrandFileUpload = async (brandId: number, type: "logo" | "short-form-outro" | "intro-audio" | "outro-audio" | "carousel-end-slide", file: File) => {
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch(`/api/brands/${brandId}/${type}`, { method: "POST", body: formData });
@@ -679,9 +680,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
         <Tabs defaultValue="projects" className="flex-1 flex flex-col overflow-hidden">
           <div className="px-4 pt-4 pb-0">
-            <TabsList className="w-full grid grid-cols-3 bg-muted/50 border border-border/50 h-9">
+            <TabsList className="w-full grid grid-cols-2 bg-muted/50 border border-border/50 h-9">
               <TabsTrigger value="projects" className="text-[11px] font-semibold">Projects</TabsTrigger>
-              <TabsTrigger value="outros" className="text-[11px] font-semibold">Outros</TabsTrigger>
               <TabsTrigger value="brands" className="text-[11px] font-semibold">Brands</TabsTrigger>
             </TabsList>
           </div>
@@ -745,151 +745,6 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
             </ScrollArea>
           </TabsContent>
 
-          {/* Outros tab */}
-          <TabsContent value="outros" className="flex-1 overflow-hidden m-0 border-none outline-none">
-            <ScrollArea className="h-full">
-              <div className="p-4 space-y-4">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1 flex items-center gap-2">
-                  Outro Library <div className="h-px bg-border flex-1" />
-                </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full border-dashed border-2 hover:bg-primary/5 hover:text-primary hover:border-primary/30 h-auto py-3 transition-all">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Upload className="w-4 h-4" />
-                        <span className="text-xs font-semibold">Upload Outro</span>
-                      </div>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader><DialogTitle>Upload New Outro</DialogTitle></DialogHeader>
-                    <form onSubmit={handleUploadOutro} className="space-y-4 pt-4">
-                      <div className="space-y-2">
-                        <Label>Video File (MP4 or MOV)</Label>
-                        <Input type="file" accept="video/mp4,video/quicktime,.mp4,.mov" ref={fileInputRef} required className="cursor-pointer file:cursor-pointer file:bg-primary/10 file:text-primary file:border-0 file:rounded-md file:mr-4 file:px-3 file:py-1 text-sm" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Name (Optional)</Label>
-                        <Input value={uploadName} onChange={e => setUploadName(e.target.value)} placeholder="e.g. Subscribe Banner" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Position</Label>
-                        <Select value={uploadPosition} onValueChange={(v: "beginning" | "end") => setUploadPosition(v)}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="beginning">Beginning (Intro)</SelectItem>
-                            <SelectItem value="end">End (Outro)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label>CTA Text</Label>
-                          <Input value={uploadCtaText} onChange={e => setUploadCtaText(e.target.value)} placeholder="Subscribe!" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>CTA Start (sec)</Label>
-                          <Input type="number" step="0.5" min="0" value={uploadCtaStartSeconds} onChange={e => setUploadCtaStartSeconds(e.target.value ? parseFloat(e.target.value) : "")} placeholder="2.5" />
-                        </div>
-                      </div>
-                      <Button type="submit" className="w-full" disabled={isUploadingOutro}>
-                        {isUploadingOutro ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
-                        {isUploadingOutro ? "Uploading..." : "Upload Outro"}
-                      </Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-
-                <div className="space-y-2">
-                  {isOutrosLoading ? (
-                    <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-primary/50" /></div>
-                  ) : outros && outros.length > 0 ? (
-                    outros.map(outro => (
-                      <div key={outro.id} className={`p-3 rounded-lg border bg-card/30 group relative transition-all ${outro.isDefault ? "border-primary/40" : "border-border/50"}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Film className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <h4 className="text-sm font-semibold truncate">{outro.name}</h4>
-                              {outro.isDefault && <Star className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />}
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 uppercase bg-muted/60">{outro.position}</Badge>
-                              {outro.ctaText && (
-                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-border/50 text-muted-foreground truncate max-w-[100px]">
-                                  CTA: {outro.ctaText}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2">
-                          {!outro.isDefault && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-primary/10 hover:text-primary" onClick={() => handleSetDefaultOutro(outro.id)}>
-                              <Star className="w-3 h-3" />
-                            </Button>
-                          )}
-                          <Dialog open={editingOutroId === outro.id} onOpenChange={(open) => !open && setEditingOutroId(null)}>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted" onClick={() => {
-                                setEditingOutroId(outro.id);
-                                setEditName(outro.name);
-                                setEditPosition(outro.position as "beginning" | "end");
-                                setEditCtaText(outro.ctaText ?? "");
-                                setEditCtaStartSeconds(outro.ctaStartSeconds != null ? Number(outro.ctaStartSeconds) : "");
-                              }}>
-                                <Edit2 className="w-3 h-3" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[425px]">
-                              <DialogHeader><DialogTitle>Edit Outro</DialogTitle></DialogHeader>
-                              <form onSubmit={handleUpdateOutro} className="space-y-4 pt-4">
-                                <div className="space-y-2">
-                                  <Label>Name</Label>
-                                  <Input value={editName} onChange={e => setEditName(e.target.value)} required />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Position</Label>
-                                  <Select value={editPosition} onValueChange={(v: "beginning" | "end") => setEditPosition(v)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="beginning">Beginning (Intro)</SelectItem>
-                                      <SelectItem value="end">End (Outro)</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="space-y-2">
-                                    <Label>CTA Text</Label>
-                                    <Input value={editCtaText} onChange={e => setEditCtaText(e.target.value)} />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>CTA Start (sec)</Label>
-                                    <Input type="number" step="0.5" min="0" value={editCtaStartSeconds} onChange={e => setEditCtaStartSeconds(e.target.value ? parseFloat(e.target.value) : "")} />
-                                  </div>
-                                </div>
-                                <Button type="submit" className="w-full" disabled={updateOutro.isPending}>
-                                  {updateOutro.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
-                                  Save Settings
-                                </Button>
-                              </form>
-                            </DialogContent>
-                          </Dialog>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteOutro(outro.id)}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-6 text-xs text-muted-foreground/60 bg-card/20 rounded-lg border border-dashed border-border/50">
-                      No outros uploaded.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </ScrollArea>
-          </TabsContent>
 
           {/* Brands tab */}
           <TabsContent value="brands" className="flex-1 overflow-hidden m-0 border-none outline-none">
@@ -1149,12 +1004,12 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                             <div className="space-y-2 pt-1">
                               <p className="text-[10px] font-semibold text-muted-foreground uppercase">Media Files</p>
                               <div className="grid grid-cols-2 gap-1.5">
-                                {(["logo", "short-form-outro", "intro-audio", "outro-audio"] as const).map((type) => {
-                                  const icons = { logo: Image, "short-form-outro": Film, "intro-audio": Mic, "outro-audio": Mic };
-                                  const labels = { logo: "Logo", "short-form-outro": "Short Form Outro", "intro-audio": "Podcast Intro", "outro-audio": "Podcast Outro" };
-                                  const accepts = { logo: "image/*", "short-form-outro": "video/*", "intro-audio": "audio/*", "outro-audio": "audio/*" };
+                                {(["logo", "short-form-outro", "intro-audio", "outro-audio", "carousel-end-slide"] as const).map((type) => {
+                                  const icons = { logo: Image, "short-form-outro": Film, "intro-audio": Mic, "outro-audio": Mic, "carousel-end-slide": LayoutGrid };
+                                  const labels = { logo: "Logo", "short-form-outro": "Short Form Outro", "intro-audio": "Podcast Intro", "outro-audio": "Podcast Outro", "carousel-end-slide": "Carousel End Slide" };
+                                  const accepts = { logo: "image/*", "short-form-outro": "video/*", "intro-audio": "audio/*", "outro-audio": "audio/*", "carousel-end-slide": "image/*" };
                                   const Icon = icons[type];
-                                  const hasFile = type === "logo" ? !!brand.logoPath : type === "short-form-outro" ? !!(brand as any).shortFormOutroPath : type === "intro-audio" ? !!brand.introAudioPath : !!brand.outroAudioPath;
+                                  const hasFile = type === "logo" ? !!brand.logoPath : type === "short-form-outro" ? !!(brand as any).shortFormOutroPath : type === "intro-audio" ? !!brand.introAudioPath : type === "outro-audio" ? !!brand.outroAudioPath : !!(brand as any).carouselEndSlidePath;
                                   return (
                                     <label key={type} className={`flex flex-col items-center gap-1 p-2 rounded border cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/30 ${hasFile ? "border-emerald-500/30 bg-emerald-500/5" : "border-dashed border-border/50 bg-card/30"}`}>
                                       <Icon className={`w-4 h-4 ${hasFile ? "text-emerald-500" : "text-muted-foreground"}`} />

@@ -179,7 +179,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const videoPath = path.join(outputDir, "video.mp4");
   const dlArgs = [
     ...baseArgs,
-    "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+    "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
     "--merge-output-format", "mp4",
     "-o", videoPath,
     youtubeUrl,
@@ -485,11 +485,26 @@ async function generateCarouselSlides(
     })
   );
 
-  return results.flatMap(r => {
+  const generated = results.flatMap(r => {
     if (r.status === "fulfilled") return [r.value];
     logger.warn({ jobId, err: (r as PromiseRejectedResult).reason }, "Failed to render carousel slide — skipping");
     return [];
   });
+
+  if (brand?.carouselEndSlidePath && fs.existsSync(brand.carouselEndSlidePath)) {
+    const ext = path.extname(brand.carouselEndSlidePath) || ".png";
+    const endSlideFilename = `carousel_${jobId}_end${ext}`;
+    const endSlideDest = path.join(CLIPS_DIR, endSlideFilename);
+    try {
+      fs.copyFileSync(brand.carouselEndSlidePath, endSlideDest);
+      generated.push(endSlideFilename);
+      logger.info({ jobId }, "Appended brand carousel end slide");
+    } catch (e) {
+      logger.warn({ jobId, e }, "Failed to copy carousel end slide — skipping");
+    }
+  }
+
+  return generated;
 }
 
 export async function generatePodcastAudio(

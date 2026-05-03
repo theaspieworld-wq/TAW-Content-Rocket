@@ -94,6 +94,7 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
     website: b.website ?? null,
     exportFolderUrl: b.exportFolderUrl ?? null,
     shortFormOutroPath: b.shortFormOutroPath ?? null,
+    carouselEndSlidePath: b.carouselEndSlidePath ?? null,
     createdAt: b.createdAt.toISOString(),
   };
 }
@@ -181,7 +182,7 @@ router.delete("/brands/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  for (const filePath of [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath]) {
+  for (const filePath of [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath, brand.carouselEndSlidePath]) {
     if (filePath && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (e) { logger.warn({ e }, "Could not delete brand file"); }
     }
@@ -290,6 +291,32 @@ router.post("/brands/:id/short-form-outro", uploadVideo.single("file"), async (r
 
   const [updated] = await db.update(brandsTable)
     .set({ shortFormOutroPath: req.file.path })
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
+    .returning();
+
+  res.json(brandToJson(updated));
+});
+
+router.post("/brands/:id/carousel-end-slide", uploadLogo.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No image file provided" }); return; }
+
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
+  if (!brand) {
+    fs.unlinkSync(req.file.path);
+    res.status(404).json({ error: "Brand not found" });
+    return;
+  }
+
+  if (brand.carouselEndSlidePath && fs.existsSync(brand.carouselEndSlidePath)) {
+    try { fs.unlinkSync(brand.carouselEndSlidePath); } catch (_) {}
+  }
+
+  const [updated] = await db.update(brandsTable)
+    .set({ carouselEndSlidePath: req.file.path })
     .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
     .returning();
 
