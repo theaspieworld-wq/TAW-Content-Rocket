@@ -177,17 +177,28 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   const baseArgs = [
     "--no-playlist",
-    "--plugin-dirs", YTDLP_PLUGINS,
     "--extractor-args", "youtube:player_client=mweb",
     "--extractor-args", `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`,
     "--js-runtimes", YTDLP_JS_RUNTIME,
     ...cookiesArgs,
   ];
 
+  // yt-dlp's --plugin-dirs flag is non-functional in our packaged yt-dlp zipapp,
+  // so we load plugins via Python's PYTHONPATH discovery: yt-dlp scans every
+  // entry on PYTHONPATH for a `yt_dlp_plugins/` subdirectory. The bundled
+  // plugins live at YTDLP_PLUGINS/yt_dlp_plugins/, so adding YTDLP_PLUGINS to
+  // PYTHONPATH makes them discoverable in production.
+  const ytdlpEnv = {
+    ...process.env,
+    PYTHONPATH: process.env.PYTHONPATH
+      ? `${YTDLP_PLUGINS}${path.delimiter}${process.env.PYTHONPATH}`
+      : YTDLP_PLUGINS,
+  };
+
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
   try {
-    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000 });
+    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000, env: ytdlpEnv });
     title = stdout.trim().split("\n")[0] || title;
   } catch (e) {
     logger.warn({ e }, "Could not fetch video title");
@@ -203,7 +214,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   ];
 
   try {
-    await execFileAsync(YTDLP, dlArgs, { timeout: 300000 });
+    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: ytdlpEnv });
   } finally {
     // Clean up temp cookies file
     if (cookiesFile) {
