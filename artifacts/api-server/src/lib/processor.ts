@@ -18,14 +18,18 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
 // YouTube's signature challenges (required since yt-dlp deprecated no-JS extraction).
 const YTDLP_JS_RUNTIME = `node:${process.execPath}`;
 
-// PYTHONPATH needed so the standalone yt-dlp Python script can find the
-// bgutil-ytdlp-pot-provider and yt-dlp-get-pot plugins installed in .pythonlibs.
-const YTDLP_ENV = {
-  ...process.env,
-  PYTHONPATH: "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages",
-};
+// yt-dlp plugin dir — bundled INSIDE the artifact so it ships with production
+// deployments. Contains the bgutil-ytdlp-pot-provider + yt-dlp-get-pot plugins
+// which generate GVS PO tokens needed for HD YouTube formats.
+const YTDLP_PLUGIN_DIR = path.resolve(process.cwd(), "artifacts/api-server/yt-dlp-plugins");
+const YTDLP_PLUGIN_DIR_FALLBACK = path.resolve(process.cwd(), "yt-dlp-plugins");
+const YTDLP_PLUGINS = fs.existsSync(YTDLP_PLUGIN_DIR)
+  ? YTDLP_PLUGIN_DIR
+  : YTDLP_PLUGIN_DIR_FALLBACK;
 
-// bgutil server home — used as fallback script provider if the HTTP server is down.
+// bgutil server home — provides the JS script that generates PO tokens.
+// The HTTP server (port 4416) auto-started by index.ts is preferred; this
+// path is also used by the script provider as a fallback.
 const BGUTIL_SERVER_HOME = "/home/runner/workspace/bgutil-server/server";
 
 // Write YOUTUBE_COOKIES (base64-encoded Netscape cookies.txt) to a temp file
@@ -173,6 +177,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   const baseArgs = [
     "--no-playlist",
+    "--plugin-dirs", YTDLP_PLUGINS,
     "--extractor-args", "youtube:player_client=mweb",
     "--extractor-args", `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`,
     "--js-runtimes", YTDLP_JS_RUNTIME,
@@ -182,7 +187,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
   try {
-    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000, env: YTDLP_ENV });
+    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000 });
     title = stdout.trim().split("\n")[0] || title;
   } catch (e) {
     logger.warn({ e }, "Could not fetch video title");
@@ -198,7 +203,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   ];
 
   try {
-    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: YTDLP_ENV });
+    await execFileAsync(YTDLP, dlArgs, { timeout: 300000 });
   } finally {
     // Clean up temp cookies file
     if (cookiesFile) {
