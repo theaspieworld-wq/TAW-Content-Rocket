@@ -185,6 +185,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isAddingBrand, setIsAddingBrand] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<number | null>(null);
   const [showIosInstall, setShowIosInstall] = useState(false);
+  const [showMobileInstall, setShowMobileInstall] = useState(false);
+  const [copiedAppUrl, setCopiedAppUrl] = useState(false);
   const { canInstall, isIos, isInStandaloneMode, isInstalled, triggerInstall } = usePwaInstall();
 
   // Brand form state
@@ -1168,15 +1170,15 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
         {/* ── Account footer ─────────────────────────────────────── */}
         <div className="border-t border-border p-3 shrink-0">
-          {(canInstall || isIos) && !isInStandaloneMode && !isInstalled && (
+          {!isInStandaloneMode && !isInstalled && (
             <button
-              onClick={isIos ? () => setShowIosInstall(true) : triggerInstall}
+              onClick={canInstall ? triggerInstall : isIos ? () => setShowIosInstall(true) : () => setShowMobileInstall(true)}
               className="w-full flex items-center gap-2.5 px-3 py-2 mb-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary transition-all text-left group"
             >
               <Smartphone className="w-4 h-4 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold leading-tight">Install App</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">Add to your home screen</p>
+                <p className="text-xs font-semibold leading-tight">Get the App</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">Install on your phone or tablet</p>
               </div>
               <Plus className="w-3.5 h-3.5 shrink-0 opacity-40 group-hover:opacity-80 transition-opacity" />
             </button>
@@ -2013,6 +2015,51 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       </div>
     </div>
       {/* ── iOS Install Instructions ────────────────────────────── */}
+      {/* ── Desktop / Generic Install Instructions ──────────────── */}
+      <Dialog open={showMobileInstall} onOpenChange={setShowMobileInstall}>
+        <DialogContent className="max-w-sm bg-[#0d0920] border-[#2a1e4a]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Smartphone className="w-5 h-5 text-[#f21178]" />
+              Get the App
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-slate-400">
+            <p>Open Content Rocket on your phone or tablet to install it as a home screen app.</p>
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Your app URL</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-[#16102a] border border-[#2a1e4a] rounded-lg px-3 py-2 text-xs text-slate-300 font-mono truncate select-all">
+                  {window.location.origin}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.origin);
+                    setCopiedAppUrl(true);
+                    setTimeout(() => setCopiedAppUrl(false), 2000);
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#16102a] border border-[#2a1e4a] text-xs text-slate-400 hover:text-white hover:border-[#f21178]/40 transition-all"
+                >
+                  {copiedAppUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedAppUrl ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-[#f21178]/10 text-[#f21178] text-[10px] font-bold flex items-center justify-center">A</span>
+                <p><strong className="text-white">Android:</strong> Open the URL in Chrome, tap the menu <span className="font-bold">⋮</span> and choose <strong className="text-white">"Add to Home Screen"</strong></p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-[#f21178]/10 text-[#f21178] text-[10px] font-bold flex items-center justify-center">i</span>
+                <p><strong className="text-white">iPhone / iPad:</strong> Open in Safari, tap Share <span className="text-blue-400 font-bold">⬆</span> then <strong className="text-white">"Add to Home Screen"</strong></p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 border-t border-[#2a1e4a] pt-3">The app runs full-screen with no browser bar, just like a native app.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showIosInstall} onOpenChange={setShowIosInstall}>
         <DialogContent className="max-w-sm bg-[#0d0920] border-[#2a1e4a]">
           <DialogHeader>
