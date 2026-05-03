@@ -3,6 +3,9 @@ import { logger } from "./lib/logger.js";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { getUncachableStripeClient } from "./stripeClient.js";
+import { spawn } from "child_process";
+import net from "net";
+import fs from "fs";
 
 async function runMigrations() {
   await db.execute(sql`
@@ -75,12 +78,47 @@ async function registerStripeWebhook() {
   }
 }
 
+function isPortInUse(port: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const srv = net.createServer();
+    srv.once("error", () => resolve(true));
+    srv.once("listening", () => { srv.close(); resolve(false); });
+    srv.listen(port);
+  });
+}
+
+async function startBgutilServer() {
+  const serverScript = "/home/runner/workspace/bgutil-server/server/build/main.js";
+  if (!fs.existsSync(serverScript)) {
+    logger.warn("bgutil server script not found — PO token generation unavailable");
+    return;
+  }
+  if (await isPortInUse(4416)) {
+    logger.info("bgutil server already running on port 4416");
+    return;
+  }
+  const child = spawn("node", [serverScript], {
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: false,
+  });
+  child.stdout?.on("data", (d: Buffer) => logger.info({ msg: d.toString().trim() }, "bgutil"));
+  child.stderr?.on("data", (d: Buffer) => logger.warn({ msg: d.toString().trim() }, "bgutil"));
+  child.on("error", (err: Error) => logger.warn({ err }, "bgutil server failed to start"));
+  child.on("exit", (code: number | null) => logger.warn({ code }, "bgutil server exited"));
+  logger.info("bgutil PO Token server started on port 4416");
+}
+
 const rawPort = process.env["PORT"];
 if (!rawPort) throw new Error("PORT environment variable is required");
 const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
 await runMigrations();
+
+// Start bgutil PO Token server for yt-dlp YouTube downloads (non-blocking)
+startBgutilServer().catch((err) =>
+  logger.warn({ err }, "bgutil server failed to start")
+);
 
 // Register webhook in background — don't block server startup
 registerStripeWebhook().catch((err) =>

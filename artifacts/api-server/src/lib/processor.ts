@@ -18,6 +18,16 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
 // YouTube's signature challenges (required since yt-dlp deprecated no-JS extraction).
 const YTDLP_JS_RUNTIME = `node:${process.execPath}`;
 
+// PYTHONPATH needed so the standalone yt-dlp Python script can find the
+// bgutil-ytdlp-pot-provider and yt-dlp-get-pot plugins installed in .pythonlibs.
+const YTDLP_ENV = {
+  ...process.env,
+  PYTHONPATH: "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages",
+};
+
+// bgutil server home — used as fallback script provider if the HTTP server is down.
+const BGUTIL_SERVER_HOME = "/home/runner/workspace/bgutil-server/server";
+
 // Write YOUTUBE_COOKIES (base64-encoded Netscape cookies.txt) to a temp file
 // and return its path, or null if the env var is not set.
 function writeCookiesFile(): string | null {
@@ -163,14 +173,16 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   const baseArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=ios",
+    "--extractor-args", "youtube:player_client=mweb",
+    "--extractor-args", `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`,
+    "--js-runtimes", YTDLP_JS_RUNTIME,
     ...cookiesArgs,
   ];
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
   try {
-    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000 });
+    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000, env: YTDLP_ENV });
     title = stdout.trim().split("\n")[0] || title;
   } catch (e) {
     logger.warn({ e }, "Could not fetch video title");
@@ -186,7 +198,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   ];
 
   try {
-    await execFileAsync(YTDLP, dlArgs, { timeout: 300000 });
+    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: YTDLP_ENV });
   } finally {
     // Clean up temp cookies file
     if (cookiesFile) {
