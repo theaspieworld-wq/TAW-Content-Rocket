@@ -122,6 +122,7 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
       durationSeconds: parseFloat(c.durationSeconds),
       filePath: c.filePath ?? null,
       status: c.status,
+      instagramCaption: c.instagramCaption ?? null,
       createdAt: c.createdAt.toISOString(),
     })),
   });

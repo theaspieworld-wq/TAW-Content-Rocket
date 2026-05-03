@@ -861,11 +861,13 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: promptA }],
       max_completion_tokens: 8000,
+      response_format: { type: "json_object" },
     }),
     openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: promptB }],
       max_completion_tokens: 8000,
+      response_format: { type: "json_object" },
     }),
   ]);
 
