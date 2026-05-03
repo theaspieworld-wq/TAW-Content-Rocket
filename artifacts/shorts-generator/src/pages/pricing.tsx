@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { Check, Loader2, Zap, Crown } from "lucide-react";
+import { Check, Loader2, Zap, Crown, ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -194,6 +194,49 @@ export default function PricingPage() {
             );
           })
         )}
+
+        {/* Content360 upsell */}
+        <div className="mt-6 bg-[#0d1a12] border border-emerald-500/25 rounded-2xl p-6 text-left relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-semibold text-emerald-400 uppercase tracking-widest">Bundle Deal</span>
+                </div>
+                <h3 className="text-lg font-bold text-white">Content360</h3>
+                <p className="text-slate-400 text-sm mt-0.5">Social media manager + AI sales bot — lifetime access</p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-2xl font-bold text-white">$67</div>
+                <div className="text-slate-400 text-xs">one-time</div>
+              </div>
+            </div>
+            <ul className="space-y-1.5 mb-5">
+              {["Manage all your social media in one place", "AI-powered sales bot", "Lifetime access — pay once, use forever", "Perfect companion to Content Rocket"].map((f) => (
+                <li key={f} className="flex items-center gap-2 text-slate-300 text-sm">
+                  <div className="h-4 w-4 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
+                    <Check className="w-2.5 h-2.5 text-emerald-400" />
+                  </div>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="https://get.content360.io/lifetime?am_id=TAW"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button
+                size="lg"
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-semibold h-12 text-base shadow-lg shadow-emerald-500/20 border-0 gap-2"
+              >
+                Get Lifetime Access — $67 <ExternalLink className="w-4 h-4" />
+              </Button>
+            </a>
+          </div>
+        </div>
 
         <button
           onClick={() => setLocation("/sign-in")}

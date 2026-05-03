@@ -1192,6 +1192,22 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
         {/* ── Account footer ─────────────────────────────────────── */}
         <div className="border-t border-border p-3 shrink-0">
+          {/* Content360 promo */}
+          <a
+            href="https://get.content360.io/lifetime?am_id=TAW"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 mb-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all text-left group"
+          >
+            <div className="w-7 h-7 rounded-md bg-emerald-500/15 flex items-center justify-center shrink-0">
+              <span className="text-sm">🚀</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold leading-tight text-emerald-400">Content360 — $67 once</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Social media manager + sales bot</p>
+            </div>
+            <svg className="w-3 h-3 shrink-0 text-emerald-500/60 group-hover:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+          </a>
           {!isInStandaloneMode && !isInstalled && (
             <button
               onClick={canInstall ? triggerInstall : isIos ? () => setShowIosInstall(true) : () => setShowMobileInstall(true)}
