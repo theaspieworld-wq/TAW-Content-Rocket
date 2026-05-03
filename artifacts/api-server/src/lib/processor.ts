@@ -399,7 +399,7 @@ async function generateCarouselSlides(
 
       const filters: string[] = bgPath
         ? [
-            `scale=1080:1080:force_original_aspect_ratio=fill`,
+            `scale=1080:1080:force_original_aspect_ratio=increase`,
             `crop=1080:1080`,
             `drawbox=x=0:y=0:w=1080:h=1080:color=black@0.55:t=fill`,
           ]
@@ -1060,8 +1060,9 @@ export async function processJob(jobId: number): Promise<void> {
       logger.warn({ jobId, err: contentResult.reason }, "Content generation failed — rendering will continue");
     }
 
-    // Step 5: Render clips in parallel batches of 3 (skip if none)
-    const CLIP_BATCH_SIZE = 3;
+    // Step 5: Render clips sequentially — concurrent ffmpeg video encoding
+    // on a single machine saturates CPU and causes hangs; sequential is reliable.
+    const CLIP_BATCH_SIZE = 1;
     if (insertedClips.length > 0) {
       await updateJobStatus(jobId, "rendering", { errorMessage: `Preparing to render ${insertedClips.length} clip${insertedClips.length !== 1 ? "s" : ""}…` });
 
