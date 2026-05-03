@@ -21,11 +21,30 @@ const YTDLP_JS_RUNTIME = `node:${process.execPath}`;
 // yt-dlp plugin dir — bundled INSIDE the artifact so it ships with production
 // deployments. Contains the bgutil-ytdlp-pot-provider + yt-dlp-get-pot plugins
 // which generate GVS PO tokens needed for HD YouTube formats.
-const YTDLP_PLUGIN_DIR = path.resolve(process.cwd(), "artifacts/api-server/yt-dlp-plugins");
-const YTDLP_PLUGIN_DIR_FALLBACK = path.resolve(process.cwd(), "yt-dlp-plugins");
-const YTDLP_PLUGINS = fs.existsSync(YTDLP_PLUGIN_DIR)
-  ? YTDLP_PLUGIN_DIR
-  : YTDLP_PLUGIN_DIR_FALLBACK;
+//
+// We try multiple candidates because cwd can vary between dev (workspace root)
+// and production (also workspace root in Replit deployments, but be defensive).
+// The presence of `yt_dlp_plugins/extractor/getpot.py` confirms a valid layout.
+function resolvePluginDir(): string {
+  const candidates = [
+    path.resolve(process.cwd(), "artifacts/api-server/yt-dlp-plugins"),
+    path.resolve(process.cwd(), "yt-dlp-plugins"),
+    "/home/runner/workspace/artifacts/api-server/yt-dlp-plugins",
+    // Also try alongside this module's source location as last resort
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../yt-dlp-plugins"),
+  ];
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(path.join(c, "yt_dlp_plugins", "extractor", "getpot.py"))) {
+        logger.info({ pluginDir: c }, "yt-dlp plugins resolved");
+        return c;
+      }
+    } catch { /* ignore */ }
+  }
+  logger.error({ candidates }, "yt-dlp plugin dir NOT FOUND — PO token plugins unavailable");
+  return candidates[0];
+}
+const YTDLP_PLUGINS = resolvePluginDir();
 
 // bgutil server home — provides the JS script that generates PO tokens.
 // The HTTP server (port 4416) auto-started by index.ts is preferred; this

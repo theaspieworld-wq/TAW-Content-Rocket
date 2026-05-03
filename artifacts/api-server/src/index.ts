@@ -6,6 +6,31 @@ import { getUncachableStripeClient } from "./stripeClient.js";
 import { spawn } from "child_process";
 import net from "net";
 import fs from "fs";
+import path from "path";
+
+// One-shot startup diagnostic: log resolved paths so we can diagnose
+// production deployment issues with the bundled yt-dlp plugins.
+function logYtdlpDiagnostics() {
+  const cwd = process.cwd();
+  const candidates = [
+    path.resolve(cwd, "artifacts/api-server/yt-dlp-plugins"),
+    path.resolve(cwd, "yt-dlp-plugins"),
+    "/home/runner/workspace/artifacts/api-server/yt-dlp-plugins",
+  ];
+  const results = candidates.map((p) => {
+    let exists = false;
+    let entries: string[] = [];
+    try {
+      exists = fs.existsSync(p);
+      if (exists) {
+        const inner = path.join(p, "yt_dlp_plugins", "extractor");
+        if (fs.existsSync(inner)) entries = fs.readdirSync(inner);
+      }
+    } catch { /* ignore */ }
+    return { path: p, exists, pluginFiles: entries };
+  });
+  logger.info({ cwd, candidates: results }, "ytdlp plugin path diagnostics");
+}
 
 async function runMigrations() {
   await db.execute(sql`
@@ -112,6 +137,8 @@ const rawPort = process.env["PORT"];
 if (!rawPort) throw new Error("PORT environment variable is required");
 const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
+
+logYtdlpDiagnostics();
 
 await runMigrations();
 
