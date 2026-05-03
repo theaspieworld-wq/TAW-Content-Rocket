@@ -221,6 +221,28 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [editCtaStartSeconds, setEditCtaStartSeconds] = useState<number | "">("");
 
   const { toast } = useToast();
+
+  const downloadFile = async (url: string, filename?: string) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        let msg = "File not available — try reprocessing the job.";
+        try { const j = await res.json(); msg = j.error ?? msg; } catch {}
+        toast({ title: "Download failed", description: msg, variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      if (filename) a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch {
+      toast({ title: "Download failed", description: "Network error — please try again.", variant: "destructive" });
+    }
+  };
   const queryClient = useQueryClient();
 
   const { data: health } = useHealthCheck({
@@ -1481,26 +1503,20 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                     </Badge>
                     {/* Export All ZIP */}
                     {jobWithClips.status === "completed" && (
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-violet-500/40 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300" asChild>
-                        <a href={`/api/jobs/${jobWithClips.id}/download-all`} download>
-                          <Package className="w-3.5 h-3.5" /> Export All (.zip)
-                        </a>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-violet-500/40 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-all`)}>
+                        <Package className="w-3.5 h-3.5" /> Export All (.zip)
                       </Button>
                     )}
                     {/* Podcast download */}
                     {(jobWithClips as any).hasPodcast && (
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" asChild>
-                        <a href={`/api/jobs/${jobWithClips.id}/download-podcast`} download>
-                          <Mic className="w-3.5 h-3.5" /> Podcast MP3
-                        </a>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
+                        <Mic className="w-3.5 h-3.5" /> Podcast MP3
                       </Button>
                     )}
                     {/* Facebook video */}
                     {(jobWithClips as any).hasFacebookVideo && (
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-[#1877F2]/40 text-[#1877F2] hover:bg-[#1877F2]/10" asChild>
-                        <a href={`/api/jobs/${jobWithClips.id}/download-facebook`} download>
-                          <Download className="w-3.5 h-3.5" /> Facebook 1:1
-                        </a>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-[#1877F2]/40 text-[#1877F2] hover:bg-[#1877F2]/10" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-facebook`)}>
+                        <Download className="w-3.5 h-3.5" /> Facebook 1:1
                       </Button>
                     )}
                     {/* Open Export Folder */}
@@ -1855,10 +1871,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                     </div>
                                   </div>
                                   <div className="p-2">
-                                    <Button size="sm" variant="outline" className="w-full h-7 text-[11px] gap-1.5 border-border/50" asChild>
-                                      <a href={`/api/images/${filename}`} download={`slide_${i + 1}.png`}>
-                                        <Download className="w-3 h-3" /> Download
-                                      </a>
+                                    <Button size="sm" variant="outline" className="w-full h-7 text-[11px] gap-1.5 border-border/50" onClick={() => downloadFile(`/api/images/${filename}`, `slide_${i + 1}.png`)}>
+                                      <Download className="w-3 h-3" /> Download
                                     </Button>
                                   </div>
                                 </div>
@@ -1891,10 +1905,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                   <p className="text-xs text-muted-foreground">MP3 Audio File</p>
                                 </div>
                               </div>
-                              <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" asChild>
-                                <a href={`/api/jobs/${jobWithClips.id}/download-podcast`} download>
-                                  <Download className="w-4 h-4" /> Download MP3
-                                </a>
+                              <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
+                                <Download className="w-4 h-4" /> Download MP3
                               </Button>
                             </div>
                           </div>
@@ -1957,10 +1969,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                         </CardHeader>
                         <CardContent className="p-4 pt-0 flex flex-col gap-2">
                           {clip.status === "completed" && clip.filePath ? (
-                            <Button className="w-full gap-2 h-9 font-medium text-sm" asChild>
-                              <a href={`/api/clips/${clip.id}/download`} download>
-                                <Download className="w-4 h-4" /> Download (9:16)
-                              </a>
+                            <Button className="w-full gap-2 h-9 font-medium text-sm" onClick={() => downloadFile(`/api/clips/${clip.id}/download`)}>
+                              <Download className="w-4 h-4" /> Download (9:16)
                             </Button>
                           ) : clip.status === "failed" ? (
                             <Button variant="outline" className="w-full text-destructive border-destructive/30 h-9" disabled>

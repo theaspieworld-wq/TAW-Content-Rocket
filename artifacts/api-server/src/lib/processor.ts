@@ -163,9 +163,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   const baseArgs = [
     "--no-playlist",
-    "--js-runtimes", YTDLP_JS_RUNTIME,
-    "--extractor-args", "youtube:player_client=web",
-    "--add-headers", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "--extractor-args", "youtube:player_client=ios",
     ...cookiesArgs,
   ];
 
