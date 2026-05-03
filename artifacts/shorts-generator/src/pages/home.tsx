@@ -159,7 +159,20 @@ function getStatusLabel(status: string) {
 export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [, setLocation] = useLocation();
   const { user } = useUser();
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+
+  // Persist selectedJobId across page reloads (HMR reconnects, proxy drops, etc.)
+  const [selectedJobId, setSelectedJobIdState] = useState<number | null>(() => {
+    const stored = sessionStorage.getItem("cr_selectedJobId");
+    return stored ? parseInt(stored, 10) : null;
+  });
+  const setSelectedJobId = (id: number | null) => {
+    setSelectedJobIdState(id);
+    if (id !== null) {
+      sessionStorage.setItem("cr_selectedJobId", String(id));
+    } else {
+      sessionStorage.removeItem("cr_selectedJobId");
+    }
+  };
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);

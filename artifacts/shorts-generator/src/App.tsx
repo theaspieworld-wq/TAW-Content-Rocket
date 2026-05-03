@@ -173,18 +173,29 @@ function HomeRedirect() {
 
 function useSubscriptionStatus() {
   const { user } = useUser();
-  const [status, setStatus] = useState<"loading" | "active" | "inactive">("loading");
-  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Seed initial state from sessionStorage so page reloads skip the loading flash
+  const [status, setStatus] = useState<"loading" | "active" | "inactive">(() => {
+    const cached = sessionStorage.getItem("cr_subStatus");
+    return cached === "active" || cached === "inactive" ? cached : "loading";
+  });
+  const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem("cr_isAdmin") === "1");
 
   useEffect(() => {
     if (!user) return;
     fetch(`${basePath}/api/stripe/subscription`)
       .then((r) => r.json())
       .then((d) => {
-        setStatus(d.active ? "active" : "inactive");
+        const s: "active" | "inactive" = d.active ? "active" : "inactive";
+        setStatus(s);
         setIsAdmin(!!d.isAdmin);
+        sessionStorage.setItem("cr_subStatus", s);
+        sessionStorage.setItem("cr_isAdmin", d.isAdmin ? "1" : "0");
       })
-      .catch(() => setStatus("inactive"));
+      .catch(() => {
+        // Only downgrade to inactive if we don't already have a confirmed status
+        if (status === "loading") setStatus("inactive");
+      });
   }, [user?.id]);
 
   return { status, isAdmin };
