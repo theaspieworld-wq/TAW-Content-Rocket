@@ -138,7 +138,12 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
 }
 
 async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
-  const infoArgs = ["--print", "%(title)s", "--no-playlist", youtubeUrl];
+  const infoArgs = [
+    "--print", "%(title)s",
+    "--no-playlist",
+    "--extractor-args", "youtube:player_client=tv_embedded",
+    youtubeUrl,
+  ];
   let title = "Untitled Video";
   try {
     const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000 });
@@ -150,7 +155,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const videoPath = path.join(outputDir, "video.mp4");
   const dlArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=android_vr",
+    "--extractor-args", "youtube:player_client=tv_embedded",
     "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
     "--merge-output-format", "mp4",
     "-o", videoPath,
