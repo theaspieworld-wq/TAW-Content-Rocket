@@ -599,7 +599,7 @@ async function renderFullFacebookVideo(
   await execFileAsync("ffmpeg", [
     "-i", videoPath,
     "-vf", squareCrop,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
     outputPath, "-y",
@@ -1058,7 +1058,7 @@ export async function processJob(jobId: number): Promise<void> {
 
     // Step 5: Render clips (skip if none)
     if (insertedClips.length > 0) {
-      await updateJobStatus(jobId, "rendering");
+      await updateJobStatus(jobId, "rendering", { errorMessage: `Preparing to render ${insertedClips.length} clip${insertedClips.length !== 1 ? "s" : ""}…` });
 
       // Brand's own short-form outro takes priority over the global outro library
       let processedOutroPath: string | null = null;
@@ -1079,7 +1079,11 @@ export async function processJob(jobId: number): Promise<void> {
         );
       }
 
-      for (const clip of insertedClips) {
+      for (let clipIdx = 0; clipIdx < insertedClips.length; clipIdx++) {
+        const clip = insertedClips[clipIdx];
+        await updateJobStatus(jobId, "rendering", {
+          errorMessage: `Rendering clip ${clipIdx + 1} of ${insertedClips.length}…`,
+        });
         try {
           await db.update(clipsTable).set({ status: "rendering" }).where(eq(clipsTable.id, clip.id));
 
@@ -1122,6 +1126,7 @@ export async function processJob(jobId: number): Promise<void> {
 
       // Step 6: Render full Facebook 1:1 video (non-fatal)
       try {
+        await updateJobStatus(jobId, "rendering", { errorMessage: "Rendering Facebook square video…" });
         const facebookPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.mp4`);
         await renderFullFacebookVideo(videoPath, jobId, transcript, facebookPath);
         logger.info({ jobId }, "Full Facebook 1:1 video rendered");
@@ -1132,6 +1137,7 @@ export async function processJob(jobId: number): Promise<void> {
 
     // Step 7: Generate podcast audio (non-fatal)
     try {
+      await updateJobStatus(jobId, "rendering", { errorMessage: "Generating podcast audio…" });
       await generatePodcastAudio(jobId, videoPath, brand);
     } catch (podErr) {
       logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");

@@ -1500,6 +1500,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                   </div>
                 )}
 
+                {jobWithClips.status === "rendering" && jobWithClips.errorMessage && (
+                  <div className="mt-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/5 border border-primary/15">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                    <p className="text-sm text-muted-foreground">{jobWithClips.errorMessage}</p>
+                  </div>
+                )}
+
                 {jobWithClips.status === "failed" && (
                   <div className="mt-6 bg-destructive/5 border border-destructive/20 rounded-xl p-5 text-destructive flex gap-4">
                     <div className="bg-destructive/10 p-2 rounded-full h-fit">
