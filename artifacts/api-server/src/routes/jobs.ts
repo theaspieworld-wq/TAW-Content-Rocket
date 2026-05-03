@@ -136,6 +136,9 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const clips = await db.select().from(clipsTable)
+    .where(eq(clipsTable.jobId, params.data.id));
+
   const [job] = await db.delete(jobsTable)
     .where(and(eq(jobsTable.id, params.data.id), eq(jobsTable.userId, userId)))
     .returning();
@@ -143,6 +146,31 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job not found" });
     return;
   }
+
+  for (const clip of clips) {
+    if (clip.filePath && fs.existsSync(clip.filePath)) {
+      try { fs.unlinkSync(clip.filePath); } catch (_) {}
+    }
+  }
+
+  const jobFiles = [
+    path.join(CLIPS_DIR, `job_${job.id}_facebook.mp4`),
+    path.join(CLIPS_DIR, `job_${job.id}_podcast.mp3`),
+  ];
+  for (const f of jobFiles) {
+    if (fs.existsSync(f)) {
+      try { fs.unlinkSync(f); } catch (_) {}
+    }
+  }
+
+  const carouselPattern = new RegExp(`^carousel_${job.id}_\\d+\\.png$`);
+  try {
+    for (const file of fs.readdirSync(CLIPS_DIR)) {
+      if (carouselPattern.test(file)) {
+        try { fs.unlinkSync(path.join(CLIPS_DIR, file)); } catch (_) {}
+      }
+    }
+  } catch (_) {}
 
   res.sendStatus(204);
 });

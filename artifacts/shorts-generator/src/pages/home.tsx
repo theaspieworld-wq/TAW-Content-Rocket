@@ -91,6 +91,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -163,6 +168,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [expandedBrandId, setExpandedBrandId] = useState<number | null>(null);
   const [editingBrandId, setEditingBrandId] = useState<number | null>(null);
   const [isAddingBrand, setIsAddingBrand] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<number | null>(null);
 
   // Brand form state
   const [newBrandName, setNewBrandName] = useState("");
@@ -387,10 +393,17 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleDeleteJob = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
+    setJobToDelete(id);
+  };
+
+  const confirmDeleteJob = () => {
+    if (jobToDelete === null) return;
+    const id = jobToDelete;
+    setJobToDelete(null);
     deleteJob.mutate({ id }, {
       onSuccess: () => {
         if (selectedJobId === id) setSelectedJobId(null);
-        toast({ title: "Job Deleted", description: "The job has been removed." });
+        toast({ title: "Job deleted", description: "The job and all its files have been removed." });
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
       },
       throwOnError: false,
@@ -554,6 +567,26 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const isHealthy = health?.status === "ok";
 
   return (
+    <>
+    <AlertDialog open={jobToDelete !== null} onOpenChange={(open) => { if (!open) setJobToDelete(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this job?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently remove the job, all its clips, carousel images, and any other generated files. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={confirmDeleteJob}
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30">
       {sidebarOpen && (
         <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setSidebarOpen(false)} />
@@ -1942,5 +1975,6 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         </ScrollArea>
       </div>
     </div>
+    </>
   );
 }
