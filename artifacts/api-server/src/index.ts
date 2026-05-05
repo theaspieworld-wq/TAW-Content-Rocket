@@ -112,6 +112,19 @@ function isPortInUse(port: number): Promise<boolean> {
   });
 }
 
+// Poll the bgutil HTTP server until it responds to /ping or times out.
+async function waitForBgutil(port: number, timeoutMs = 15000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/ping`, { signal: AbortSignal.timeout(1000) });
+      if (res.ok) return true;
+    } catch { /* not ready yet */ }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return false;
+}
+
 async function startBgutilServer() {
   const serverScript = "/home/runner/workspace/bgutil-server/server/build/main.js";
   if (!fs.existsSync(serverScript)) {
@@ -127,10 +140,19 @@ async function startBgutilServer() {
     detached: false,
   });
   child.stdout?.on("data", (d: Buffer) => logger.info({ msg: d.toString().trim() }, "bgutil"));
-  child.stderr?.on("data", (d: Buffer) => logger.warn({ msg: d.toString().trim() }, "bgutil"));
+  child.stderr?.on("data", (d: Buffer) => logger.warn({ msg: d.toString().trim() }, "bgutil stderr"));
   child.on("error", (err: Error) => logger.warn({ err }, "bgutil server failed to start"));
   child.on("exit", (code: number | null) => logger.warn({ code }, "bgutil server exited"));
-  logger.info("bgutil PO Token server started on port 4416");
+
+  // Wait until the server actually responds — "started" used to fire immediately
+  // after spawn(), before the server was ready, causing yt-dlp to miss the HTTP
+  // provider and fall back to "No request handlers configured".
+  const ready = await waitForBgutil(4416, 15000);
+  if (ready) {
+    logger.info("bgutil PO Token server ready on port 4416");
+  } else {
+    logger.warn("bgutil PO Token server did not become ready within 15s — downloads will rely on script provider fallback");
+  }
 }
 
 const rawPort = process.env["PORT"];

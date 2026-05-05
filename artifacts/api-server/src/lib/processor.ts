@@ -207,12 +207,16 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   // entry on PYTHONPATH for a `yt_dlp_plugins/` subdirectory. The bundled
   // plugins live at YTDLP_PLUGINS/yt_dlp_plugins/, so adding YTDLP_PLUGINS to
   // PYTHONPATH makes them discoverable in production.
+  const pythonPath = process.env.PYTHONPATH
+    ? `${YTDLP_PLUGINS}${path.delimiter}${process.env.PYTHONPATH}`
+    : YTDLP_PLUGINS;
+
   const ytdlpEnv = {
     ...process.env,
-    PYTHONPATH: process.env.PYTHONPATH
-      ? `${YTDLP_PLUGINS}${path.delimiter}${process.env.PYTHONPATH}`
-      : YTDLP_PLUGINS,
+    PYTHONPATH: pythonPath,
   };
+
+  logger.info({ pluginDir: YTDLP_PLUGINS, pythonPath: pythonPath.split(path.delimiter)[0] }, "yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
