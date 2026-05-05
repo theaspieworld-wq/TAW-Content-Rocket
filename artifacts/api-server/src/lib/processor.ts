@@ -194,11 +194,12 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const cookiesFile = writeCookiesFile();
   const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
 
+  // ios client does not require a PO token (unlike mweb) so it bypasses
+  // YouTube's bot-detection gate reliably in production.  We keep android
+  // and web as ordered fallbacks in case YouTube tightens the ios client.
   const baseArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=mweb",
-    "--extractor-args", `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`,
-    "--js-runtimes", YTDLP_JS_RUNTIME,
+    "--extractor-args", "youtube:player_client=ios,android,web",
     ...cookiesArgs,
   ];
 
