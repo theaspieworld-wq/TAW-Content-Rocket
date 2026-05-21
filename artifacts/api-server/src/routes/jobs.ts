@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import path from "path";
 import fs from "fs";
 import archiver from "archiver";
+import multer from "multer";
 import { db, jobsTable, clipsTable, outrosTable, brandsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -15,6 +16,29 @@ import { processJob, generateContent, generatePodcastAudio } from "../lib/proces
 
 const router: IRouter = Router();
 const CLIPS_DIR = path.join(process.cwd(), "clips");
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const videoUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".mp4";
+    cb(null, `upload_${Date.now()}${ext}`);
+  },
+});
+
+const uploadVideoMiddleware = multer({
+  storage: videoUploadStorage,
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|ts|mts)$/i;
+    if (file.mimetype.startsWith("video/") || allowed.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only video files are allowed"));
+    }
+  },
+});
 
 function jobToJson(j: typeof jobsTable.$inferSelect) {
   const facebookPath = path.join(CLIPS_DIR, `job_${j.id}_facebook.mp4`);
@@ -87,6 +111,55 @@ router.post("/jobs", async (req, res): Promise<void> => {
     status: "pending",
     outroId: outroId ?? null,
     brandId: brandId ?? null,
+  }).returning();
+
+  processJob(job.id).catch(() => {});
+
+  res.status(201).json(jobToJson(job));
+});
+
+// Upload a local video file and create a job
+router.post("/jobs/upload", uploadVideoMiddleware.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+
+  if (!req.file) {
+    res.status(400).json({ error: "No video file provided" });
+    return;
+  }
+
+  const clipCount = parseInt(req.body.clipCount ?? "9", 10);
+  const clipDur = parseInt(req.body.clipDurationSeconds ?? "45", 10);
+  const outroIdRaw = req.body.outroId ? parseInt(req.body.outroId, 10) : null;
+  const brandIdRaw = req.body.brandId ? parseInt(req.body.brandId, 10) : null;
+
+  if (outroIdRaw != null) {
+    const [outro] = await db.select().from(outrosTable)
+      .where(and(eq(outrosTable.id, outroIdRaw), eq(outrosTable.userId, userId)));
+    if (!outro) {
+      res.status(400).json({ error: "Specified outro not found" });
+      return;
+    }
+  }
+
+  if (brandIdRaw != null) {
+    const [brand] = await db.select().from(brandsTable)
+      .where(and(eq(brandsTable.id, brandIdRaw), eq(brandsTable.userId, userId)));
+    if (!brand) {
+      res.status(400).json({ error: "Specified brand not found" });
+      return;
+    }
+  }
+
+  const [job] = await db.insert(jobsTable).values({
+    userId,
+    youtubeUrl: `upload://${req.file.originalname}`,
+    localFilePath: req.file.path,
+    clipCount: isNaN(clipCount) ? 9 : clipCount,
+    clipDurationSeconds: isNaN(clipDur) ? 45 : clipDur,
+    contentCta: req.body.contentCta?.trim() || null,
+    status: "pending",
+    outroId: outroIdRaw,
+    brandId: brandIdRaw,
   }).returning();
 
   processJob(job.id).catch(() => {});

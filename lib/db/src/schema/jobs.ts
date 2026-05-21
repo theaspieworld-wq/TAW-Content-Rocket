@@ -83,6 +83,7 @@ export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   youtubeUrl: text("youtube_url").notNull(),
+  localFilePath: text("local_file_path"),
   videoTitle: text("video_title"),
   status: text("status").notNull().default("pending"),
   errorMessage: text("error_message"),

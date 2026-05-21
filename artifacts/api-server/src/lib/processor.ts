@@ -1145,9 +1145,21 @@ export async function processJob(jobId: number): Promise<void> {
 
     const clipDuration = job.clipDurationSeconds ?? 45;
 
-    // Step 1: Download
+    // Step 1: Download or use uploaded local file
     await updateJobStatus(jobId, "downloading");
-    const { videoPath, title } = await downloadVideo(job.youtubeUrl, tempDir);
+    let videoPath: string;
+    let title: string;
+    if (job.localFilePath && fs.existsSync(job.localFilePath)) {
+      videoPath = job.localFilePath;
+      const rawName = job.youtubeUrl.startsWith("upload://")
+        ? job.youtubeUrl.slice(9)
+        : path.basename(job.localFilePath);
+      title = path.parse(rawName).name.replace(/[_\-]+/g, " ").trim() || "Uploaded Video";
+    } else {
+      const result = await downloadVideo(job.youtubeUrl, tempDir);
+      videoPath = result.videoPath;
+      title = result.title;
+    }
     await updateJobStatus(jobId, "downloading", { videoTitle: title });
     const videoDuration = await getVideoDuration(videoPath);
 

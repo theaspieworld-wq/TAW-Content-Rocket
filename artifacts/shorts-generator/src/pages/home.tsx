@@ -39,6 +39,8 @@ import {
   Layers,
   Activity,
   Upload,
+  Youtube,
+  Facebook,
   Settings,
   Star,
   Film,
@@ -111,7 +113,7 @@ const GOOGLE_FONTS = [
 ] as const;
 
 const formSchema = z.object({
-  youtubeUrl: z.string().url({ message: "Please enter a valid YouTube URL" }),
+  youtubeUrl: z.string().optional(),
   clipCount: z.coerce.number().min(0).max(10).default(9),
   clipDurationSeconds: z.coerce.number().default(45),
   contentCta: z.string().optional(),
@@ -220,6 +222,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [editPosition, setEditPosition] = useState<"beginning" | "end">("end");
   const [editCtaText, setEditCtaText] = useState("");
   const [editCtaStartSeconds, setEditCtaStartSeconds] = useState<number | "">("");
+  const [sourceType, setSourceType] = useState<"youtube" | "facebook" | "upload">("youtube");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   const { toast } = useToast();
 
@@ -405,8 +411,77 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   }, []);
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
+    const sharedReset = {
+      youtubeUrl: "",
+      clipCount: 9,
+      clipDurationSeconds: values.clipDurationSeconds,
+      contentCta: values.contentCta,
+      outroId: values.outroId,
+      brandId: values.brandId,
+      includeShorts: values.includeShorts,
+    };
+
+    if (sourceType === "upload") {
+      if (!uploadFile) {
+        toast({ title: "No file selected", description: "Please choose a video file to upload.", variant: "destructive" });
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", uploadFile);
+      fd.append("clipCount", String(values.includeShorts ? (values.clipCount ?? 9) : 0));
+      fd.append("clipDurationSeconds", String(values.clipDurationSeconds ?? 45));
+      if (values.contentCta?.trim()) fd.append("contentCta", values.contentCta.trim());
+      if (values.outroId && values.outroId !== "none") fd.append("outroId", values.outroId);
+      if (values.brandId && values.brandId !== "none") fd.append("brandId", values.brandId);
+
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      const basePath = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        setIsUploading(false);
+        if (xhr.status === 201) {
+          const newJob = JSON.parse(xhr.responseText);
+          setUploadFile(null);
+          form.reset(sharedReset);
+          setSelectedJobId(newJob.id);
+          toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
+          queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+          } catch {
+            toast({ title: "Upload failed", description: "Server error — please try again.", variant: "destructive" });
+          }
+        }
+      };
+      xhr.onerror = () => {
+        setIsUploading(false);
+        toast({ title: "Upload failed", description: "Network error — please try again.", variant: "destructive" });
+      };
+      xhr.open("POST", `${basePath}/api/jobs/upload`);
+      xhr.send(fd);
+      return;
+    }
+
+    // YouTube / Facebook URL path
+    const url = (values.youtubeUrl ?? "").trim();
+    if (!url) {
+      form.setError("youtubeUrl", { message: "Please enter a video URL" });
+      return;
+    }
+    try { new URL(url); } catch {
+      form.setError("youtubeUrl", { message: "Please enter a valid URL" });
+      return;
+    }
+
     const payload = {
-      youtubeUrl: values.youtubeUrl,
+      youtubeUrl: url,
       clipCount: values.includeShorts ? (values.clipCount ?? 9) : 0,
       clipDurationSeconds: values.clipDurationSeconds ?? 45,
       contentCta: values.contentCta?.trim() || undefined,
@@ -416,15 +491,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
     createJob.mutate({ data: payload }, {
       onSuccess: (newJob) => {
-        form.reset({
-          youtubeUrl: "",
-          clipCount: 9,
-          clipDurationSeconds: values.clipDurationSeconds,
-          contentCta: values.contentCta,
-          outroId: values.outroId,
-          brandId: values.brandId,
-          includeShorts: values.includeShorts,
-        });
+        form.reset(sharedReset);
         setSelectedJobId(newJob.id);
         toast({ title: "Job Created 🚀", description: "Video processing has started." });
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
@@ -1161,39 +1228,101 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-3 max-w-4xl mx-auto w-full">
 
-              {/* Row 1: URL + submit button */}
-              <div className="flex flex-col sm:flex-row gap-3 items-start w-full">
-                <FormField
-                  control={form.control}
-                  name="youtubeUrl"
-                  render={({ field }) => (
-                    <FormItem className="flex-1 w-full">
-                      <FormControl>
-                        <div className="relative group">
-                          <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                          <Input
-                            placeholder="Paste YouTube URL here..."
-                            className="pl-12 bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-base h-13 shadow-sm transition-all rounded-xl"
-                            {...field}
-                          />
+              {/* Row 1: Source selector + input + submit */}
+              <div className="flex flex-col gap-2.5 w-full">
+                {/* Source type pills */}
+                <div className="flex items-center gap-1 bg-background/60 border border-border/60 rounded-xl p-1 w-fit">
+                  {([ 
+                    { type: "youtube" as const, label: "YouTube", Icon: Youtube },
+                    { type: "facebook" as const, label: "Facebook", Icon: Facebook },
+                    { type: "upload" as const,   label: "Upload File", Icon: Upload },
+                  ]).map(({ type, label, Icon }) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => { setSourceType(type); setUploadFile(null); form.clearErrors("youtubeUrl"); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        sourceType === type
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* URL input or file dropzone + submit button */}
+                <div className="flex flex-col sm:flex-row gap-3 items-start w-full">
+                  {sourceType !== "upload" ? (
+                    <FormField
+                      control={form.control}
+                      name="youtubeUrl"
+                      render={({ field }) => (
+                        <FormItem className="flex-1 w-full">
+                          <FormControl>
+                            <div className="relative group">
+                              {sourceType === "youtube"
+                                ? <Youtube className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                : <Facebook className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                              }
+                              <Input
+                                placeholder={sourceType === "youtube" ? "Paste YouTube URL here…" : "Paste Facebook video URL here…"}
+                                className="pl-12 bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-base h-13 shadow-sm transition-all rounded-xl"
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage className="text-xs ml-1" />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <div className="flex-1 w-full flex flex-col gap-1.5">
+                      <label
+                        htmlFor="video-file-input"
+                        className={`flex items-center justify-center gap-2 w-full h-13 rounded-xl border-2 border-dashed cursor-pointer transition-all text-sm font-medium px-4 ${
+                          uploadFile
+                            ? "border-primary/60 bg-primary/5 text-primary"
+                            : "border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5 text-muted-foreground"
+                        }`}
+                      >
+                        <input
+                          id="video-file-input"
+                          type="file"
+                          accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv"
+                          className="hidden"
+                          onChange={(e) => { setUploadFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                        />
+                        {uploadFile
+                          ? <span className="truncate max-w-full">{uploadFile.name}</span>
+                          : <><Upload className="w-4 h-4 shrink-0" /> Choose a video file (MP4, MOV, MKV…)</>
+                        }
+                      </label>
+                      {isUploading && (
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Uploading…</span><span>{uploadProgress}%</span>
+                          </div>
+                          <Progress value={uploadProgress} className="h-1.5" />
                         </div>
-                      </FormControl>
-                      <FormMessage className="text-xs ml-1" />
-                    </FormItem>
+                      )}
+                    </div>
                   )}
-                />
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={createJob.isPending}
-                  style={{ background: "linear-gradient(135deg, #7c3aed, #c026d3, #f21178)" }}
-                  className="h-13 px-7 text-base shadow-[0_4px_20px_0_rgba(124,58,237,0.35)] hover:shadow-[0_6px_24px_rgba(242,17,120,0.4)] hover:-translate-y-0.5 transition-all rounded-xl font-bold active:translate-y-0 shrink-0 text-white border-0 w-full sm:w-auto whitespace-nowrap"
-                >
-                  {createJob.isPending
-                    ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Starting...</>
-                    : <><Zap className="w-5 h-5 mr-2" />Multiply My Content 🚀</>
-                  }
-                </Button>
+                  <Button
+                    type="submit"
+                    size="lg"
+                    disabled={createJob.isPending || isUploading}
+                    style={{ background: "linear-gradient(135deg, #7c3aed, #c026d3, #f21178)" }}
+                    className="h-13 px-7 text-base shadow-[0_4px_20px_0_rgba(124,58,237,0.35)] hover:shadow-[0_6px_24px_rgba(242,17,120,0.4)] hover:-translate-y-0.5 transition-all rounded-xl font-bold active:translate-y-0 shrink-0 text-white border-0 w-full sm:w-auto whitespace-nowrap"
+                  >
+                    {createJob.isPending || isUploading
+                      ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />{isUploading ? `Uploading ${uploadProgress}%` : "Starting…"}</>
+                      : <><Zap className="w-5 h-5 mr-2" />Multiply My Content 🚀</>
+                    }
+                  </Button>
+                </div>
               </div>
 
               {/* Row 2: Options */}
@@ -1361,14 +1490,20 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       {jobWithClips.videoTitle || "Processing Video…"}
                     </h2>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <a
-                        href={jobWithClips.youtubeUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary/90 hover:text-primary flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-lg font-medium transition-colors text-xs"
-                      >
-                        <PlayCircle className="w-3.5 h-3.5" /> Source Video
-                      </a>
+                      {jobWithClips.youtubeUrl?.startsWith("upload://") ? (
+                        <span className="text-muted-foreground flex items-center gap-1.5 bg-muted/40 px-2.5 py-1 rounded-lg font-medium text-xs">
+                          <FileVideo className="w-3.5 h-3.5" /> {jobWithClips.youtubeUrl.slice(9)}
+                        </span>
+                      ) : (
+                        <a
+                          href={jobWithClips.youtubeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary/90 hover:text-primary flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-lg font-medium transition-colors text-xs"
+                        >
+                          <PlayCircle className="w-3.5 h-3.5" /> Source Video
+                        </a>
+                      )}
                       <span className="text-muted-foreground text-xs flex items-center gap-1.5 bg-muted/40 px-2.5 py-1 rounded-lg">
                         <Layers className="w-3.5 h-3.5" />
                         {(jobWithClips as any).clipCount === 0 ? "No shorts" : `${(jobWithClips as any).clipCount} clips`}
