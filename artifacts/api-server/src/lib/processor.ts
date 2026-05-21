@@ -194,30 +194,44 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const cookiesFile = writeCookiesFile();
   const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
 
-  // tv_embedded is YouTube's embedded player client — it doesn't require PO
-  // tokens and is not subject to the server-IP bot-detection that blocks the
-  // ios/android/web clients in production.  mweb is kept as a fallback.
+  // In production (Replit deployment) the bgutil HTTP server cannot run, so the
+  // GetPOT plugin intercepts every client request, rejects tv_embedded as
+  // "unsupported", and then fails to fetch PO tokens for the rest — making
+  // downloads impossible.  We skip the plugin entirely in production so yt-dlp
+  // uses its native handlers, which work without PO tokens for most videos.
+  // In dev the plugin stays loaded so bgutil PO tokens work for local testing.
+  const isProduction = process.env.REPLIT_DEPLOYMENT === "1";
+
+  // tv_embedded (YouTube's embedded player) + web_creator don't need PO tokens.
+  // In dev, fall back to ios/android/web so the GetPOT plugin can supply tokens.
+  const playerClients = isProduction
+    ? "tv_embedded,web_creator,ios"
+    : "ios,android,web";
+
   const baseArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=tv_embedded,mweb",
+    "--extractor-args", `youtube:player_client=${playerClients}`,
     ...cookiesArgs,
   ];
 
-  // yt-dlp's --plugin-dirs flag is non-functional in our packaged yt-dlp zipapp,
-  // so we load plugins via Python's PYTHONPATH discovery: yt-dlp scans every
-  // entry on PYTHONPATH for a `yt_dlp_plugins/` subdirectory. The bundled
-  // plugins live at YTDLP_PLUGINS/yt_dlp_plugins/, so adding YTDLP_PLUGINS to
-  // PYTHONPATH makes them discoverable in production.
-  const pythonPath = process.env.PYTHONPATH
-    ? `${YTDLP_PLUGINS}${path.delimiter}${process.env.PYTHONPATH}`
-    : YTDLP_PLUGINS;
+  // In dev: load GetPOT plugin via PYTHONPATH so bgutil PO token server works.
+  // In production: run yt-dlp with a clean environment — no plugin interference.
+  let ytdlpEnv: NodeJS.ProcessEnv;
+  if (isProduction) {
+    // Strip PYTHONPATH so the GetPOT plugin is never loaded in production
+    const { PYTHONPATH: _omit, ...cleanEnv } = process.env as Record<string, string | undefined>;
+    ytdlpEnv = cleanEnv;
+  } else {
+    const pythonPath = process.env.PYTHONPATH
+      ? `${YTDLP_PLUGINS}${path.delimiter}${process.env.PYTHONPATH}`
+      : YTDLP_PLUGINS;
+    ytdlpEnv = { ...process.env, PYTHONPATH: pythonPath };
+  }
 
-  const ytdlpEnv = {
-    ...process.env,
-    PYTHONPATH: pythonPath,
-  };
-
-  logger.info({ pluginDir: YTDLP_PLUGINS, pythonPath: pythonPath.split(path.delimiter)[0] }, "yt-dlp download starting");
+  logger.info(
+    { pluginDir: isProduction ? "disabled (production)" : YTDLP_PLUGINS, isProduction, playerClients },
+    "yt-dlp download starting"
+  );
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
