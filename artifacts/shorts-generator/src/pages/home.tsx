@@ -244,6 +244,17 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       toast({ title: "Download failed", description: "Network error — please try again.", variant: "destructive" });
     }
   };
+
+  // For large binary files (ZIP, MP3, MP4) use direct browser navigation so the
+  // browser streams the download natively instead of buffering the entire file as
+  // a blob in JavaScript memory (which silently fails for files > ~100 MB).
+  const downloadDirect = (url: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
   const queryClient = useQueryClient();
 
   const { data: health } = useHealthCheck({
@@ -1374,19 +1385,19 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                     </Badge>
                     {/* Export All ZIP */}
                     {jobWithClips.status === "completed" && (
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-violet-500/40 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-all`)}>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-violet-500/40 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300" onClick={() => downloadDirect(`/api/jobs/${jobWithClips.id}/download-all`)}>
                         <Package className="w-3.5 h-3.5" /> Export All (.zip)
                       </Button>
                     )}
                     {/* Podcast download */}
                     {(jobWithClips as any).hasPodcast && (
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" onClick={() => downloadDirect(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
                         <Mic className="w-3.5 h-3.5" /> Podcast MP3
                       </Button>
                     )}
                     {/* Facebook video */}
                     {(jobWithClips as any).hasFacebookVideo && (
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-[#1877F2]/40 text-[#1877F2] hover:bg-[#1877F2]/10" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-facebook`)}>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-[#1877F2]/40 text-[#1877F2] hover:bg-[#1877F2]/10" onClick={() => downloadDirect(`/api/jobs/${jobWithClips.id}/download-facebook`)}>
                         <Download className="w-3.5 h-3.5" /> Facebook 1:1
                       </Button>
                     )}
@@ -1776,7 +1787,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                   <p className="text-xs text-muted-foreground">MP3 Audio File</p>
                                 </div>
                               </div>
-                              <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" onClick={() => downloadFile(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
+                              <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" onClick={() => downloadDirect(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
                                 <Download className="w-4 h-4" /> Download MP3
                               </Button>
                             </div>
