@@ -3,8 +3,8 @@ import { promisify } from "util";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { db, jobsTable, clipsTable, outrosTable, brandsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, jobsTable, clipsTable, outrosTable, brandsTable, brandOutrosTable, brandDocumentsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 
@@ -848,6 +848,15 @@ function buildNewsletterHtml(params: {
   ].join("");
 }
 
+// Sanitize a clip title into a safe, readable filename segment (max 60 chars)
+function sanitizeFilename(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60) || "clip";
+}
+
 export async function generateContent(
   youtubeUrl: string,
   videoTitle: string,
@@ -857,6 +866,7 @@ export async function generateContent(
     contentCta?: string | null;
     brandName?: string | null;
     brandWebsite?: string | null;
+    brandDocuments?: string[];
     jobId?: number;
     brand?: typeof brandsTable.$inferSelect | null;
     tempDir?: string;
@@ -870,12 +880,16 @@ export async function generateContent(
     ? `\n\nBRAND VOICE STYLE: ${options.brandVoice}\nApply this voice consistently across all content.`
     : "";
 
+  const brandDocsNote = options?.brandDocuments?.length
+    ? `\n\nBRAND REFERENCE DOCUMENTS (use to inform brand voice, terminology, and positioning):\n${options.brandDocuments.join("\n---\n").slice(0, 6000)}`
+    : "";
+
   const ctaNote = options?.contentCta
     ? `\n\nCTA TO APPEND: "${options.contentCta}" — include this as the final call-to-action in all text content pieces.`
     : "";
 
   // ── Call A: short-form content ──────────────────────────────────────────
-  const promptA = `You are a professional content creator. Based on this YouTube video transcript, generate short-form social content.${brandVoiceNote}${ctaNote}
+  const promptA = `You are a professional content creator. Based on this YouTube video transcript, generate short-form social content.${brandVoiceNote}${brandDocsNote}${ctaNote}
 
 VIDEO TITLE: ${videoTitle}
 VIDEO URL: ${youtubeUrl}
@@ -1098,6 +1112,37 @@ export async function processJob(jobId: number): Promise<void> {
       if (foundBrand) brand = foundBrand;
     }
 
+    // Load brand outro rotation list (takes priority over single outro / brand shortFormOutroPath)
+    let brandOutros: (typeof brandOutrosTable.$inferSelect)[] = [];
+    if (job.brandOutroIds) {
+      try {
+        const ids: number[] = JSON.parse(job.brandOutroIds);
+        if (ids.length > 0) {
+          const found = await db.select().from(brandOutrosTable).where(inArray(brandOutrosTable.id, ids));
+          // Keep the user-defined ordering and filter missing files
+          brandOutros = ids
+            .map(id => found.find(o => o.id === id))
+            .filter((o): o is typeof brandOutrosTable.$inferSelect => !!o && fs.existsSync(o.filePath));
+        }
+      } catch (e) {
+        logger.warn({ e, jobId }, "Failed to parse brandOutroIds — skipping rotation");
+      }
+    }
+
+    // Load brand documents to enrich AI brand voice context
+    let brandDocumentTexts: string[] = [];
+    if (job.brandId) {
+      try {
+        const docs = await db.select().from(brandDocumentsTable)
+          .where(eq(brandDocumentsTable.brandId, job.brandId));
+        brandDocumentTexts = docs
+          .filter(d => d.contentText && d.contentText.trim().length > 0)
+          .map(d => d.contentText!.slice(0, 3000));
+      } catch (e) {
+        logger.warn({ e, jobId }, "Failed to load brand documents");
+      }
+    }
+
     const clipDuration = job.clipDurationSeconds ?? 45;
 
     // Step 1: Download
@@ -1127,6 +1172,7 @@ export async function processJob(jobId: number): Promise<void> {
         contentCta: job.contentCta ?? null,
         brandName: brand?.name ?? null,
         brandWebsite: brand?.website ?? null,
+        brandDocuments: brandDocumentTexts,
         jobId,
         brand,
         tempDir,
@@ -1163,29 +1209,57 @@ export async function processJob(jobId: number): Promise<void> {
       logger.warn({ jobId, err: contentResult.reason }, "Content generation failed — rendering will continue");
     }
 
-    // Step 5: Render clips sequentially — concurrent ffmpeg video encoding
-    // on a single machine saturates CPU and causes hangs; sequential is reliable.
-    const CLIP_BATCH_SIZE = 1;
+    // Step 5: Render clips in small batches — batching 3 at a time gives a
+    // meaningful speedup while avoiding CPU saturation on the production machine.
+    const CLIP_BATCH_SIZE = 3;
     if (insertedClips.length > 0) {
       await updateJobStatus(jobId, "rendering", { errorMessage: `Preparing to render ${insertedClips.length} clip${insertedClips.length !== 1 ? "s" : ""}…` });
 
-      // Brand's own short-form outro takes priority over the global outro library
-      let processedOutroPath: string | null = null;
-      let outroPosition = "end";
+      // ── Prepare outro sources ──────────────────────────────────────────────
+      //
+      // Priority: brandOutros rotation > brand.shortFormOutroPath > global outro
+      //
+      // For rotation: pre-prepare each unique brand outro once, then assign
+      // to clips by index (clip 0 → outro[0], clip 1 → outro[1], ..., wrapping).
+      // For single sources the path is resolved before the loop.
 
-      if (brand?.shortFormOutroPath && fs.existsSync(brand.shortFormOutroPath)) {
-        processedOutroPath = brand.shortFormOutroPath;
-        outroPosition = "end";
-        logger.info({ jobId }, "Using brand short-form outro video");
-      } else if (outro) {
-        processedOutroPath = path.join(tempDir, "outro_cta.mp4");
-        outroPosition = outro.position;
-        await prepareOutroWithCta(
-          outro.filePath,
-          outro.ctaText ?? null,
-          outro.ctaStartSeconds ? parseFloat(outro.ctaStartSeconds) : null,
-          processedOutroPath,
-        );
+      // Pre-prepare brand outro files (with CTA baked in)
+      const preparedBrandOutros: Array<{ path: string; id: number }> = [];
+      if (brandOutros.length > 0) {
+        for (const bo of brandOutros) {
+          const preparedPath = path.join(tempDir, `brand_outro_${bo.id}.mp4`);
+          try {
+            if (bo.ctaText) {
+              await prepareOutroWithCta(bo.filePath, bo.ctaText, null, preparedPath);
+            } else {
+              fs.copyFileSync(bo.filePath, preparedPath);
+            }
+            preparedBrandOutros.push({ path: preparedPath, id: bo.id });
+          } catch (e) {
+            logger.warn({ e, outroId: bo.id }, "Failed to prepare brand outro — skipping");
+          }
+        }
+        logger.info({ jobId, count: preparedBrandOutros.length }, "Brand outros prepared for rotation");
+      }
+
+      // Single-source fallback (brand shortFormOutroPath or global outro)
+      let singleOutroPath: string | null = null;
+      let singleOutroPosition = "end";
+      if (preparedBrandOutros.length === 0) {
+        if (brand?.shortFormOutroPath && fs.existsSync(brand.shortFormOutroPath)) {
+          singleOutroPath = brand.shortFormOutroPath;
+          singleOutroPosition = "end";
+          logger.info({ jobId }, "Using brand short-form outro video");
+        } else if (outro) {
+          singleOutroPath = path.join(tempDir, "outro_cta.mp4");
+          singleOutroPosition = outro.position;
+          await prepareOutroWithCta(
+            outro.filePath,
+            outro.ctaText ?? null,
+            outro.ctaStartSeconds ? parseFloat(outro.ctaStartSeconds) : null,
+            singleOutroPath,
+          );
+        }
       }
 
       for (let batchStart = 0; batchStart < insertedClips.length; batchStart += CLIP_BATCH_SIZE) {
@@ -1195,7 +1269,8 @@ export async function processJob(jobId: number): Promise<void> {
           errorMessage: `Rendering clip${batch.length > 1 ? "s" : ""} ${batchStart + 1}${batch.length > 1 ? `–${batchEnd}` : ""} of ${insertedClips.length}…`,
         });
 
-        await Promise.all(batch.map(async (clip) => {
+        await Promise.all(batch.map(async (clip, batchIdx) => {
+          const clipIndex = batchStart + batchIdx;
           try {
             await db.update(clipsTable).set({ status: "rendering" }).where(eq(clipsTable.id, clip.id));
 
@@ -1210,13 +1285,21 @@ export async function processJob(jobId: number): Promise<void> {
               mainClipPath,
             );
 
-            const finalPath = path.join(CLIPS_DIR, `clip_${clip.id}.mp4`);
+            // Name the final file using the clip's AI-generated title for easy identification
+            const safeTitle = sanitizeFilename(clip.title);
+            const finalPath = path.join(CLIPS_DIR, `${safeTitle}_${clip.id}.mp4`);
 
-            if (processedOutroPath) {
+            // Pick outro for this specific clip (rotation or single source)
+            const clipOutroPath = preparedBrandOutros.length > 0
+              ? preparedBrandOutros[clipIndex % preparedBrandOutros.length].path
+              : singleOutroPath;
+            const clipOutroPosition = preparedBrandOutros.length > 0 ? "end" : singleOutroPosition;
+
+            if (clipOutroPath) {
               await concatenateClipWithOutro(
                 mainClipPath,
-                processedOutroPath,
-                outroPosition,
+                clipOutroPath,
+                clipOutroPosition,
                 finalPath,
                 tempDir,
                 clip.id,
@@ -1230,7 +1313,7 @@ export async function processJob(jobId: number): Promise<void> {
               filePath: finalPath,
             }).where(eq(clipsTable.id, clip.id));
 
-            logger.info({ clipId: clip.id }, "Clip rendered successfully");
+            logger.info({ clipId: clip.id, title: clip.title }, "Clip rendered successfully");
           } catch (clipErr) {
             logger.error({ clipId: clip.id, err: clipErr }, "Failed to render clip");
             await db.update(clipsTable).set({ status: "failed" }).where(eq(clipsTable.id, clip.id));

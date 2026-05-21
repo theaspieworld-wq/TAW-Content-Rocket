@@ -65,6 +65,200 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/outros:
+    get:
+      operationId: listBrandOutros
+      tags: [brands]
+      summary: List all outros for a brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of brand outros
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrandOutro"
+    post:
+      operationId: uploadBrandOutro
+      tags: [brands]
+      summary: Upload a new outro video for a brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                ctaText:
+                  type: string
+      responses:
+        "201":
+          description: Brand outro created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandOutro"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/outros/{outroId}:
+    patch:
+      operationId: updateBrandOutro
+      tags: [brands]
+      summary: Update a brand outro (e.g. name or CTA text)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: outroId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBrandOutroBody"
+      responses:
+        "200":
+          description: Updated brand outro
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandOutro"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBrandOutro
+      tags: [brands]
+      summary: Delete a brand outro
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: outroId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/documents:
+    get:
+      operationId: listBrandDocuments
+      tags: [brands]
+      summary: List all documents for a brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of brand documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrandDocument"
+    post:
+      operationId: uploadBrandDocument
+      tags: [brands]
+      summary: Upload a brand voice document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Brand document created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandDocument"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/documents/{docId}:
+    delete:
+      operationId: deleteBrandDocument
+      tags: [brands]
+      summary: Delete a brand document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /brands/{id}:
     patch:
       operationId: updateBrand
@@ -481,6 +675,9 @@ components:
           type: ["integer", "null"]
         brandId:
           type: ["integer", "null"]
+        brandOutroIds:
+          type: ["string", "null"]
+          description: JSON array of brand outro IDs to rotate through, e.g. "[1,2,3]"
       required:
         - youtubeUrl
     Job:
@@ -507,6 +704,9 @@ components:
           type: ["integer", "null"]
         brandId:
           type: ["integer", "null"]
+        brandOutroIds:
+          type: ["string", "null"]
+          description: JSON array of brand outro IDs to rotate through
         hasContent:
           type: boolean
           description: Whether AI content has been generated for this job
@@ -674,6 +874,60 @@ components:
         - filePath
         - isDefault
         - position
+        - createdAt
+    BrandOutro:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        name:
+          type: string
+        filePath:
+          type: string
+        ctaText:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandId
+        - name
+        - filePath
+        - sortOrder
+        - createdAt
+    UpdateBrandOutroBody:
+      type: object
+      properties:
+        name:
+          type: string
+        ctaText:
+          type: ["string", "null"]
+    BrandDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        name:
+          type: string
+        filePath:
+          type: string
+        contentText:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandId
+        - name
+        - filePath
         - createdAt
     UpdateOutroBody:
       type: object

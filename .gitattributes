@@ -4,3 +4,4 @@ artifacts/api-server/clips/job_18_facebook.mp4 filter=lfs diff=lfs merge=lfs -te
 artifacts/api-server/clips/job_19_facebook.mp4 filter=lfs diff=lfs merge=lfs -text
 artifacts/api-server/clips/job_22_facebook.mp4 filter=lfs diff=lfs merge=lfs -text
 artifacts/api-server/clips/job_23_facebook.mp4 filter=lfs diff=lfs merge=lfs -text
+artifacts/api-server/clips/job_24_facebook.mp4 filter=lfs diff=lfs merge=lfs -text

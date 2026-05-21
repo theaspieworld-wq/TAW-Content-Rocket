@@ -7,6 +7,8 @@
  */
 
 export * from "./brand";
+export * from "./brandDocument";
+export * from "./brandOutro";
 export * from "./clip";
 export * from "./clipStatus";
 export * from "./createBrandBody";
@@ -21,5 +23,8 @@ export * from "./newsletterEmail";
 export * from "./outro";
 export * from "./outroPosition";
 export * from "./updateBrandBody";
+export * from "./updateBrandOutroBody";
 export * from "./updateOutroBody";
 export * from "./updateOutroBodyPosition";
+export * from "./uploadBrandDocumentBody";
+export * from "./uploadBrandOutroBody";

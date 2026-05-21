@@ -117,6 +117,11 @@ export interface CreateJobBody {
   outroId?: number | null;
   /** @nullable */
   brandId?: number | null;
+  /**
+   * JSON array of brand outro IDs to rotate through, e.g. "[1,2,3]"
+   * @nullable
+   */
+  brandOutroIds?: string | null;
 }
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
@@ -147,6 +152,11 @@ export interface Job {
   outroId?: number | null;
   /** @nullable */
   brandId?: number | null;
+  /**
+   * JSON array of brand outro IDs to rotate through
+   * @nullable
+   */
+  brandOutroIds?: string | null;
   /** Whether AI content has been generated for this job */
   hasContent: boolean;
   hasFacebookVideo: boolean;
@@ -236,6 +246,33 @@ export interface Outro {
   createdAt: string;
 }
 
+export interface BrandOutro {
+  id: number;
+  brandId: number;
+  name: string;
+  filePath: string;
+  /** @nullable */
+  ctaText?: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface UpdateBrandOutroBody {
+  name?: string;
+  /** @nullable */
+  ctaText?: string | null;
+}
+
+export interface BrandDocument {
+  id: number;
+  brandId: number;
+  name: string;
+  filePath: string;
+  /** @nullable */
+  contentText?: string | null;
+  createdAt: string;
+}
+
 export type UpdateOutroBodyPosition =
   (typeof UpdateOutroBodyPosition)[keyof typeof UpdateOutroBodyPosition];
 
@@ -253,3 +290,13 @@ export interface UpdateOutroBody {
   ctaStartSeconds?: number | null;
   isDefault?: boolean;
 }
+
+export type UploadBrandOutroBody = {
+  file?: Blob;
+  name?: string;
+  ctaText?: string;
+};
+
+export type UploadBrandDocumentBody = {
+  file?: Blob;
+};

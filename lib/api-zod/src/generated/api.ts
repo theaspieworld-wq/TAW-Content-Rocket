@@ -75,6 +75,106 @@ export const CreateBrandBody = zod.object({
 });
 
 /**
+ * @summary List all outros for a brand
+ */
+export const ListBrandOutrosParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListBrandOutrosResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  ctaText: zod.string().nullish(),
+  sortOrder: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListBrandOutrosResponse = zod.array(ListBrandOutrosResponseItem);
+
+/**
+ * @summary Upload a new outro video for a brand
+ */
+export const UploadBrandOutroParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UploadBrandOutroBody = zod.object({
+  file: zod.instanceof(File).optional(),
+  name: zod.string().optional(),
+  ctaText: zod.string().optional(),
+});
+
+/**
+ * @summary Update a brand outro (e.g. name or CTA text)
+ */
+export const UpdateBrandOutroParams = zod.object({
+  id: zod.coerce.number(),
+  outroId: zod.coerce.number(),
+});
+
+export const UpdateBrandOutroBody = zod.object({
+  name: zod.string().optional(),
+  ctaText: zod.string().nullish(),
+});
+
+export const UpdateBrandOutroResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  ctaText: zod.string().nullish(),
+  sortOrder: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a brand outro
+ */
+export const DeleteBrandOutroParams = zod.object({
+  id: zod.coerce.number(),
+  outroId: zod.coerce.number(),
+});
+
+/**
+ * @summary List all documents for a brand
+ */
+export const ListBrandDocumentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListBrandDocumentsResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  contentText: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListBrandDocumentsResponse = zod.array(
+  ListBrandDocumentsResponseItem,
+);
+
+/**
+ * @summary Upload a brand voice document
+ */
+export const UploadBrandDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UploadBrandDocumentBody = zod.object({
+  file: zod.instanceof(File).optional(),
+});
+
+/**
+ * @summary Delete a brand document
+ */
+export const DeleteBrandDocumentParams = zod.object({
+  id: zod.coerce.number(),
+  docId: zod.coerce.number(),
+});
+
+/**
  * @summary Update brand settings
  */
 export const UpdateBrandParams = zod.object({
@@ -163,6 +263,10 @@ export const ListJobsResponseItem = zod.object({
   contentCta: zod.string().nullish(),
   outroId: zod.number().nullish(),
   brandId: zod.number().nullish(),
+  brandOutroIds: zod
+    .string()
+    .nullish()
+    .describe("JSON array of brand outro IDs to rotate through"),
   hasContent: zod
     .boolean()
     .describe("Whether AI content has been generated for this job"),
@@ -201,6 +305,12 @@ export const CreateJobBody = zod.object({
     .describe("Call-to-action text to append to all text content"),
   outroId: zod.number().nullish(),
   brandId: zod.number().nullish(),
+  brandOutroIds: zod
+    .string()
+    .nullish()
+    .describe(
+      'JSON array of brand outro IDs to rotate through, e.g. \"[1,2,3]\"',
+    ),
 });
 
 /**
@@ -230,6 +340,10 @@ export const GetJobResponse = zod
     contentCta: zod.string().nullish(),
     outroId: zod.number().nullish(),
     brandId: zod.number().nullish(),
+    brandOutroIds: zod
+      .string()
+      .nullish()
+      .describe("JSON array of brand outro IDs to rotate through"),
     hasContent: zod
       .boolean()
       .describe("Whether AI content has been generated for this job"),

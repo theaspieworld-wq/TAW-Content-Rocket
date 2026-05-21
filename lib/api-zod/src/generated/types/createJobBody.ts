@@ -24,4 +24,9 @@ export interface CreateJobBody {
   outroId?: number | null;
   /** @nullable */
   brandId?: number | null;
+  /**
+   * JSON array of brand outro IDs to rotate through, e.g. "[1,2,3]"
+   * @nullable
+   */
+  brandOutroIds?: string | null;
 }

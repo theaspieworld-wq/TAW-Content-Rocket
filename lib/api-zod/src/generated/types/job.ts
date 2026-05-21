@@ -23,6 +23,11 @@ export interface Job {
   outroId?: number | null;
   /** @nullable */
   brandId?: number | null;
+  /**
+   * JSON array of brand outro IDs to rotate through
+   * @nullable
+   */
+  brandOutroIds?: string | null;
   /** Whether AI content has been generated for this job */
   hasContent: boolean;
   hasFacebookVideo: boolean;

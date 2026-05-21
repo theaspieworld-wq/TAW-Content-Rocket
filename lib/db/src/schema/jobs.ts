@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -50,6 +50,35 @@ export const insertOutroSchema = createInsertSchema(outrosTable).omit({ id: true
 export type InsertOutro = z.infer<typeof insertOutroSchema>;
 export type Outro = typeof outrosTable.$inferSelect;
 
+export const brandOutrosTable = pgTable("brand_outros", {
+  id: serial("id").primaryKey(),
+  brandId: integer("brand_id").notNull().references(() => brandsTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  filePath: text("file_path").notNull(),
+  ctaText: text("cta_text"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("brand_outros_brand_id_idx").on(t.brandId)]);
+
+export const insertBrandOutroSchema = createInsertSchema(brandOutrosTable).omit({ id: true, createdAt: true });
+export type InsertBrandOutro = z.infer<typeof insertBrandOutroSchema>;
+export type BrandOutro = typeof brandOutrosTable.$inferSelect;
+
+export const brandDocumentsTable = pgTable("brand_documents", {
+  id: serial("id").primaryKey(),
+  brandId: integer("brand_id").notNull().references(() => brandsTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  filePath: text("file_path").notNull(),
+  contentText: text("content_text"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("brand_documents_brand_id_idx").on(t.brandId)]);
+
+export const insertBrandDocumentSchema = createInsertSchema(brandDocumentsTable).omit({ id: true, createdAt: true });
+export type InsertBrandDocument = z.infer<typeof insertBrandDocumentSchema>;
+export type BrandDocument = typeof brandDocumentsTable.$inferSelect;
+
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
@@ -62,6 +91,7 @@ export const jobsTable = pgTable("jobs", {
   contentCta: text("content_cta"),
   outroId: integer("outro_id").references(() => outrosTable.id, { onDelete: "set null" }),
   brandId: integer("brand_id").references(() => brandsTable.id, { onDelete: "set null" }),
+  brandOutroIds: text("brand_outro_ids"),
   transcript: text("transcript"),
   generatedContent: text("generated_content"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -71,6 +101,12 @@ export const jobsTable = pgTable("jobs", {
 export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobsTable.$inferSelect;
+
+export const appConfigTable = pgTable("app_config", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
 
 export const clipsTable = pgTable("clips", {
   id: serial("id").primaryKey(),

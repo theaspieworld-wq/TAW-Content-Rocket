@@ -18,6 +18,8 @@ import type {
 
 import type {
   Brand,
+  BrandDocument,
+  BrandOutro,
   CreateBrandBody,
   CreateJobBody,
   ErrorResponse,
@@ -27,7 +29,10 @@ import type {
   JobWithClips,
   Outro,
   UpdateBrandBody,
+  UpdateBrandOutroBody,
   UpdateOutroBody,
+  UploadBrandDocumentBody,
+  UploadBrandOutroBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -271,6 +276,626 @@ export const useCreateBrand = <
   TContext
 > => {
   return useMutation(getCreateBrandMutationOptions(options));
+};
+
+/**
+ * @summary List all outros for a brand
+ */
+export const getListBrandOutrosUrl = (id: number) => {
+  return `/api/brands/${id}/outros`;
+};
+
+export const listBrandOutros = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BrandOutro[]> => {
+  return customFetch<BrandOutro[]>(getListBrandOutrosUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBrandOutrosQueryKey = (id: number) => {
+  return [`/api/brands/${id}/outros`] as const;
+};
+
+export const getListBrandOutrosQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBrandOutros>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBrandOutros>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBrandOutrosQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBrandOutros>>> = ({
+    signal,
+  }) => listBrandOutros(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBrandOutros>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBrandOutrosQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBrandOutros>>
+>;
+export type ListBrandOutrosQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all outros for a brand
+ */
+
+export function useListBrandOutros<
+  TData = Awaited<ReturnType<typeof listBrandOutros>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBrandOutros>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBrandOutrosQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a new outro video for a brand
+ */
+export const getUploadBrandOutroUrl = (id: number) => {
+  return `/api/brands/${id}/outros`;
+};
+
+export const uploadBrandOutro = async (
+  id: number,
+  uploadBrandOutroBody: UploadBrandOutroBody,
+  options?: RequestInit,
+): Promise<BrandOutro> => {
+  const formData = new FormData();
+  if (uploadBrandOutroBody.file !== undefined) {
+    formData.append(`file`, uploadBrandOutroBody.file);
+  }
+  if (uploadBrandOutroBody.name !== undefined) {
+    formData.append(`name`, uploadBrandOutroBody.name);
+  }
+  if (uploadBrandOutroBody.ctaText !== undefined) {
+    formData.append(`ctaText`, uploadBrandOutroBody.ctaText);
+  }
+
+  return customFetch<BrandOutro>(getUploadBrandOutroUrl(id), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getUploadBrandOutroMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadBrandOutro>>,
+    TError,
+    { id: number; data: BodyType<UploadBrandOutroBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadBrandOutro>>,
+  TError,
+  { id: number; data: BodyType<UploadBrandOutroBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadBrandOutro"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadBrandOutro>>,
+    { id: number; data: BodyType<UploadBrandOutroBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return uploadBrandOutro(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadBrandOutroMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadBrandOutro>>
+>;
+export type UploadBrandOutroMutationBody = BodyType<UploadBrandOutroBody>;
+export type UploadBrandOutroMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload a new outro video for a brand
+ */
+export const useUploadBrandOutro = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadBrandOutro>>,
+    TError,
+    { id: number; data: BodyType<UploadBrandOutroBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadBrandOutro>>,
+  TError,
+  { id: number; data: BodyType<UploadBrandOutroBody> },
+  TContext
+> => {
+  return useMutation(getUploadBrandOutroMutationOptions(options));
+};
+
+/**
+ * @summary Update a brand outro (e.g. name or CTA text)
+ */
+export const getUpdateBrandOutroUrl = (id: number, outroId: number) => {
+  return `/api/brands/${id}/outros/${outroId}`;
+};
+
+export const updateBrandOutro = async (
+  id: number,
+  outroId: number,
+  updateBrandOutroBody: UpdateBrandOutroBody,
+  options?: RequestInit,
+): Promise<BrandOutro> => {
+  return customFetch<BrandOutro>(getUpdateBrandOutroUrl(id, outroId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateBrandOutroBody),
+  });
+};
+
+export const getUpdateBrandOutroMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBrandOutro>>,
+    TError,
+    { id: number; outroId: number; data: BodyType<UpdateBrandOutroBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateBrandOutro>>,
+  TError,
+  { id: number; outroId: number; data: BodyType<UpdateBrandOutroBody> },
+  TContext
+> => {
+  const mutationKey = ["updateBrandOutro"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateBrandOutro>>,
+    { id: number; outroId: number; data: BodyType<UpdateBrandOutroBody> }
+  > = (props) => {
+    const { id, outroId, data } = props ?? {};
+
+    return updateBrandOutro(id, outroId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateBrandOutroMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateBrandOutro>>
+>;
+export type UpdateBrandOutroMutationBody = BodyType<UpdateBrandOutroBody>;
+export type UpdateBrandOutroMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a brand outro (e.g. name or CTA text)
+ */
+export const useUpdateBrandOutro = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBrandOutro>>,
+    TError,
+    { id: number; outroId: number; data: BodyType<UpdateBrandOutroBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateBrandOutro>>,
+  TError,
+  { id: number; outroId: number; data: BodyType<UpdateBrandOutroBody> },
+  TContext
+> => {
+  return useMutation(getUpdateBrandOutroMutationOptions(options));
+};
+
+/**
+ * @summary Delete a brand outro
+ */
+export const getDeleteBrandOutroUrl = (id: number, outroId: number) => {
+  return `/api/brands/${id}/outros/${outroId}`;
+};
+
+export const deleteBrandOutro = async (
+  id: number,
+  outroId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteBrandOutroUrl(id, outroId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteBrandOutroMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrandOutro>>,
+    TError,
+    { id: number; outroId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBrandOutro>>,
+  TError,
+  { id: number; outroId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteBrandOutro"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBrandOutro>>,
+    { id: number; outroId: number }
+  > = (props) => {
+    const { id, outroId } = props ?? {};
+
+    return deleteBrandOutro(id, outroId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBrandOutroMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBrandOutro>>
+>;
+
+export type DeleteBrandOutroMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a brand outro
+ */
+export const useDeleteBrandOutro = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrandOutro>>,
+    TError,
+    { id: number; outroId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBrandOutro>>,
+  TError,
+  { id: number; outroId: number },
+  TContext
+> => {
+  return useMutation(getDeleteBrandOutroMutationOptions(options));
+};
+
+/**
+ * @summary List all documents for a brand
+ */
+export const getListBrandDocumentsUrl = (id: number) => {
+  return `/api/brands/${id}/documents`;
+};
+
+export const listBrandDocuments = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BrandDocument[]> => {
+  return customFetch<BrandDocument[]>(getListBrandDocumentsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBrandDocumentsQueryKey = (id: number) => {
+  return [`/api/brands/${id}/documents`] as const;
+};
+
+export const getListBrandDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBrandDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBrandDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBrandDocumentsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBrandDocuments>>
+  > = ({ signal }) => listBrandDocuments(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBrandDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBrandDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBrandDocuments>>
+>;
+export type ListBrandDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all documents for a brand
+ */
+
+export function useListBrandDocuments<
+  TData = Awaited<ReturnType<typeof listBrandDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBrandDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBrandDocumentsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a brand voice document
+ */
+export const getUploadBrandDocumentUrl = (id: number) => {
+  return `/api/brands/${id}/documents`;
+};
+
+export const uploadBrandDocument = async (
+  id: number,
+  uploadBrandDocumentBody: UploadBrandDocumentBody,
+  options?: RequestInit,
+): Promise<BrandDocument> => {
+  const formData = new FormData();
+  if (uploadBrandDocumentBody.file !== undefined) {
+    formData.append(`file`, uploadBrandDocumentBody.file);
+  }
+
+  return customFetch<BrandDocument>(getUploadBrandDocumentUrl(id), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getUploadBrandDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadBrandDocument>>,
+    TError,
+    { id: number; data: BodyType<UploadBrandDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadBrandDocument>>,
+  TError,
+  { id: number; data: BodyType<UploadBrandDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadBrandDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadBrandDocument>>,
+    { id: number; data: BodyType<UploadBrandDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return uploadBrandDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadBrandDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadBrandDocument>>
+>;
+export type UploadBrandDocumentMutationBody = BodyType<UploadBrandDocumentBody>;
+export type UploadBrandDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload a brand voice document
+ */
+export const useUploadBrandDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadBrandDocument>>,
+    TError,
+    { id: number; data: BodyType<UploadBrandDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadBrandDocument>>,
+  TError,
+  { id: number; data: BodyType<UploadBrandDocumentBody> },
+  TContext
+> => {
+  return useMutation(getUploadBrandDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Delete a brand document
+ */
+export const getDeleteBrandDocumentUrl = (id: number, docId: number) => {
+  return `/api/brands/${id}/documents/${docId}`;
+};
+
+export const deleteBrandDocument = async (
+  id: number,
+  docId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteBrandDocumentUrl(id, docId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteBrandDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrandDocument>>,
+    TError,
+    { id: number; docId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBrandDocument>>,
+  TError,
+  { id: number; docId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteBrandDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBrandDocument>>,
+    { id: number; docId: number }
+  > = (props) => {
+    const { id, docId } = props ?? {};
+
+    return deleteBrandDocument(id, docId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBrandDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBrandDocument>>
+>;
+
+export type DeleteBrandDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a brand document
+ */
+export const useDeleteBrandDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrandDocument>>,
+    TError,
+    { id: number; docId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBrandDocument>>,
+  TError,
+  { id: number; docId: number },
+  TContext
+> => {
+  return useMutation(getDeleteBrandDocumentMutationOptions(options));
 };
 
 /**
