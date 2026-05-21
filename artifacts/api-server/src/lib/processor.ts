@@ -697,8 +697,8 @@ async function renderFullFacebookVideo(
   await execFileAsync("ffmpeg", [
     "-i", videoPath,
     "-vf", squareCrop,
-    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
-    "-c:a", "aac", "-b:a", "128k",
+    "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+    "-c:a", "aac", "-b:a", "192k",
     "-movflags", "+faststart",
     outputPath, "-y",
   ], { timeout: 3600000 });
