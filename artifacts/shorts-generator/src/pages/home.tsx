@@ -758,9 +758,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
         <Tabs defaultValue="projects" className="flex-1 flex flex-col overflow-hidden">
           <div className="px-4 pt-4 pb-0">
-            <TabsList className="w-full grid grid-cols-2 bg-muted/50 border border-border/50 h-9">
+            <TabsList className="w-full grid grid-cols-3 bg-muted/50 border border-border/50 h-9">
               <TabsTrigger value="projects" className="text-[11px] font-semibold">Projects</TabsTrigger>
               <TabsTrigger value="brands" className="text-[11px] font-semibold">Brands</TabsTrigger>
+              <TabsTrigger value="outros" className="text-[11px] font-semibold">Outros</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1118,6 +1119,117 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                     </div>
                   )}
                 </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* Outros tab */}
+          <TabsContent value="outros" className="flex-1 overflow-hidden m-0 border-none outline-none">
+            <ScrollArea className="h-full">
+              <div className="p-4 space-y-4">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-1 flex items-center gap-2">
+                  Short Form Outros <div className="h-px bg-border flex-1" />
+                </div>
+
+                {/* Upload form */}
+                <form onSubmit={handleUploadOutro} className="space-y-2.5 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                  <p className="text-xs font-semibold text-foreground">Upload New Outro</p>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px]">Name</Label>
+                    <Input
+                      value={uploadName}
+                      onChange={e => setUploadName(e.target.value)}
+                      placeholder="e.g. TAW Brand Outro"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px]">Video File</Label>
+                    <input ref={fileInputRef} type="file" accept="video/*" className="block w-full text-xs text-muted-foreground file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary/10 file:text-primary cursor-pointer" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px]">Position</Label>
+                    <Select value={uploadPosition} onValueChange={v => setUploadPosition(v as "beginning" | "end")}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="end">End of clip</SelectItem>
+                        <SelectItem value="beginning">Beginning of clip</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px]">CTA Text (optional)</Label>
+                    <Input value={uploadCtaText} onChange={e => setUploadCtaText(e.target.value)} placeholder="e.g. Book a call →" className="h-7 text-xs" />
+                  </div>
+                  {uploadCtaText && (
+                    <div className="space-y-1.5">
+                      <Label className="text-[11px]">CTA Start (seconds)</Label>
+                      <Input type="number" min={0} value={uploadCtaStartSeconds} onChange={e => setUploadCtaStartSeconds(e.target.value === "" ? "" : Number(e.target.value))} placeholder="0" className="h-7 text-xs" />
+                    </div>
+                  )}
+                  <Button type="submit" size="sm" className="w-full h-7 text-xs" disabled={isUploadingOutro}>
+                    {isUploadingOutro ? <><Loader2 className="w-3 h-3 animate-spin mr-1.5" />Uploading…</> : <><Upload className="w-3 h-3 mr-1.5" />Upload Outro</>}
+                  </Button>
+                </form>
+
+                {/* Outro list */}
+                {isOutrosLoading ? (
+                  <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary/50" /></div>
+                ) : outros && outros.length > 0 ? (
+                  <div className="space-y-2">
+                    {outros.map(o => (
+                      <div key={o.id} className="rounded-lg border border-border/50 bg-card/30 p-2.5 space-y-2">
+                        {editingOutroId === o.id ? (
+                          <form onSubmit={handleUpdateOutro} className="space-y-2">
+                            <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" className="h-7 text-xs" />
+                            <Select value={editPosition} onValueChange={v => setEditPosition(v as "beginning" | "end")}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="end">End of clip</SelectItem>
+                                <SelectItem value="beginning">Beginning of clip</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input value={editCtaText} onChange={e => setEditCtaText(e.target.value)} placeholder="CTA text (optional)" className="h-7 text-xs" />
+                            {editCtaText && (
+                              <Input type="number" min={0} value={editCtaStartSeconds} onChange={e => setEditCtaStartSeconds(e.target.value === "" ? "" : Number(e.target.value))} placeholder="CTA start seconds" className="h-7 text-xs" />
+                            )}
+                            <div className="flex gap-1.5">
+                              <Button type="submit" size="sm" className="flex-1 h-7 text-xs">Save</Button>
+                              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingOutroId(null)}>Cancel</Button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-1">
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium truncate">{o.name}{o.isDefault ? <span className="ml-1 text-[10px] text-primary">✦ default</span> : null}</p>
+                                <p className="text-[10px] text-muted-foreground capitalize">{o.position} of clip</p>
+                                {o.ctaText && <p className="text-[10px] text-muted-foreground truncate">CTA: {o.ctaText}</p>}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingOutroId(o.id); setEditName(o.name); setEditPosition(o.position as "beginning" | "end"); setEditCtaText(o.ctaText ?? ""); setEditCtaStartSeconds(o.ctaStartSeconds ?? ""); }}>
+                                  <Edit2 className="w-3 h-3" />
+                                </Button>
+                                {!o.isDefault && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" title="Set as default" onClick={() => handleSetDefaultOutro(o.id)}>
+                                    <Star className="w-3 h-3" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => handleDeleteOutro(o.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-muted-foreground/60 bg-card/20 rounded-lg border border-dashed border-border/50">
+                    No outros yet. Upload one above to add it to the dropdown.
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
