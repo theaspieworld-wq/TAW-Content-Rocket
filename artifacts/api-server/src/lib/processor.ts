@@ -194,12 +194,12 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const cookiesFile = writeCookiesFile();
   const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
 
-  // ios client does not require a PO token (unlike mweb) so it bypasses
-  // YouTube's bot-detection gate reliably in production.  We keep android
-  // and web as ordered fallbacks in case YouTube tightens the ios client.
+  // tv_embedded is YouTube's embedded player client — it doesn't require PO
+  // tokens and is not subject to the server-IP bot-detection that blocks the
+  // ios/android/web clients in production.  mweb is kept as a fallback.
   const baseArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=ios,android,web",
+    "--extractor-args", "youtube:player_client=tv_embedded,mweb",
     ...cookiesArgs,
   ];
 
