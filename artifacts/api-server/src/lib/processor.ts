@@ -14,42 +14,6 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
   ? "/home/runner/workspace/bin/yt-dlp"
   : "yt-dlp";
 
-// Use the running Node.js binary as the JS runtime for yt-dlp so it can solve
-// YouTube's signature challenges (required since yt-dlp deprecated no-JS extraction).
-const YTDLP_JS_RUNTIME = `node:${process.execPath}`;
-
-// yt-dlp plugin dir — bundled INSIDE the artifact so it ships with production
-// deployments. Contains the bgutil-ytdlp-pot-provider + yt-dlp-get-pot plugins
-// which generate GVS PO tokens needed for HD YouTube formats.
-//
-// We try multiple candidates because cwd can vary between dev (workspace root)
-// and production (also workspace root in Replit deployments, but be defensive).
-// The presence of `yt_dlp_plugins/extractor/getpot.py` confirms a valid layout.
-function resolvePluginDir(): string {
-  const candidates = [
-    path.resolve(process.cwd(), "artifacts/api-server/yt-dlp-plugins"),
-    path.resolve(process.cwd(), "yt-dlp-plugins"),
-    "/home/runner/workspace/artifacts/api-server/yt-dlp-plugins",
-    // Also try alongside this module's source location as last resort
-    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../yt-dlp-plugins"),
-  ];
-  for (const c of candidates) {
-    try {
-      if (fs.existsSync(path.join(c, "yt_dlp_plugins", "extractor", "getpot.py"))) {
-        logger.info({ pluginDir: c }, "yt-dlp plugins resolved");
-        return c;
-      }
-    } catch { /* ignore */ }
-  }
-  logger.error({ candidates }, "yt-dlp plugin dir NOT FOUND — PO token plugins unavailable");
-  return candidates[0];
-}
-const YTDLP_PLUGINS = resolvePluginDir();
-
-// bgutil server home — provides the JS script that generates PO tokens.
-// The HTTP server (port 4416) auto-started by index.ts is preferred; this
-// path is also used by the script provider as a fallback.
-const BGUTIL_SERVER_HOME = "/home/runner/workspace/bgutil-server/server";
 
 // Write YOUTUBE_COOKIES (base64-encoded Netscape cookies.txt) to a temp file
 // and return its path, or null if the env var is not set.
@@ -194,49 +158,20 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const cookiesFile = writeCookiesFile();
   const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
 
-  // In production (Replit deployment) the bgutil HTTP server cannot run, so the
-  // GetPOT plugin intercepts every client request, rejects tv_embedded as
-  // "unsupported", and then fails to fetch PO tokens for the rest — making
-  // downloads impossible.  We skip the plugin entirely in production so yt-dlp
-  // uses its native handlers, which work without PO tokens for most videos.
-  // In dev the plugin stays loaded so bgutil PO tokens work for local testing.
-  const isProduction = process.env.REPLIT_DEPLOYMENT === "1";
-
-  // tv_embedded (YouTube's embedded player) + web_creator don't need PO tokens.
-  // In dev, fall back to ios/android/web so the GetPOT plugin can supply tokens.
-  const playerClients = isProduction
-    ? "tv_embedded,web_creator,ios"
-    : "ios,android,web";
-
+  // tv_embedded is YouTube's embedded player client — no PO tokens required,
+  // works on server IPs.  web_creator and ios are kept as ordered fallbacks.
   const baseArgs = [
     "--no-playlist",
-    "--extractor-args", `youtube:player_client=${playerClients}`,
+    "--extractor-args", "youtube:player_client=tv_embedded,web_creator,ios",
     ...cookiesArgs,
   ];
 
-  // In dev: load GetPOT plugin via PYTHONPATH so bgutil PO token server works.
-  // In production: run yt-dlp with a clean environment — no plugin interference.
-  let ytdlpEnv: NodeJS.ProcessEnv;
-  if (isProduction) {
-    // Strip PYTHONPATH so the GetPOT plugin is never loaded in production
-    const { PYTHONPATH: _omit, ...cleanEnv } = process.env as Record<string, string | undefined>;
-    ytdlpEnv = cleanEnv;
-  } else {
-    const pythonPath = process.env.PYTHONPATH
-      ? `${YTDLP_PLUGINS}${path.delimiter}${process.env.PYTHONPATH}`
-      : YTDLP_PLUGINS;
-    ytdlpEnv = { ...process.env, PYTHONPATH: pythonPath };
-  }
-
-  logger.info(
-    { pluginDir: isProduction ? "disabled (production)" : YTDLP_PLUGINS, isProduction, playerClients },
-    "yt-dlp download starting"
-  );
+  logger.info("yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
   try {
-    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000, env: ytdlpEnv });
+    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000, env: process.env });
     title = stdout.trim().split("\n")[0] || title;
   } catch (e) {
     logger.warn({ e }, "Could not fetch video title");
@@ -252,7 +187,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   ];
 
   try {
-    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: ytdlpEnv });
+    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
   } finally {
     // Clean up temp cookies file
     if (cookiesFile) {
