@@ -228,6 +228,12 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Admin: YouTube cookies management
+  const [cookiesText, setCookiesText] = useState("");
+  const [hasCookies, setHasCookies] = useState<boolean | null>(null);
+  const [isSavingCookies, setIsSavingCookies] = useState(false);
+  const [isClearingCookies, setIsClearingCookies] = useState(false);
+
   const { toast } = useToast();
 
   const downloadFile = async (url: string, filename?: string) => {
@@ -279,6 +285,50 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const { data: brands, isLoading: isBrandsLoading } = useListBrands({
     query: { queryKey: getListBrandsQueryKey() },
   });
+
+  const adminBase = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch(`${adminBase}/api/admin/youtube-cookies`)
+      .then(r => r.json())
+      .then(d => setHasCookies(!!d.hasCookies))
+      .catch(() => setHasCookies(false));
+  }, [isAdmin]);
+
+  async function handleSaveCookies() {
+    if (!cookiesText.trim()) return;
+    setIsSavingCookies(true);
+    try {
+      const res = await fetch(`${adminBase}/api/admin/youtube-cookies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookies: cookiesText }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setHasCookies(true);
+      setCookiesText("");
+      toast({ title: "YouTube cookies saved", description: "Downloads will now use your account cookies." });
+    } catch {
+      toast({ title: "Failed to save cookies", variant: "destructive" });
+    } finally {
+      setIsSavingCookies(false);
+    }
+  }
+
+  async function handleClearCookies() {
+    setIsClearingCookies(true);
+    try {
+      const res = await fetch(`${adminBase}/api/admin/youtube-cookies`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Clear failed");
+      setHasCookies(false);
+      toast({ title: "YouTube cookies cleared" });
+    } catch {
+      toast({ title: "Failed to clear cookies", variant: "destructive" });
+    } finally {
+      setIsClearingCookies(false);
+    }
+  }
 
   const { data: jobWithClips } = useGetJob(selectedJobId as number, {
     query: {
@@ -759,9 +809,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
         <Tabs defaultValue="projects" className="flex-1 flex flex-col overflow-hidden">
           <div className="px-4 pt-4 pb-0">
-            <TabsList className="w-full grid grid-cols-2 bg-muted/50 border border-border/50 h-9">
+            <TabsList className={`w-full grid bg-muted/50 border border-border/50 h-9 ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
               <TabsTrigger value="projects" className="text-[11px] font-semibold">Projects</TabsTrigger>
               <TabsTrigger value="brands" className="text-[11px] font-semibold">Brands</TabsTrigger>
+              {isAdmin && <TabsTrigger value="admin" className="text-[11px] font-semibold">Admin</TabsTrigger>}
             </TabsList>
           </div>
 
@@ -1222,6 +1273,72 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
               </div>
             </ScrollArea>
           </TabsContent>
+
+          {/* Admin tab */}
+          {isAdmin && (
+            <TabsContent value="admin" className="flex-1 overflow-hidden m-0 border-none outline-none">
+              <ScrollArea className="h-full">
+                <div className="p-4 space-y-4">
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-1 flex items-center gap-2">
+                    Admin Settings <div className="h-px bg-border flex-1" />
+                  </div>
+
+                  {/* YouTube Cookies */}
+                  <div className="rounded-xl border border-border/60 bg-card/30 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">YouTube Cookies</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Required to download videos from server IPs without bot errors.</p>
+                      </div>
+                      {hasCookies === true && (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Active</span>
+                      )}
+                      {hasCookies === false && (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-destructive/15 text-destructive border border-destructive/30">Not set</span>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1.5">
+                      <p className="text-[10px] font-semibold text-amber-400">How to export cookies</p>
+                      <ol className="text-[10px] text-muted-foreground space-y-1 list-decimal list-inside">
+                        <li>Install <span className="text-foreground font-medium">Get cookies.txt LOCALLY</span> Chrome extension</li>
+                        <li>Go to <span className="text-foreground font-medium">youtube.com</span> while logged in</li>
+                        <li>Click the extension → Export <span className="text-foreground font-medium">cookies.txt</span></li>
+                        <li>Open the file, copy all the text, paste below</li>
+                      </ol>
+                    </div>
+
+                    <textarea
+                      value={cookiesText}
+                      onChange={e => setCookiesText(e.target.value)}
+                      placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE    /       TRUE    ..."
+                      className="w-full h-28 text-[10px] font-mono bg-muted/30 border border-border/60 rounded-lg p-2.5 resize-none text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveCookies}
+                        disabled={isSavingCookies || !cookiesText.trim()}
+                        className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg bg-primary text-primary-foreground text-[11px] font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                      >
+                        {isSavingCookies ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        {isSavingCookies ? "Saving…" : "Save Cookies"}
+                      </button>
+                      {hasCookies && (
+                        <button
+                          onClick={handleClearCookies}
+                          disabled={isClearingCookies}
+                          className="px-3 h-8 rounded-lg border border-destructive/40 text-destructive text-[11px] font-semibold hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                        >
+                          {isClearingCookies ? <Loader2 className="w-3 h-3 animate-spin" /> : "Clear"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          )}
 
         </Tabs>
 
