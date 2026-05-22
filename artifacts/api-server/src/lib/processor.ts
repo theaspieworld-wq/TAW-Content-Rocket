@@ -158,11 +158,11 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const cookiesFile = writeCookiesFile();
   const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
 
-  // tv_embedded is YouTube's embedded player client — no PO tokens required,
-  // works on server IPs.  web_creator and ios are kept as ordered fallbacks.
+  // Use yt-dlp's default android_vr client — works on server IPs without PO
+  // tokens or authentication.  Forcing specific clients (tv_embedded etc.)
+  // breaks on yt-dlp 2026+ so we let the tool pick the best available.
   const baseArgs = [
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=tv_embedded,web_creator,ios",
     ...cookiesArgs,
   ];
 
