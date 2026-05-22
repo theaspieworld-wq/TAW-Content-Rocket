@@ -12,8 +12,7 @@ async function getCredentials(): Promise<{ secretKey: string; publishableKey: st
     throw new Error('Missing Replit environment variables. Ensure the Stripe integration is connected.');
   }
 
-  const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
-  const targetEnvironment = isProduction ? 'production' : 'development';
+  const targetEnvironment = 'production';
 
   const url = new URL(`https://${hostname}/api/v2/connection`);
   url.searchParams.set('include_secrets', 'true');
