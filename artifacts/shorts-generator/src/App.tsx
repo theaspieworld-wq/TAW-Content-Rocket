@@ -6,8 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ClerkProvider, SignIn, SignUp, UserProfile, Show, useClerk, useUser } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
-import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, User, LogOut, Copy, Check } from "lucide-react";
+import { ArrowLeft, User, LogOut, Copy, Check } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import PricingPage from "@/pages/pricing";
@@ -174,12 +173,6 @@ function HomeRedirect() {
 
 function useSubscriptionStatus() {
   const { user } = useUser();
-
-  // Seed initial state from sessionStorage so page reloads skip the loading flash
-  const [status, setStatus] = useState<"loading" | "active" | "inactive">(() => {
-    const cached = sessionStorage.getItem("cr_subStatus");
-    return cached === "active" || cached === "inactive" ? cached : "loading";
-  });
   const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem("cr_isAdmin") === "1");
 
   useEffect(() => {
@@ -187,24 +180,17 @@ function useSubscriptionStatus() {
     fetch(`${basePath}/api/stripe/subscription`)
       .then((r) => r.json())
       .then((d) => {
-        const s: "active" | "inactive" = d.active ? "active" : "inactive";
-        setStatus(s);
         setIsAdmin(!!d.isAdmin);
-        sessionStorage.setItem("cr_subStatus", s);
         sessionStorage.setItem("cr_isAdmin", d.isAdmin ? "1" : "0");
       })
-      .catch(() => {
-        // Only downgrade to inactive if we don't already have a confirmed status
-        if (status === "loading") setStatus("inactive");
-      });
+      .catch(() => {});
   }, [user?.id]);
 
-  return { status, isAdmin };
+  return { status: "active" as const, isAdmin };
 }
 
 function AppPage() {
-  const { status: subStatus, isAdmin } = useSubscriptionStatus();
-  const [, setLocation] = useLocation();
+  const { isAdmin } = useSubscriptionStatus();
 
   return (
     <>
@@ -212,31 +198,7 @@ function AppPage() {
         <Redirect to="/" />
       </Show>
       <Show when="signed-in">
-        {subStatus === "loading" ? (
-          <div className="min-h-[100dvh] bg-[#080614] flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-[#f21178]" />
-          </div>
-        ) : subStatus === "inactive" ? (
-          <div className="min-h-[100dvh] bg-[#080614] flex flex-col items-center justify-center px-4 relative overflow-hidden">
-            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-[#f21178]/6 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative z-10 text-center max-w-md">
-              <img src={`${basePath}/logo.png`} alt="Content Rocket" className="h-20 w-20 rounded-2xl object-cover mx-auto mb-6 shadow-xl shadow-[#f21178]/20" />
-              <h2 className="text-2xl font-bold text-white mb-3">Subscription required</h2>
-              <p className="text-slate-400 mb-8">
-                You need an active Content Rocket subscription to use the app. Get started with a plan below.
-              </p>
-              <Button
-                size="lg"
-                className="bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 text-white font-semibold px-8 h-12 border-0 shadow-lg shadow-[#f21178]/20"
-                onClick={() => setLocation("/pricing")}
-              >
-                View Plans
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Home isAdmin={isAdmin} />
-        )}
+        <Home isAdmin={isAdmin} />
       </Show>
     </>
   );
