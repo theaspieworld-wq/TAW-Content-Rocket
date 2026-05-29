@@ -11,7 +11,6 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import PricingPage from "@/pages/pricing";
 import LandingPage from "@/pages/landing";
-import AdminLoginPage from "@/pages/admin-login";
 
 const queryClient = new QueryClient();
 
@@ -395,7 +394,6 @@ function ClerkProviderWithRoutes() {
             <Route path="/pricing" component={PricingPage} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
-            <Route path="/admin-login" component={AdminLoginPage} />
             <Route component={NotFound} />
           </Switch>
         </TooltipProvider>
