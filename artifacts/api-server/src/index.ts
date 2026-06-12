@@ -80,32 +80,23 @@ if (!rawPort) throw new Error("PORT environment variable is required");
 const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
-async function loadYouTubeConfigFromDb() {
+async function loadYouTubeCookiesFromDb() {
   try {
-    const cookies = await db.execute(
+    const result = await db.execute(
       sql`SELECT value FROM app_config WHERE key = 'youtube_cookies'`
     );
-    const cookieVal = (cookies as any).rows?.[0]?.value ?? null;
-    if (cookieVal && !process.env.YOUTUBE_COOKIES) {
-      process.env.YOUTUBE_COOKIES = cookieVal;
+    const value = (result as any).rows?.[0]?.value ?? null;
+    if (value && !process.env.YOUTUBE_COOKIES) {
+      process.env.YOUTUBE_COOKIES = value;
       logger.info("YouTube cookies loaded from DB");
     }
-
-    const proxy = await db.execute(
-      sql`SELECT value FROM app_config WHERE key = 'youtube_proxy'`
-    );
-    const proxyVal = (proxy as any).rows?.[0]?.value ?? null;
-    if (proxyVal && !process.env.YTDLP_PROXY) {
-      process.env.YTDLP_PROXY = Buffer.from(proxyVal, "base64").toString("utf8");
-      logger.info("YouTube proxy loaded from DB");
-    }
   } catch (err) {
-    logger.warn({ err }, "Could not load YouTube config from DB (non-fatal)");
+    logger.warn({ err }, "Could not load YouTube cookies from DB (non-fatal)");
   }
 }
 
 await runMigrations();
-await loadYouTubeConfigFromDb();
+await loadYouTubeCookiesFromDb();
 
 // Register webhook in background — don't block server startup
 registerStripeWebhook().catch((err) =>

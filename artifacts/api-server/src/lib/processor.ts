@@ -31,14 +31,6 @@ function writeCookiesFile(): string | null {
   }
 }
 
-// Returns ["--proxy", url] if a YouTube proxy is configured, else [].
-// A residential/rotating proxy is the reliable way to bypass YouTube's
-// datacenter-IP bot detection in production.
-function getProxyArgs(): string[] {
-  const proxy = process.env.YTDLP_PROXY?.trim();
-  return proxy ? ["--proxy", proxy] : [];
-}
-
 const CLIPS_DIR = path.join(process.cwd(), "clips");
 fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
@@ -169,17 +161,12 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   // Use yt-dlp's default android_vr client — works on server IPs without PO
   // tokens or authentication.  Forcing specific clients (tv_embedded etc.)
   // breaks on yt-dlp 2026+ so we let the tool pick the best available.
-  const proxyArgs = getProxyArgs();
   const baseArgs = [
     "--no-playlist",
-    ...proxyArgs,
     ...cookiesArgs,
   ];
 
-  logger.info(
-    { hasCookies: !!cookiesFile, hasProxy: proxyArgs.length > 0 },
-    "yt-dlp download starting"
-  );
+  logger.info("yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
@@ -203,26 +190,11 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
     await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
   } catch (err: any) {
     const stderr: string = err?.stderr ?? err?.message ?? "";
-    const isBotCheck =
-      stderr.includes("Sign in to confirm") ||
-      stderr.includes("confirm you") ||
-      stderr.includes("not a bot") ||
-      stderr.includes("blocked it in your country") ||
-      /bot/i.test(stderr);
-    if (isBotCheck) {
-      const usingCookies = !!cookiesFile;
-      const usingProxy = proxyArgs.length > 0;
-      let hint: string;
-      if (usingCookies && usingProxy) {
-        hint = "Both cookies and a proxy are set but YouTube still blocked it — your cookies may have expired (re-export them) or the proxy IP is also flagged.";
-      } else if (usingCookies) {
-        hint = "Cookies are set but YouTube still blocked it — they may have expired. Re-export fresh cookies in Admin → YouTube Cookies, or add a residential proxy in Admin → YouTube Proxy for a permanent fix.";
-      } else if (usingProxy) {
-        hint = "A proxy is set but YouTube still blocked it — the proxy IP is likely flagged. Use a residential/rotating proxy, or add YouTube cookies in Admin.";
-      } else {
-        hint = "Go to Admin → YouTube Proxy and add a residential proxy (reliable), or Admin → YouTube Cookies and paste fresh cookies.";
-      }
-      throw new Error(`YouTube blocked this download (bot detection on server IP). ${hint}`);
+    if (stderr.includes("Sign in to confirm") || stderr.includes("bot") || stderr.includes("confirm you")) {
+      throw new Error(
+        "YouTube blocked this download (bot detection on server IP). " +
+        "Fix: go to Admin → YouTube Cookies and paste your YouTube cookies."
+      );
     }
     throw err;
   } finally {

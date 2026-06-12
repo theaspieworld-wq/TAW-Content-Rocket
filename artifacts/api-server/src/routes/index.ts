@@ -8,7 +8,6 @@ import stripeRouter from "./stripe";
 import webhookRouter from "./webhook";
 import meRouter from "./me";
 import adminRouter from "./admin";
-import { requireSubscription } from "../middlewares/requireSubscription.js";
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const auth = getAuth(req);
@@ -28,8 +27,6 @@ router.use(stripeRouter);
 router.use(requireAuth);
 router.use(meRouter);
 router.use(adminRouter);
-// Core data routes require an active subscription (admins are exempt).
-router.use(requireSubscription);
 router.use(jobsRouter);
 router.use(outrosRouter);
 router.use(brandsRouter);
