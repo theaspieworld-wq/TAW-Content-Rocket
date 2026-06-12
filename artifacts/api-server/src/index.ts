@@ -80,23 +80,7 @@ if (!rawPort) throw new Error("PORT environment variable is required");
 const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
-async function loadYouTubeCookiesFromDb() {
-  try {
-    const result = await db.execute(
-      sql`SELECT value FROM app_config WHERE key = 'youtube_cookies'`
-    );
-    const value = (result as any).rows?.[0]?.value ?? null;
-    if (value && !process.env.YOUTUBE_COOKIES) {
-      process.env.YOUTUBE_COOKIES = value;
-      logger.info("YouTube cookies loaded from DB");
-    }
-  } catch (err) {
-    logger.warn({ err }, "Could not load YouTube cookies from DB (non-fatal)");
-  }
-}
-
 await runMigrations();
-await loadYouTubeCookiesFromDb();
 
 // Register webhook in background — don't block server startup
 registerStripeWebhook().catch((err) =>
