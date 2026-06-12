@@ -215,13 +215,18 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const cookiesFile = writeCookiesFile();
   const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
 
-  // Use yt-dlp's default android_vr client — works on server IPs without PO
-  // tokens or authentication.  Forcing specific clients (tv_embedded etc.)
-  // breaks on yt-dlp 2026+ so we let the tool pick the best available.
-  //
-  // Datacenter IPs (Replit production) are heavily rate-limited and bot-checked
-  // by YouTube, so we add retry/backoff and request throttling.  The reliable
-  // fix for "Sign in to confirm you're not a bot" is cookies (YOUTUBE_COOKIES).
+  // Proxy: if YTDLP_PROXY is set (e.g. http://user:pass@host:port), route all
+  // yt-dlp traffic through it.  A residential proxy is the most reliable
+  // cookieless fix for YouTube bot-detection on datacenter IPs — YouTube sees
+  // a home IP instead of a cloud server and doesn't challenge it.
+  const proxy = process.env.YTDLP_PROXY?.trim();
+  const proxyArgs = proxy ? ["--proxy", proxy] : [];
+
+  // Use the Android player client first: YouTube's Android API has lighter
+  // bot-detection than the browser client and often works from server IPs.
+  // Falls back to web client automatically if Android fails.
+  const clientArgs = ["--extractor-args", "youtube:player_client=android,web"];
+
   const resilienceArgs = [
     "--retries", "5",
     "--extractor-retries", "5",
@@ -232,11 +237,13 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   ];
   const baseArgs = [
     "--no-playlist",
+    ...proxyArgs,
+    ...clientArgs,
     ...cookiesArgs,
     ...resilienceArgs,
   ];
 
-  logger.info({ hasCookies: !!cookiesFile }, "yt-dlp download starting");
+  logger.info({ hasCookies: !!cookiesFile, hasProxy: !!proxy }, "yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
@@ -261,10 +268,11 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i.test(msg)) {
+      const fixes: string[] = [];
+      if (!proxy) fixes.push("set YTDLP_PROXY to a residential proxy URL (e.g. http://user:pass@host:port) — most reliable fix");
+      if (!cookiesFile) fixes.push("set YOUTUBE_COOKIES to a freshly exported Netscape cookies.txt from a logged-in browser");
       throw new Error(
-        cookiesFile
-          ? "YouTube blocked this download even with cookies. The cookies may have expired — please refresh the YOUTUBE_COOKIES secret with a freshly exported cookies file."
-          : "YouTube is blocking downloads from this server's IP (bot detection). To fix this, a YouTube cookies file must be provided via the YOUTUBE_COOKIES secret. See the app setup instructions.",
+        `YouTube is blocking downloads from this server's IP (bot detection).${fixes.length ? " To fix: " + fixes.join("; or ") + "." : " Both YTDLP_PROXY and YOUTUBE_COOKIES are set — the cookies may have expired."}`,
       );
     }
     throw e;
