@@ -234,6 +234,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isSavingCookies, setIsSavingCookies] = useState(false);
   const [isClearingCookies, setIsClearingCookies] = useState(false);
 
+  // Admin: YouTube proxy management
+  const [proxyText, setProxyText] = useState("");
+  const [proxyMasked, setProxyMasked] = useState<string | null>(null);
+  const [hasProxy, setHasProxy] = useState<boolean | null>(null);
+  const [isSavingProxy, setIsSavingProxy] = useState(false);
+  const [isClearingProxy, setIsClearingProxy] = useState(false);
+
   const { toast } = useToast();
 
   const downloadFile = async (url: string, filename?: string) => {
@@ -294,6 +301,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       .then(r => r.json())
       .then(d => setHasCookies(!!d.hasCookies))
       .catch(() => setHasCookies(false));
+    fetch(`${adminBase}/api/admin/youtube-proxy`)
+      .then(r => r.json())
+      .then(d => { setHasProxy(!!d.hasProxy); setProxyMasked(d.masked ?? null); })
+      .catch(() => setHasProxy(false));
   }, [isAdmin]);
 
   async function handleSaveCookies() {
@@ -327,6 +338,47 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       toast({ title: "Failed to clear cookies", variant: "destructive" });
     } finally {
       setIsClearingCookies(false);
+    }
+  }
+
+  async function handleSaveProxy() {
+    if (!proxyText.trim()) return;
+    setIsSavingProxy(true);
+    try {
+      const res = await fetch(`${adminBase}/api/admin/youtube-proxy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proxy: proxyText }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      setHasProxy(true);
+      setProxyText("");
+      // Refresh masked value
+      fetch(`${adminBase}/api/admin/youtube-proxy`)
+        .then(r => r.json())
+        .then(d => setProxyMasked(d.masked ?? null))
+        .catch(() => {});
+      toast({ title: "YouTube proxy saved", description: "Downloads now route through your proxy." });
+    } catch (e: any) {
+      toast({ title: "Failed to save proxy", description: e.message, variant: "destructive" });
+    } finally {
+      setIsSavingProxy(false);
+    }
+  }
+
+  async function handleClearProxy() {
+    setIsClearingProxy(true);
+    try {
+      const res = await fetch(`${adminBase}/api/admin/youtube-proxy`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Clear failed");
+      setHasProxy(false);
+      setProxyMasked(null);
+      toast({ title: "YouTube proxy cleared" });
+    } catch {
+      toast({ title: "Failed to clear proxy", variant: "destructive" });
+    } finally {
+      setIsClearingProxy(false);
     }
   }
 
@@ -1331,6 +1383,67 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                           className="px-3 h-8 rounded-lg border border-destructive/40 text-destructive text-[11px] font-semibold hover:bg-destructive/10 transition-colors disabled:opacity-50"
                         >
                           {isClearingCookies ? <Loader2 className="w-3 h-3 animate-spin" /> : "Clear"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* YouTube Proxy */}
+                  <div className="rounded-xl border border-border/60 bg-card/30 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">YouTube Proxy</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Most reliable fix. Routes downloads through a residential IP so YouTube never sees the server.</p>
+                      </div>
+                      {hasProxy === true && (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Active</span>
+                      )}
+                      {hasProxy === false && (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border/60">Not set</span>
+                      )}
+                    </div>
+
+                    {hasProxy && proxyMasked && (
+                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Current proxy</p>
+                        <code className="text-[10px] font-mono text-emerald-300 break-all">{proxyMasked}</code>
+                      </div>
+                    )}
+
+                    <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-1.5">
+                      <p className="text-[10px] font-semibold text-sky-400">Where to get one</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Sign up for a <span className="text-foreground font-medium">residential proxy</span> (e.g. Webshare, IPRoyal, Bright Data, Smartproxy). Copy the connection URL they give you.
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">Format:</p>
+                      <code className="block text-[9.5px] font-mono text-sky-300 break-all bg-sky-500/5 rounded px-1.5 py-1">http://user:pass@host:port</code>
+                      <p className="text-[10px] text-muted-foreground">socks5:// and https:// also work. A <span className="text-foreground font-medium">rotating residential</span> endpoint is best.</p>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={proxyText}
+                      onChange={e => setProxyText(e.target.value)}
+                      placeholder="http://user:pass@host:port"
+                      className="w-full text-[11px] font-mono bg-muted/30 border border-border/60 rounded-lg px-2.5 h-9 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveProxy}
+                        disabled={isSavingProxy || !proxyText.trim()}
+                        className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg bg-primary text-primary-foreground text-[11px] font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                      >
+                        {isSavingProxy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        {isSavingProxy ? "Saving…" : "Save Proxy"}
+                      </button>
+                      {hasProxy && (
+                        <button
+                          onClick={handleClearProxy}
+                          disabled={isClearingProxy}
+                          className="px-3 h-8 rounded-lg border border-destructive/40 text-destructive text-[11px] font-semibold hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                        >
+                          {isClearingProxy ? <Loader2 className="w-3 h-3 animate-spin" /> : "Clear"}
                         </button>
                       )}
                     </div>

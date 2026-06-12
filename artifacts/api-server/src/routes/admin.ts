@@ -75,4 +75,59 @@ router.delete("/admin/youtube-cookies", requireAdmin, async (_req, res) => {
   }
 });
 
+router.get("/admin/youtube-proxy", requireAdmin, async (_req, res) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT value FROM app_config WHERE key = 'youtube_proxy'`
+    );
+    const row = (result as any).rows?.[0];
+    if (!row) { res.json({ hasProxy: false, masked: null }); return; }
+    const url = Buffer.from(row.value, "base64").toString("utf8");
+    // Mask credentials before sending back to the client
+    const masked = url.replace(/\/\/([^:@/]+)(:[^@/]+)?@/, "//$1:****@");
+    res.json({ hasProxy: true, masked });
+  } catch (err: any) {
+    logger.error({ err }, "Failed to get youtube proxy status");
+    res.status(500).json({ error: "Failed to get proxy status" });
+  }
+});
+
+router.post("/admin/youtube-proxy", requireAdmin, async (req, res) => {
+  const { proxy } = req.body;
+  if (!proxy || typeof proxy !== "string" || !proxy.trim()) {
+    res.status(400).json({ error: "proxy URL required" }); return;
+  }
+  const url = proxy.trim();
+  if (!/^(https?|socks4|socks5|socks5h):\/\//i.test(url)) {
+    res.status(400).json({ error: "Proxy must start with http://, https://, socks5://, etc." });
+    return;
+  }
+
+  try {
+    const b64 = Buffer.from(url).toString("base64");
+    await db.execute(
+      sql`INSERT INTO app_config (key, value) VALUES ('youtube_proxy', ${b64})
+          ON CONFLICT (key) DO UPDATE SET value = excluded.value`
+    );
+    process.env.YTDLP_PROXY = url;
+    logger.info("YouTube proxy updated by admin");
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error({ err }, "Failed to save youtube proxy");
+    res.status(500).json({ error: "Failed to save proxy" });
+  }
+});
+
+router.delete("/admin/youtube-proxy", requireAdmin, async (_req, res) => {
+  try {
+    await db.execute(sql`DELETE FROM app_config WHERE key = 'youtube_proxy'`);
+    delete process.env.YTDLP_PROXY;
+    logger.info("YouTube proxy cleared by admin");
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error({ err }, "Failed to clear youtube proxy");
+    res.status(500).json({ error: "Failed to clear proxy" });
+  }
+});
+
 export default router;

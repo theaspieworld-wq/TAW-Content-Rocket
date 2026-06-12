@@ -1,0 +1,2 @@
+- [YouTube download bot-block](youtube-download-botblock.md) — datacenter IPs get "Sign in to confirm you're not a bot"; proxy is the reliable fix, cookies a fragile stopgap.
+- [Hot-loaded config via app_config](app-config-hot-reload.md) — secrets/config that must change without redeploy live in the `app_config` DB table, loaded into process.env at startup + on admin save.
