@@ -15,13 +15,27 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
   : "yt-dlp";
 
 
-// Write YOUTUBE_COOKIES (base64-encoded Netscape cookies.txt) to a temp file
-// and return its path, or null if the env var is not set.
+// Write YOUTUBE_COOKIES to a temp file and return its path, or null if unset.
+// Accepts EITHER a raw Netscape cookies.txt paste OR a base64-encoded one, so
+// users can simply paste the exported cookies.txt contents directly.
 function writeCookiesFile(): string | null {
-  const b64 = process.env.YOUTUBE_COOKIES;
-  if (!b64) return null;
+  const raw = process.env.YOUTUBE_COOKIES;
+  if (!raw || !raw.trim()) return null;
   try {
-    const content = Buffer.from(b64, "base64").toString("utf8");
+    let content = raw;
+    // Detect raw Netscape format: it contains the header comment or TAB-separated
+    // cookie rows.  If it doesn't look like cookies, assume it's base64.
+    const looksLikeNetscape =
+      raw.includes("# Netscape HTTP Cookie File") ||
+      raw.includes("# HTTP Cookie File") ||
+      /\t/.test(raw);
+    if (!looksLikeNetscape) {
+      content = Buffer.from(raw, "base64").toString("utf8");
+    }
+    if (!content.includes("\n")) {
+      logger.warn("YOUTUBE_COOKIES does not look like a valid cookies file — proceeding without cookies");
+      return null;
+    }
     const cookiePath = path.join(os.tmpdir(), `yt_cookies_${process.pid}.txt`);
     fs.writeFileSync(cookiePath, content, { mode: 0o600 });
     return cookiePath;
@@ -161,17 +175,30 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   // Use yt-dlp's default android_vr client — works on server IPs without PO
   // tokens or authentication.  Forcing specific clients (tv_embedded etc.)
   // breaks on yt-dlp 2026+ so we let the tool pick the best available.
+  //
+  // Datacenter IPs (Replit production) are heavily rate-limited and bot-checked
+  // by YouTube, so we add retry/backoff and request throttling.  The reliable
+  // fix for "Sign in to confirm you're not a bot" is cookies (YOUTUBE_COOKIES).
+  const resilienceArgs = [
+    "--retries", "5",
+    "--extractor-retries", "5",
+    "--retry-sleep", "exp=1:30",
+    "--sleep-requests", "1",
+    "--socket-timeout", "30",
+    "--force-ipv4",
+  ];
   const baseArgs = [
     "--no-playlist",
     ...cookiesArgs,
+    ...resilienceArgs,
   ];
 
-  logger.info("yt-dlp download starting");
+  logger.info({ hasCookies: !!cookiesFile }, "yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
   try {
-    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 30000, env: process.env });
+    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 60000, env: process.env });
     title = stdout.trim().split("\n")[0] || title;
   } catch (e) {
     logger.warn({ e }, "Could not fetch video title");
@@ -188,6 +215,16 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   try {
     await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i.test(msg)) {
+      throw new Error(
+        cookiesFile
+          ? "YouTube blocked this download even with cookies. The cookies may have expired — please refresh the YOUTUBE_COOKIES secret with a freshly exported cookies file."
+          : "YouTube is blocking downloads from this server's IP (bot detection). To fix this, a YouTube cookies file must be provided via the YOUTUBE_COOKIES secret. See the app setup instructions.",
+      );
+    }
+    throw e;
   } finally {
     // Clean up temp cookies file
     if (cookiesFile) {
