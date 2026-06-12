@@ -844,6 +844,9 @@ components:
         carouselCaption:
           type: string
           description: Instagram caption for the carousel post
+        podcastShowNotes:
+          type: string
+          description: SEO-ready podcast show notes in plain text — episode title, description, key takeaways, timestamps, CTA links, and keywords
       required:
         - videoTitle
         - thumbnailUrl
@@ -857,6 +860,7 @@ components:
         - instagramCaptions
         - carouselImages
         - carouselCaption
+        - podcastShowNotes
     Outro:
       type: object
       properties:

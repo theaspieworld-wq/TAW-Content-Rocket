@@ -1004,7 +1004,8 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
 {
   "blogPost": "SEO-OPTIMISED HTML BLOG POST. ALLOWED TAGS: <h1> <h2> <h3> <p> <strong> <em> <ul> <li> only. STRUCTURE: (1) <h1> SEO title. (2) 2-3 <p> hook paragraphs. (3) 6-8 <h2> sections each with 2-3 <p> paragraphs; use <h3> for sub-steps followed by <ul><li>. (4) LAST: <p><strong>TL;DR:</strong> 3-4 sentence summary</p>.${ctaSuffix} TARGET: minimum 1500 words.",
   "socialArticle": "HTML article for Facebook, Quora, LinkedIn. ALLOWED TAGS: <h2> <p> <strong> <em> <ul> <li> only. TARGET: 500 words. STRUCTURE: <p> hook. 2-3 <h2> sections. One <ul><li> list. Final <p> ending with: 'FREE autism life hacks book — link in comments.'",
-  "faqItems": [{"question": "FREQUENTLY ASKED QUESTION about the topic", "answer": "CLEAR, HELPFUL ANSWER (2-3 sentences)"}]
+  "faqItems": [{"question": "FREQUENTLY ASKED QUESTION about the topic", "answer": "CLEAR, HELPFUL ANSWER (2-3 sentences)"}],
+  "podcastShowNotes": "SEO-READY PODCAST SHOW NOTES — plain text only, no HTML, no markdown. Use this exact structure with the literal section headers shown:\n\nEPISODE TITLE:\n[Compelling, keyword-rich episode title — 60-70 chars]\n\nEPISODE DESCRIPTION:\n[2-3 sentences. Front-load the primary keyword. Summarise what the listener will learn. 200-280 chars total — this is what appears on Spotify/Apple Podcasts.]\n\nIN THIS EPISODE YOU'LL LEARN:\n• [Specific takeaway 1 — actionable]\n• [Specific takeaway 2 — actionable]\n• [Specific takeaway 3 — actionable]\n• [Specific takeaway 4 — actionable]\n• [Specific takeaway 5 — actionable]\n\nTIMESTAMPS:\n0:00 — Introduction\n[Generate 5-7 realistic timestamp entries based on the transcript flow — e.g. '2:15 — The core problem explained']\n\nRESOURCES & LINKS:${options?.contentCta ? `\n${options.contentCta}` : "\n[Add your website or resource links here]"}\n[Subscribe for more: link in bio]\n\nKEYWORDS:\n[10-12 SEO keywords and phrases from the topic, comma-separated — include long-tail variants]\n\nLIKE THIS EPISODE?\nLeave a review and share with someone who needs to hear this."
 }`;
 
   const [responseA, responseB] = await Promise.all([
@@ -1119,6 +1120,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     instagramCaptions: Array.isArray(a.instagramCaptions) ? (a.instagramCaptions as string[]).slice(0, 5) : [],
     carouselImages,
     carouselCaption: (a.carouselCaption as string) ?? "",
+    podcastShowNotes: (b.podcastShowNotes as string) ?? "",
   };
 }
 
