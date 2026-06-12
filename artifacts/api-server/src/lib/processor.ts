@@ -188,6 +188,15 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
   try {
     await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
+  } catch (err: any) {
+    const stderr: string = err?.stderr ?? err?.message ?? "";
+    if (stderr.includes("Sign in to confirm") || stderr.includes("bot") || stderr.includes("confirm you")) {
+      throw new Error(
+        "YouTube blocked this download (bot detection on server IP). " +
+        "Fix: go to Admin → YouTube Cookies and paste your YouTube cookies."
+      );
+    }
+    throw err;
   } finally {
     if (cookiesFile) {
       try { fs.unlinkSync(cookiesFile); } catch { /* ignore */ }
