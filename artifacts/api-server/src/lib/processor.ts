@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
@@ -9,6 +9,34 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 
 const execFileAsync = promisify(execFile);
+
+/** Resolve a system binary to its full path so it works in deployed containers
+ *  where the Nix runtime bin dir may not be on PATH. */
+function resolveBinary(name: string): string {
+  // 1. Try which — works if the binary is already on the process PATH
+  try {
+    const result = execFileSync("which", [name], {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (result) return result;
+  } catch { /* ignore */ }
+  // 2. Check standard Nix / Linux locations
+  const candidates = [
+    `/nix/var/nix/profiles/default/bin/${name}`,
+    `/run/current-system/sw/bin/${name}`,
+    `/usr/local/bin/${name}`,
+    `/usr/bin/${name}`,
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  // 3. Fall back to bare name and let the OS sort it out
+  return name;
+}
+
+const FFMPEG  = resolveBinary("ffmpeg");
+const FFPROBE = resolveBinary("ffprobe");
 
 const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
   ? "/home/runner/workspace/bin/yt-dlp"
@@ -292,7 +320,7 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
 
 async function extractAudio(videoPath: string, outputDir: string): Promise<string> {
   const audioPath = path.join(outputDir, "audio.mp3");
-  await execFileAsync("ffmpeg", [
+  await execFileAsync(FFMPEG, [
     "-i", videoPath, "-vn", "-ar", "16000", "-ac", "1", "-b:a", "64k", audioPath, "-y",
   ], { timeout: 120000 });
   return audioPath;
@@ -462,7 +490,7 @@ Titles must be ALL CAPS, max 8 words, punchy and hook-oriented. Return ONLY the 
 }
 
 async function getVideoDuration(videoPath: string): Promise<number> {
-  const { stdout } = await execFileAsync("ffprobe", [
+  const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "quiet", "-print_format", "json", "-show_format", videoPath,
   ], { timeout: 30000 });
   const info = JSON.parse(stdout);
@@ -564,7 +592,7 @@ async function generateCarouselSlides(
         ? ["-i", bgPath, "-vf", filters.join(","), "-frames:v", "1", "-y", outputPath]
         : ["-f", "lavfi", "-i", "color=c=black:s=1080x1080:d=1", "-vf", filters.join(","), "-frames:v", "1", "-y", outputPath];
 
-      await execFileAsync("ffmpeg", ffmpegArgs, { timeout: 30000 });
+      await execFileAsync(FFMPEG, ffmpegArgs, { timeout: 30000 });
 
       if (bgPath) {
         try { fs.unlinkSync(bgPath); } catch (_) {}
@@ -614,7 +642,7 @@ export async function generatePodcastAudio(
 
     if (!introPath && !outroPath) {
       // Simple extraction — no mixing needed
-      await execFileAsync("ffmpeg", [
+      await execFileAsync(FFMPEG, [
         "-i", videoPath,
         "-vn",
         "-acodec", "libmp3lame",
@@ -628,7 +656,7 @@ export async function generatePodcastAudio(
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `podcast_${jobId}_`));
       const mainAudioPath = path.join(tempDir, "main.mp3");
 
-      await execFileAsync("ffmpeg", [
+      await execFileAsync(FFMPEG, [
         "-i", videoPath,
         "-vn",
         "-acodec", "libmp3lame",
@@ -646,7 +674,7 @@ export async function generatePodcastAudio(
       if (outroPath) parts.push(`file '${outroPath}'`);
       fs.writeFileSync(concatListPath, parts.join("\n"));
 
-      await execFileAsync("ffmpeg", [
+      await execFileAsync(FFMPEG, [
         "-f", "concat",
         "-safe", "0",
         "-i", concatListPath,
@@ -679,7 +707,7 @@ async function renderMainClip(
 ): Promise<void> {
   const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
 
-  await execFileAsync("ffmpeg", [
+  await execFileAsync(FFMPEG, [
     "-ss", startSeconds.toString(),
     "-i", videoPath,
     "-t", (endSeconds - startSeconds).toString(),
@@ -732,7 +760,7 @@ async function renderFullFacebookVideo(
 ): Promise<void> {
   const squareCrop = "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080";
 
-  await execFileAsync("ffmpeg", [
+  await execFileAsync(FFMPEG, [
     "-i", videoPath,
     "-vf", squareCrop,
     "-c:v", "libx264", "-preset", "fast", "-crf", "18",
@@ -749,7 +777,7 @@ async function prepareOutroWithCta(
   outputPath: string,
 ): Promise<void> {
   if (!ctaText || ctaText.trim() === "") {
-    await execFileAsync("ffmpeg", [
+    await execFileAsync(FFMPEG, [
       "-i", outroFilePath,
       "-c:v", "libx264", "-preset", "fast", "-crf", "23",
       "-c:a", "aac", "-b:a", "128k",
@@ -763,7 +791,7 @@ async function prepareOutroWithCta(
   const outroText = escapeFfmpegText(ctaText.toUpperCase());
   const ctaFilter = `drawtext=text='${outroText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=30:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='gte(t,${startSec.toFixed(2)})':borderw=3:bordercolor=black@0.8`;
 
-  await execFileAsync("ffmpeg", [
+  await execFileAsync(FFMPEG, [
     "-i", outroFilePath,
     "-vf", ctaFilter,
     "-c:v", "libx264", "-preset", "fast", "-crf", "23",
@@ -781,7 +809,7 @@ async function concatenateClipWithOutro(
   tempDir: string,
   uniqueId: number | string,
 ): Promise<void> {
-  const { stdout } = await execFileAsync("ffprobe", [
+  const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "quiet", "-print_format", "json", "-show_streams",
     "-select_streams", "v:0", mainClipPath,
   ], { timeout: 30000 });
@@ -793,7 +821,7 @@ async function concatenateClipWithOutro(
 
   // Use uniqueId in temp filenames to prevent collisions when clips render in parallel
   const scaledOutroPath = path.join(tempDir, `outro_scaled_${uniqueId}.mp4`);
-  await execFileAsync("ffmpeg", [
+  await execFileAsync(FFMPEG, [
     "-i", outroPath,
     "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
     "-c:v", "libx264", "-preset", "fast", "-crf", "23",
@@ -808,7 +836,7 @@ async function concatenateClipWithOutro(
     : `file '${mainClipPath}'\nfile '${scaledOutroPath}'\n`;
   fs.writeFileSync(concatListPath, concatContent);
 
-  await execFileAsync("ffmpeg", [
+  await execFileAsync(FFMPEG, [
     "-f", "concat",
     "-safe", "0",
     "-i", concatListPath,
