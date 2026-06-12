@@ -18,13 +18,18 @@ import {
   useCreateBrand,
   useUpdateBrand,
   useDeleteBrand,
+  useListBrandDocuments,
+  useUploadBrandDocument,
+  useDeleteBrandDocument,
   getGetJobQueryKey,
   getListJobsQueryKey,
   getHealthCheckQueryKey,
   getListOutrosQueryKey,
   getListBrandsQueryKey,
   getGetJobContentQueryKey,
+  getListBrandDocumentsQueryKey,
   type Brand,
+  type BrandDocument,
 } from "@workspace/api-client-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -302,6 +307,14 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const createBrand = useCreateBrand();
   const updateBrand = useUpdateBrand();
   const deleteBrand = useDeleteBrand();
+  const uploadBrandDoc = useUploadBrandDocument();
+  const deleteBrandDocMutation = useDeleteBrandDocument();
+
+  // Load documents for whichever brand is currently expanded
+  const { data: brandDocuments } = useListBrandDocuments(
+    expandedBrandId ?? 0,
+    { query: { enabled: expandedBrandId !== null, queryKey: getListBrandDocumentsQueryKey(expandedBrandId ?? 0) } }
+  );
 
   const { data: jobContent, isLoading: isContentLoading } = useGetJobContent(
     selectedJobId as number,
@@ -837,6 +850,24 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
+                      {/* YouTube / source URL — always visible, copyable */}
+                      {job.youtubeUrl && !job.youtubeUrl.startsWith("upload://") && !job.youtubeUrl.startsWith("transcript://") && (
+                        <div className="flex items-center gap-1 mb-1.5 group/url">
+                          <span className="text-[10px] font-mono text-muted-foreground/55 truncate flex-1 min-w-0">
+                            {job.youtubeUrl.replace(/^https?:\/\/(www\.)?/, "").replace(/\?.*$/, "")}
+                          </span>
+                          <button
+                            className="opacity-0 group-hover/url:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-muted/60"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(job.youtubeUrl ?? "");
+                              toast({ title: "Copied!", description: "Source URL copied to clipboard." });
+                            }}
+                          >
+                            <Copy className="w-2.5 h-2.5 text-muted-foreground/70" />
+                          </button>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between mt-2">
                         <Badge variant="outline" className={`px-1.5 py-0.5 text-[10px] font-medium ${getStatusColor(job.status)}`}>
                           {getStatusLabel(job.status)}
@@ -866,7 +897,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           {/* Brands tab */}
           <TabsContent value="brands" className="flex-1 overflow-hidden m-0 border-none outline-none">
             <ScrollArea className="h-full">
-              <div className="p-4 space-y-4">
+              <div className="pt-4 pl-4 pb-4 pr-5 space-y-4">
                 <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1 flex items-center gap-2">
                   Brand Profiles <div className="h-px bg-border flex-1" />
                 </div>
@@ -1116,6 +1147,60 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                 </Button>
                               </>
                             )}
+
+                            {/* Brand Guide Documents */}
+                            <div className="space-y-2 pt-1">
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Brand Guide</p>
+                              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">Upload a PDF or text doc — AI uses it to match your brand voice, style, and terminology.</p>
+
+                              {/* Existing docs */}
+                              {expandedBrandId !== null && brandDocuments && brandDocuments.length > 0 && (
+                                <div className="space-y-1">
+                                  {(brandDocuments as BrandDocument[]).map((doc) => (
+                                    <div key={doc.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                                      <FileText className="w-3 h-3 text-emerald-500 shrink-0" />
+                                      <span className="text-[10px] text-foreground/80 truncate flex-1">{doc.name}</span>
+                                      <Button
+                                        variant="ghost" size="icon"
+                                        className="h-5 w-5 shrink-0 hover:bg-destructive/10 hover:text-destructive"
+                                        onClick={() => deleteBrandDocMutation.mutate(
+                                          { id: expandedBrandId!, docId: doc.id },
+                                          { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListBrandDocumentsQueryKey(expandedBrandId!) }) }
+                                        )}
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Upload */}
+                              <label className={`flex items-center gap-2 p-2.5 rounded-lg border border-dashed cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/30 ${uploadBrandDoc.isPending ? "opacity-60 pointer-events-none" : "border-border/50 bg-card/30"}`}>
+                                {uploadBrandDoc.isPending
+                                  ? <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+                                  : <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+                                }
+                                <span className="text-[10px] text-muted-foreground">{uploadBrandDoc.isPending ? "Uploading…" : "Upload PDF, TXT, or DOCX"}</span>
+                                <input
+                                  type="file"
+                                  accept=".pdf,.txt,.md,.doc,.docx"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file || expandedBrandId === null) return;
+                                    try {
+                                      await uploadBrandDoc.mutateAsync({ id: expandedBrandId, data: { file } });
+                                      queryClient.invalidateQueries({ queryKey: getListBrandDocumentsQueryKey(expandedBrandId) });
+                                      toast({ title: "Brand guide uploaded", description: "AI will reference it in all content generation." });
+                                    } catch {
+                                      toast({ title: "Upload failed", variant: "destructive" });
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
 
                             {/* File uploads */}
                             <div className="space-y-2 pt-1">
