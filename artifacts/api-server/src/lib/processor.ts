@@ -16,28 +16,53 @@ const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
 
 
 // Write YOUTUBE_COOKIES to a temp file and return its path, or null if unset.
-// Accepts EITHER a raw Netscape cookies.txt paste OR a base64-encoded one, so
-// users can simply paste the exported cookies.txt contents directly.
+// Accepts:
+//   1. Raw Netscape cookies.txt content (actual newlines + tabs)
+//   2. Escaped version where \n/\t are literal two-character sequences
+//      (Replit secrets UI sometimes stores multiline values this way)
+//   3. Base64-encoded Netscape cookies.txt
 function writeCookiesFile(): string | null {
   const raw = process.env.YOUTUBE_COOKIES;
-  if (!raw || !raw.trim()) return null;
+  if (!raw || !raw.trim()) {
+    logger.info("YOUTUBE_COOKIES not set — downloading without cookies");
+    return null;
+  }
   try {
+    logger.info(
+      { len: raw.length, hasActualNewline: raw.includes("\n"), hasEscapedNewline: raw.includes("\\n"), hasTab: /\t/.test(raw), hasEscapedTab: raw.includes("\\t"), preview: raw.slice(0, 60).replace(/\n/g, "↵") },
+      "YOUTUBE_COOKIES detected — processing",
+    );
+
     let content = raw;
-    // Detect raw Netscape format: it contains the header comment or TAB-separated
-    // cookie rows.  If it doesn't look like cookies, assume it's base64.
-    const looksLikeNetscape =
-      raw.includes("# Netscape HTTP Cookie File") ||
-      raw.includes("# HTTP Cookie File") ||
-      /\t/.test(raw);
-    if (!looksLikeNetscape) {
-      content = Buffer.from(raw, "base64").toString("utf8");
+
+    // If the secret was stored with escaped sequences (no actual newlines but
+    // has literal \n), unescape it first so the rest of the logic works.
+    if (!raw.includes("\n") && raw.includes("\\n")) {
+      content = raw.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+      logger.info("YOUTUBE_COOKIES: unescaped \\n/\\t sequences");
     }
+
+    // Detect raw Netscape format: has header comment or tab-separated cookie rows.
+    // If it doesn't look like Netscape, assume it's base64-encoded.
+    const looksLikeNetscape =
+      content.includes("# Netscape HTTP Cookie File") ||
+      content.includes("# HTTP Cookie File") ||
+      content.includes("youtube.com") ||
+      /\t/.test(content);
+
+    if (!looksLikeNetscape) {
+      logger.info("YOUTUBE_COOKIES: attempting base64 decode");
+      content = Buffer.from(content.trim(), "base64").toString("utf8");
+    }
+
     if (!content.includes("\n")) {
-      logger.warn("YOUTUBE_COOKIES does not look like a valid cookies file — proceeding without cookies");
+      logger.warn({ len: content.length }, "YOUTUBE_COOKIES has no newlines after processing — invalid format, proceeding without cookies");
       return null;
     }
+
     const cookiePath = path.join(os.tmpdir(), `yt_cookies_${process.pid}.txt`);
     fs.writeFileSync(cookiePath, content, { mode: 0o600 });
+    logger.info({ cookiePath, lines: content.split("\n").length }, "YOUTUBE_COOKIES written to temp file");
     return cookiePath;
   } catch (e) {
     logger.warn({ e }, "Failed to write YouTube cookies file — proceeding without cookies");
