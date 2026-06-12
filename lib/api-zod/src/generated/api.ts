@@ -446,6 +446,11 @@ export const GetJobContentResponse = zod.object({
   carouselCaption: zod
     .string()
     .describe("Instagram caption for the carousel post"),
+  podcastShowNotes: zod
+    .string()
+    .describe(
+      "SEO-ready podcast show notes in plain text — episode title, description, key takeaways, timestamps, CTA links, and keywords",
+    ),
 });
 
 /**
@@ -489,6 +494,11 @@ export const RegenerateJobContentResponse = zod.object({
   carouselCaption: zod
     .string()
     .describe("Instagram caption for the carousel post"),
+  podcastShowNotes: zod
+    .string()
+    .describe(
+      "SEO-ready podcast show notes in plain text — episode title, description, key takeaways, timestamps, CTA links, and keywords",
+    ),
 });
 
 /**

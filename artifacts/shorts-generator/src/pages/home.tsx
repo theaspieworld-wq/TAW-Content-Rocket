@@ -1832,7 +1832,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                             <Image className="w-3.5 h-3.5" /> Carousel
                           </TabsTrigger>
                         )}
-                        {(jobWithClips as any).hasPodcast && (
+                        {((jobWithClips as any).hasPodcast || jobContent.podcastShowNotes) && (
                           <TabsTrigger value="podcast" className="text-xs font-semibold gap-1.5 data-[state=active]:bg-background">
                             <Mic className="w-3.5 h-3.5" /> Podcast
                           </TabsTrigger>
@@ -2076,32 +2076,63 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       )}
 
                       {/* Podcast */}
-                      {(jobWithClips as any).hasPodcast && (
+                      {((jobWithClips as any).hasPodcast || jobContent.podcastShowNotes) && (
                         <TabsContent value="podcast" className="m-0">
                           <div className="rounded-xl border border-border bg-card p-6 space-y-5">
+                            {/* Header */}
                             <div className="flex items-center gap-2">
                               <div className="bg-emerald-500/10 p-2 rounded-lg">
                                 <Mic className="w-5 h-5 text-emerald-400" />
                               </div>
                               <div>
-                                <h3 className="text-sm font-bold">Podcast Audio</h3>
-                                <p className="text-xs text-muted-foreground">Full-length MP3 with brand intro &amp; outro audio</p>
+                                <h3 className="text-sm font-bold">Podcast</h3>
+                                <p className="text-xs text-muted-foreground">SEO show notes + MP3 audio file</p>
                               </div>
                             </div>
-                            <div className="bg-muted/30 rounded-lg border border-border/40 p-4 flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                  <Mic className="w-4 h-4 text-emerald-400" />
+
+                            {/* MP3 download — only when file exists */}
+                            {(jobWithClips as any).hasPodcast && (
+                              <div className="bg-muted/30 rounded-lg border border-border/40 p-4 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                    <Mic className="w-4 h-4 text-emerald-400" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold truncate">{(jobWithClips as any).videoTitle ?? "Podcast Episode"}</p>
+                                    <p className="text-xs text-muted-foreground">MP3 Audio File</p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold truncate">{(jobWithClips as any).videoTitle ?? "Podcast Episode"}</p>
-                                  <p className="text-xs text-muted-foreground">MP3 Audio File</p>
-                                </div>
+                                <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" onClick={() => downloadDirect(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
+                                  <Download className="w-4 h-4" /> Download MP3
+                                </Button>
                               </div>
-                              <Button variant="outline" className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 shrink-0" onClick={() => downloadDirect(`/api/jobs/${jobWithClips.id}/download-podcast`)}>
-                                <Download className="w-4 h-4" /> Download MP3
-                              </Button>
-                            </div>
+                            )}
+
+                            {/* Show notes */}
+                            {jobContent.podcastShowNotes && (
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-sm font-semibold">Show Notes</p>
+                                    <p className="text-xs text-muted-foreground">SEO-ready — copy and paste into your podcast uploader (Buzzsprout, Spotify, Apple Podcasts…)</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 h-8 text-xs shrink-0"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(jobContent.podcastShowNotes ?? "");
+                                      toast({ title: "Copied!", description: "Show notes copied to clipboard." });
+                                    }}
+                                  >
+                                    <Copy className="w-3.5 h-3.5" /> Copy All
+                                  </Button>
+                                </div>
+                                <pre className="bg-muted/40 border border-border/60 rounded-xl p-4 text-xs text-foreground/90 whitespace-pre-wrap font-mono leading-relaxed max-h-[520px] overflow-y-auto select-all">
+                                  {jobContent.podcastShowNotes}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         </TabsContent>
                       )}

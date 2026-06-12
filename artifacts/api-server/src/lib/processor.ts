@@ -201,6 +201,7 @@ export interface GeneratedContent {
   instagramCaptions: string[];
   carouselImages: string[];
   carouselCaption: string;
+  podcastShowNotes: string;
 }
 
 async function updateJobStatus(jobId: number, status: string, extra?: { videoTitle?: string; errorMessage?: string }): Promise<void> {

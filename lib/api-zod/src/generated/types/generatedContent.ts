@@ -28,4 +28,6 @@ export interface GeneratedContent {
   carouselImages: string[];
   /** Instagram caption for the carousel post */
   carouselCaption: string;
+  /** SEO-ready podcast show notes in plain text — episode title, description, key takeaways, timestamps, CTA links, and keywords */
+  podcastShowNotes: string;
 }
