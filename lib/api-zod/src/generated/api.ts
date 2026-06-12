@@ -272,6 +272,9 @@ export const ListJobsResponseItem = zod.object({
     .describe("Whether AI content has been generated for this job"),
   hasFacebookVideo: zod.boolean(),
   hasPodcast: zod.boolean(),
+  generatePodcast: zod
+    .boolean()
+    .describe("Whether podcast generation was requested for this job"),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -285,9 +288,15 @@ export const createJobBodyClipCountMin = 0;
 export const createJobBodyClipCountMax = 10;
 
 export const createJobBodyClipDurationSecondsDefault = 45;
+export const createJobBodyGeneratePodcastDefault = true;
 
 export const CreateJobBody = zod.object({
-  youtubeUrl: zod.string(),
+  youtubeUrl: zod
+    .string()
+    .optional()
+    .describe(
+      "YouTube or Facebook video URL. Required unless manualTranscript is provided.",
+    ),
   clipCount: zod
     .number()
     .min(createJobBodyClipCountMin)
@@ -310,6 +319,18 @@ export const CreateJobBody = zod.object({
     .nullish()
     .describe(
       'JSON array of brand outro IDs to rotate through, e.g. \"[1,2,3]\"',
+    ),
+  manualTranscript: zod
+    .string()
+    .nullish()
+    .describe(
+      "Paste a transcript directly to skip YouTube download and transcription. When provided, youtubeUrl is optional and no video clips or podcast will be generated.",
+    ),
+  generatePodcast: zod
+    .boolean()
+    .default(createJobBodyGeneratePodcastDefault)
+    .describe(
+      "Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided.",
     ),
 });
 
@@ -349,6 +370,9 @@ export const GetJobResponse = zod
       .describe("Whether AI content has been generated for this job"),
     hasFacebookVideo: zod.boolean(),
     hasPodcast: zod.boolean(),
+    generatePodcast: zod
+      .boolean()
+      .describe("Whether podcast generation was requested for this job"),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })

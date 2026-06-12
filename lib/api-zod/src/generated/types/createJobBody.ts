@@ -7,7 +7,8 @@
  */
 
 export interface CreateJobBody {
-  youtubeUrl: string;
+  /** YouTube or Facebook video URL. Required unless manualTranscript is provided. */
+  youtubeUrl?: string;
   /**
    * @minimum 0
    * @maximum 10
@@ -29,4 +30,11 @@ export interface CreateJobBody {
    * @nullable
    */
   brandOutroIds?: string | null;
+  /**
+   * Paste a transcript directly to skip YouTube download and transcription. When provided, youtubeUrl is optional and no video clips or podcast will be generated.
+   * @nullable
+   */
+  manualTranscript?: string | null;
+  /** Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided. */
+  generatePodcast?: boolean;
 }

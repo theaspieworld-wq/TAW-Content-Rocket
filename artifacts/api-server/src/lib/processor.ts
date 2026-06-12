@@ -152,6 +152,24 @@ interface TranscriptSegment {
   text: string;
 }
 
+// Convert plain-text transcript into timed segments by estimating timing at
+// ~2.5 words per second (150 wpm average speaking pace).
+function textToTranscriptSegments(text: string): TranscriptSegment[] {
+  const WORDS_PER_SECOND = 2.5;
+  const rawSentences = text.match(/[^.!?\n]+[.!?\n]*/g) ?? [text];
+  let currentTime = 0;
+  return rawSentences
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(sentence => {
+      const wordCount = sentence.split(/\s+/).filter(Boolean).length;
+      const duration = Math.max(0.5, wordCount / WORDS_PER_SECOND);
+      const seg: TranscriptSegment = { start: currentTime, end: currentTime + duration, text: sentence };
+      currentTime += duration + 0.1;
+      return seg;
+    });
+}
+
 interface ClipSegment {
   title: string;
   startSeconds: number;
@@ -1155,6 +1173,38 @@ export async function processJob(jobId: number): Promise<void> {
     }
 
     const clipDuration = job.clipDurationSeconds ?? 45;
+    const wantPodcast = job.generatePodcast !== "false";
+
+    // ── Transcript-only mode ─────────────────────────────────────────────────
+    // When a manual transcript is pasted, skip download, audio extraction, and
+    // all video rendering.  We convert the plain text to timed segments using
+    // an estimated speaking pace and run content generation only.
+    if (job.manualTranscript) {
+      logger.info({ jobId }, "Manual transcript provided — skipping download and transcription");
+      const title = job.videoTitle || "Pasted Transcript";
+      const transcript = textToTranscriptSegments(job.manualTranscript);
+      await db.update(jobsTable).set({ transcript: JSON.stringify(transcript) }).where(eq(jobsTable.id, jobId));
+      await updateJobStatus(jobId, "analyzing");
+      try {
+        const content = await generateContent(job.youtubeUrl, title, transcript, {
+          brandVoice: brand?.voiceStyle ?? null,
+          contentCta: job.contentCta ?? null,
+          brandName: brand?.name ?? null,
+          brandWebsite: brand?.website ?? null,
+          brandDocuments: brandDocumentTexts,
+          jobId,
+          brand,
+          tempDir,
+        });
+        await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
+        logger.info({ jobId }, "Content generation completed for transcript job");
+      } catch (e) {
+        logger.warn({ e, jobId }, "Content generation failed for transcript job — completing anyway");
+      }
+      await updateJobStatus(jobId, "completed");
+      logger.info({ jobId }, "Transcript-only job completed");
+      return;
+    }
 
     // Step 1: Download or use uploaded local file
     await updateJobStatus(jobId, "downloading");
@@ -1345,7 +1395,8 @@ export async function processJob(jobId: number): Promise<void> {
       }
 
       // Steps 6 & 7: Facebook square video + podcast audio run in parallel — both only need the source video
-      await updateJobStatus(jobId, "rendering", { errorMessage: "Rendering Facebook video & podcast audio…" });
+      const step67Label = wantPodcast ? "Rendering Facebook video & podcast audio…" : "Rendering Facebook video…";
+      await updateJobStatus(jobId, "rendering", { errorMessage: step67Label });
       await Promise.allSettled([
         (async () => {
           try {
@@ -1357,6 +1408,7 @@ export async function processJob(jobId: number): Promise<void> {
           }
         })(),
         (async () => {
+          if (!wantPodcast) { logger.info({ jobId }, "Podcast generation skipped (disabled)"); return; }
           try {
             await generatePodcastAudio(jobId, videoPath, brand);
           } catch (podErr) {
@@ -1365,12 +1417,14 @@ export async function processJob(jobId: number): Promise<void> {
         })(),
       ]);
     } else {
-      // No clips — still generate podcast audio
-      try {
-        await updateJobStatus(jobId, "rendering", { errorMessage: "Generating podcast audio…" });
-        await generatePodcastAudio(jobId, videoPath, brand);
-      } catch (podErr) {
-        logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
+      // No clips — still generate podcast audio if enabled
+      if (wantPodcast) {
+        try {
+          await updateJobStatus(jobId, "rendering", { errorMessage: "Generating podcast audio…" });
+          await generatePodcastAudio(jobId, videoPath, brand);
+        } catch (podErr) {
+          logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
+        }
       }
     }
 

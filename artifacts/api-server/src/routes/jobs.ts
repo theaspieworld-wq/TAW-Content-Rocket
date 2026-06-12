@@ -57,6 +57,7 @@ function jobToJson(j: typeof jobsTable.$inferSelect) {
     hasContent: j.generatedContent != null,
     hasFacebookVideo: fs.existsSync(facebookPath),
     hasPodcast: fs.existsSync(podcastPath),
+    generatePodcast: j.generatePodcast !== "false",
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
   };
@@ -80,9 +81,16 @@ router.post("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
-  const { youtubeUrl, clipCount, clipDurationSeconds, contentCta, outroId, brandId } = parsed.data;
+  const { youtubeUrl, clipCount, clipDurationSeconds, contentCta, outroId, brandId, manualTranscript, generatePodcast } = parsed.data;
   const count = clipCount ?? 9;
   const clipDur = clipDurationSeconds ?? 45;
+
+  // Either a URL or a manual transcript must be provided
+  const resolvedUrl = youtubeUrl?.trim() || (manualTranscript ? "transcript://manual" : "");
+  if (!resolvedUrl) {
+    res.status(400).json({ error: "Please provide a YouTube URL or paste a transcript" });
+    return;
+  }
 
   if (outroId != null) {
     const [outro] = await db.select().from(outrosTable)
@@ -104,13 +112,15 @@ router.post("/jobs", async (req, res): Promise<void> => {
 
   const [job] = await db.insert(jobsTable).values({
     userId,
-    youtubeUrl,
+    youtubeUrl: resolvedUrl,
     clipCount: count,
     clipDurationSeconds: clipDur,
     contentCta: contentCta ?? null,
     status: "pending",
     outroId: outroId ?? null,
     brandId: brandId ?? null,
+    manualTranscript: manualTranscript ?? null,
+    generatePodcast: generatePodcast === false ? "false" : "true",
   }).returning();
 
   processJob(job.id).catch(() => {});

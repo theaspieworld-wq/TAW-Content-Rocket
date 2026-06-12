@@ -32,6 +32,8 @@ export interface Job {
   hasContent: boolean;
   hasFacebookVideo: boolean;
   hasPodcast: boolean;
+  /** Whether podcast generation was requested for this job */
+  generatePodcast: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

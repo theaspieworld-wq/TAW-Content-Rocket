@@ -120,6 +120,8 @@ const formSchema = z.object({
   outroId: z.string().optional(),
   brandId: z.string().min(1, { message: "Please select a brand before running" }),
   includeShorts: z.boolean().default(true),
+  generatePodcast: z.boolean().default(true),
+  manualTranscript: z.string().optional(),
 });
 
 function getStatusProgress(status: string) {
@@ -223,7 +225,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [editPosition, setEditPosition] = useState<"beginning" | "end">("end");
   const [editCtaText, setEditCtaText] = useState("");
   const [editCtaStartSeconds, setEditCtaStartSeconds] = useState<number | "">("");
-  const [sourceType, setSourceType] = useState<"youtube" | "facebook" | "upload">("youtube");
+  const [sourceType, setSourceType] = useState<"youtube" | "facebook" | "upload" | "transcript">("youtube");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -375,10 +377,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       outroId: "none",
       brandId: "",
       includeShorts: true,
+      generatePodcast: true,
+      manualTranscript: "",
     },
   });
 
   const includeShorts = form.watch("includeShorts");
+  const generatePodcast = form.watch("generatePodcast");
   const selectedDuration = form.watch("clipDurationSeconds");
   const selectedBrandId = form.watch("brandId");
 
@@ -420,7 +425,39 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       outroId: values.outroId,
       brandId: values.brandId,
       includeShorts: values.includeShorts,
+      generatePodcast: values.generatePodcast,
+      manualTranscript: "",
     };
+
+    if (sourceType === "transcript") {
+      const transcript = (values.manualTranscript ?? "").trim();
+      if (!transcript) {
+        form.setError("manualTranscript", { message: "Please paste the video transcript" });
+        return;
+      }
+      const payload = {
+        clipCount: 0,
+        clipDurationSeconds: values.clipDurationSeconds ?? 45,
+        contentCta: values.contentCta?.trim() || undefined,
+        outroId: null as number | null,
+        brandId: values.brandId && values.brandId !== "none" ? parseInt(values.brandId, 10) : null as number | null,
+        manualTranscript: transcript,
+        generatePodcast: false,
+      };
+      createJob.mutate({ data: payload }, {
+        onSuccess: (newJob) => {
+          form.reset(sharedReset);
+          setSelectedJobId(newJob.id);
+          toast({ title: "Job Created 🚀", description: "Generating content from your transcript…" });
+          queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        },
+        onError: (error: any) => {
+          const message = error?.data?.error || error?.message?.replace(/^HTTP \d+ [^:]+:\s*/, "") || "Failed to create job.";
+          toast({ title: "Error", description: message, variant: "destructive" });
+        },
+      });
+      return;
+    }
 
     if (sourceType === "upload") {
       if (!uploadFile) {
@@ -488,6 +525,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       contentCta: values.contentCta?.trim() || undefined,
       outroId: values.outroId && values.outroId !== "none" ? parseInt(values.outroId, 10) : null,
       brandId: values.brandId && values.brandId !== "none" ? parseInt(values.brandId, 10) : null,
+      generatePodcast: values.generatePodcast ?? true,
     };
 
     createJob.mutate({ data: payload }, {
@@ -1335,14 +1373,15 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                 {/* Source type pills */}
                 <div className="flex items-center gap-1 bg-background/60 border border-border/60 rounded-xl p-1 w-fit">
                   {([ 
-                    { type: "youtube" as const, label: "YouTube", Icon: Youtube },
-                    { type: "facebook" as const, label: "Facebook", Icon: Facebook },
-                    { type: "upload" as const,   label: "Upload File", Icon: Upload },
+                    { type: "youtube" as const,     label: "YouTube",         Icon: Youtube },
+                    { type: "facebook" as const,    label: "Facebook",        Icon: Facebook },
+                    { type: "upload" as const,      label: "Upload File",     Icon: Upload },
+                    { type: "transcript" as const,  label: "Paste Transcript", Icon: FileText },
                   ]).map(({ type, label, Icon }) => (
                     <button
                       key={type}
                       type="button"
-                      onClick={() => { setSourceType(type); setUploadFile(null); form.clearErrors("youtubeUrl"); }}
+                      onClick={() => { setSourceType(type); setUploadFile(null); form.clearErrors("youtubeUrl"); form.clearErrors("manualTranscript"); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         sourceType === type
                           ? "bg-primary text-primary-foreground shadow-sm"
@@ -1355,9 +1394,26 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                   ))}
                 </div>
 
-                {/* URL input or file dropzone + submit button */}
+                {/* URL input / file dropzone / transcript textarea + submit button */}
                 <div className="flex flex-col sm:flex-row gap-3 items-start w-full">
-                  {sourceType !== "upload" ? (
+                  {sourceType === "transcript" ? (
+                    <FormField
+                      control={form.control}
+                      name="manualTranscript"
+                      render={({ field }) => (
+                        <FormItem className="flex-1 w-full">
+                          <FormControl>
+                            <Textarea
+                              placeholder="Paste the video transcript here… The AI will generate your full content pack from this text."
+                              className="bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-sm shadow-sm transition-all rounded-xl min-h-[88px] resize-none"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage className="text-xs ml-1" />
+                        </FormItem>
+                      )}
+                    />
+                  ) : sourceType !== "upload" ? (
                     <FormField
                       control={form.control}
                       name="youtubeUrl"
@@ -1430,62 +1486,80 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
               {/* Row 2: Options */}
               <div className="flex flex-wrap gap-3 items-center">
 
-                {/* Clip duration pills */}
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-xs text-muted-foreground font-medium shrink-0">Clip length:</span>
-                  <div className="flex gap-1">
-                    {CLIP_DURATIONS.map(dur => (
-                      <button
-                        key={dur}
-                        type="button"
-                        onClick={() => form.setValue("clipDurationSeconds", dur)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
-                          selectedDuration === dur
-                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                            : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        {dur}s
-                      </button>
-                    ))}
+                {/* Clip duration pills — hidden in transcript mode */}
+                {sourceType !== "transcript" && (
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground font-medium shrink-0">Clip length:</span>
+                    <div className="flex gap-1">
+                      {CLIP_DURATIONS.map(dur => (
+                        <button
+                          key={dur}
+                          type="button"
+                          onClick={() => form.setValue("clipDurationSeconds", dur)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+                            selectedDuration === dur
+                              ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                              : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          }`}
+                        >
+                          {dur}s
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="h-4 w-px bg-border/60 hidden sm:block" />
+                {sourceType !== "transcript" && <div className="h-4 w-px bg-border/60 hidden sm:block" />}
 
-                {/* Shorts toggle */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => form.setValue("includeShorts", !includeShorts)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${includeShorts ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
-                  >
-                    <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${includeShorts ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
-                  <span className="text-xs text-muted-foreground font-medium">Shorts clips</span>
-                  {includeShorts && (
-                    <FormField
-                      control={form.control}
-                      name="clipCount"
-                      render={({ field }) => (
-                        <FormItem className="w-16 m-0">
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={10}
-                              className="h-7 text-xs text-center px-2 font-mono bg-background border-border/60"
-                              {...field}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
+                {/* Shorts toggle — hidden in transcript mode */}
+                {sourceType !== "transcript" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("includeShorts", !includeShorts)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${includeShorts ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${includeShorts ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-muted-foreground font-medium">Shorts clips</span>
+                    {includeShorts && (
+                      <FormField
+                        control={form.control}
+                        name="clipCount"
+                        render={({ field }) => (
+                          <FormItem className="w-16 m-0">
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={10}
+                                className="h-7 text-xs text-center px-2 font-mono bg-background border-border/60"
+                                {...field}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
+                )}
 
-                <div className="h-4 w-px bg-border/60 hidden sm:block" />
+                {/* Podcast toggle — hidden in transcript mode */}
+                {sourceType !== "transcript" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("generatePodcast", !generatePodcast)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${generatePodcast ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${generatePodcast ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-muted-foreground font-medium">Podcast</span>
+                  </div>
+                )}
+
+                {sourceType !== "transcript" && <div className="h-4 w-px bg-border/60 hidden sm:block" />}
 
                 {/* Outro select */}
                 <FormField

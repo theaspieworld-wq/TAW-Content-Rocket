@@ -659,6 +659,7 @@ components:
       properties:
         youtubeUrl:
           type: string
+          description: YouTube or Facebook video URL. Required unless manualTranscript is provided.
         clipCount:
           type: integer
           default: 9
@@ -678,8 +679,13 @@ components:
         brandOutroIds:
           type: ["string", "null"]
           description: JSON array of brand outro IDs to rotate through, e.g. "[1,2,3]"
-      required:
-        - youtubeUrl
+        manualTranscript:
+          type: ["string", "null"]
+          description: Paste a transcript directly to skip YouTube download and transcription. When provided, youtubeUrl is optional and no video clips or podcast will be generated.
+        generatePodcast:
+          type: boolean
+          default: true
+          description: Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided.
     Job:
       type: object
       properties:
@@ -714,6 +720,9 @@ components:
           type: boolean
         hasPodcast:
           type: boolean
+        generatePodcast:
+          type: boolean
+          description: Whether podcast generation was requested for this job
         createdAt:
           type: string
           format: date-time
@@ -729,6 +738,7 @@ components:
         - hasContent
         - hasFacebookVideo
         - hasPodcast
+        - generatePodcast
         - createdAt
         - updatedAt
     Clip:
