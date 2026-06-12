@@ -241,13 +241,9 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
 }
 
 async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
-  const cookiesFile = writeCookiesFile();
-  const cookiesArgs = cookiesFile ? ["--cookies", cookiesFile] : [];
-
-  // Proxy: if YTDLP_PROXY is set (e.g. http://user:pass@host:port), route all
-  // yt-dlp traffic through it.  A residential proxy is the most reliable
-  // cookieless fix for YouTube bot-detection on datacenter IPs — YouTube sees
-  // a home IP instead of a cloud server and doesn't challenge it.
+  // Proxy: residential proxy routes traffic through a home IP so YouTube
+  // doesn't flag it as a datacenter bot. Cookies are not used — the proxy
+  // alone is sufficient and avoids the cookie-expiry maintenance problem.
   const proxy = process.env.YTDLP_PROXY?.trim();
   const proxyArgs = proxy ? ["--proxy", proxy] : [];
 
@@ -268,11 +264,10 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
     "--no-playlist",
     ...proxyArgs,
     ...clientArgs,
-    ...cookiesArgs,
     ...resilienceArgs,
   ];
 
-  logger.info({ hasCookies: !!cookiesFile, hasProxy: !!proxy }, "yt-dlp download starting");
+  logger.info({ hasProxy: !!proxy }, "yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
@@ -297,19 +292,13 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i.test(msg)) {
-      const fixes: string[] = [];
-      if (!proxy) fixes.push("set YTDLP_PROXY to a residential proxy URL (e.g. http://user:pass@host:port) — most reliable fix");
-      if (!cookiesFile) fixes.push("set YOUTUBE_COOKIES to a freshly exported Netscape cookies.txt from a logged-in browser");
       throw new Error(
-        `YouTube is blocking downloads from this server's IP (bot detection).${fixes.length ? " To fix: " + fixes.join("; or ") + "." : " Both YTDLP_PROXY and YOUTUBE_COOKIES are set — the cookies may have expired."}`,
+        proxy
+          ? "YouTube is blocking downloads — the residential proxy may be flagged. Try a different proxy endpoint."
+          : "YouTube is blocking downloads from this server's IP. Set YTDLP_PROXY to a residential proxy URL (e.g. http://user:pass@host:port).",
       );
     }
     throw e;
-  } finally {
-    // Clean up temp cookies file
-    if (cookiesFile) {
-      try { fs.unlinkSync(cookiesFile); } catch { /* ignore */ }
-    }
   }
 
   if (!fs.existsSync(videoPath)) {
