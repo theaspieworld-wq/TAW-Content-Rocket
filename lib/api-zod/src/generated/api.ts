@@ -260,6 +260,11 @@ export const ListJobsResponseItem = zod.object({
   errorMessage: zod.string().nullish(),
   clipCount: zod.number(),
   clipDurationSeconds: zod.number(),
+  clipMode: zod.enum(["ai", "chapters"]),
+  captionsEnabled: zod.boolean(),
+  captionStyle: zod.enum(["classic", "bold", "boxed", "brand"]),
+  showTitle: zod.boolean(),
+  showWatermark: zod.boolean(),
   contentCta: zod.string().nullish(),
   outroId: zod.number().nullish(),
   brandId: zod.number().nullish(),
@@ -288,6 +293,11 @@ export const createJobBodyClipCountMin = 0;
 export const createJobBodyClipCountMax = 10;
 
 export const createJobBodyClipDurationSecondsDefault = 45;
+export const createJobBodyClipModeDefault = `ai`;
+export const createJobBodyCaptionsEnabledDefault = true;
+export const createJobBodyCaptionStyleDefault = `classic`;
+export const createJobBodyShowTitleDefault = true;
+export const createJobBodyShowWatermarkDefault = true;
 export const createJobBodyGeneratePodcastDefault = true;
 
 export const CreateJobBody = zod.object({
@@ -301,12 +311,43 @@ export const CreateJobBody = zod.object({
     .number()
     .min(createJobBodyClipCountMin)
     .max(createJobBodyClipCountMax)
-    .default(createJobBodyClipCountDefault),
+    .default(createJobBodyClipCountDefault)
+    .describe(
+      'Number of clips for AI mode (used only when clipMode is \"ai\"; the app clamps this to 3-6). Ignored in \"chapters\" mode.',
+    ),
   clipDurationSeconds: zod
     .number()
     .default(createJobBodyClipDurationSecondsDefault)
     .describe(
-      "Target duration in seconds for each short clip (15, 30, 45, 60, 90)",
+      "Target duration in seconds for each short clip (15, 30, 45, 60, 90). Only used in AI mode.",
+    ),
+  clipMode: zod
+    .enum(["ai", "chapters"])
+    .default(createJobBodyClipModeDefault)
+    .describe(
+      'How snippets are selected. \"ai\" lets the model pick 3-6 best moments; \"chapters\" creates one snippet per YouTube chapter.',
+    ),
+  captionsEnabled: zod
+    .boolean()
+    .default(createJobBodyCaptionsEnabledDefault)
+    .describe(
+      "Whether to burn auto-generated closed captions into each snippet",
+    ),
+  captionStyle: zod
+    .enum(["classic", "bold", "boxed", "brand"])
+    .default(createJobBodyCaptionStyleDefault)
+    .describe("Visual style preset for burned-in captions"),
+  showTitle: zod
+    .boolean()
+    .default(createJobBodyShowTitleDefault)
+    .describe(
+      "Whether to overlay the snippet title text at the top of the video",
+    ),
+  showWatermark: zod
+    .boolean()
+    .default(createJobBodyShowWatermarkDefault)
+    .describe(
+      "Whether to overlay the brand logo as a watermark in the top-left corner (requires a brand with a logo)",
     ),
   contentCta: zod
     .string()
@@ -358,6 +399,11 @@ export const GetJobResponse = zod
     errorMessage: zod.string().nullish(),
     clipCount: zod.number(),
     clipDurationSeconds: zod.number(),
+    clipMode: zod.enum(["ai", "chapters"]),
+    captionsEnabled: zod.boolean(),
+    captionStyle: zod.enum(["classic", "bold", "boxed", "brand"]),
+    showTitle: zod.boolean(),
+    showWatermark: zod.boolean(),
     contentCta: zod.string().nullish(),
     outroId: zod.number().nullish(),
     brandId: zod.number().nullish(),

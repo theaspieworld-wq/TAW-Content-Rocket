@@ -119,8 +119,13 @@ const GOOGLE_FONTS = [
 
 const formSchema = z.object({
   youtubeUrl: z.string().optional(),
-  clipCount: z.coerce.number().min(0).max(10).default(9),
+  clipCount: z.coerce.number().min(0).max(10).default(5),
   clipDurationSeconds: z.coerce.number().default(45),
+  clipMode: z.enum(["ai", "chapters"]).default("ai"),
+  captionsEnabled: z.boolean().default(true),
+  captionStyle: z.enum(["classic", "bold", "boxed", "brand"]).default("classic"),
+  showTitle: z.boolean().default(true),
+  showWatermark: z.boolean().default(true),
   contentCta: z.string().optional(),
   outroId: z.string().optional(),
   brandId: z.string().min(1, { message: "Please select a brand before running" }),
@@ -384,8 +389,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     resolver: zodResolver(formSchema as any),
     defaultValues: {
       youtubeUrl: "",
-      clipCount: 9,
+      clipCount: 5,
       clipDurationSeconds: 45,
+      clipMode: "ai",
+      captionsEnabled: true,
+      captionStyle: "classic",
+      showTitle: true,
+      showWatermark: true,
       contentCta: "",
       outroId: "none",
       brandId: "",
@@ -399,6 +409,11 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const generatePodcast = form.watch("generatePodcast");
   const selectedDuration = form.watch("clipDurationSeconds");
   const selectedBrandId = form.watch("brandId");
+  const clipMode = form.watch("clipMode");
+  const captionsEnabled = form.watch("captionsEnabled");
+  const captionStyle = form.watch("captionStyle");
+  const showTitle = form.watch("showTitle");
+  const showWatermark = form.watch("showWatermark");
 
   // Auto-fill CTA from selected brand
   useEffect(() => {
@@ -432,8 +447,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const sharedReset = {
       youtubeUrl: "",
-      clipCount: 9,
+      clipCount: 5,
       clipDurationSeconds: values.clipDurationSeconds,
+      clipMode: values.clipMode,
+      captionsEnabled: values.captionsEnabled,
+      captionStyle: values.captionStyle,
+      showTitle: values.showTitle,
+      showWatermark: values.showWatermark,
       contentCta: values.contentCta,
       outroId: values.outroId,
       brandId: values.brandId,
@@ -479,8 +499,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       }
       const fd = new FormData();
       fd.append("file", uploadFile);
-      fd.append("clipCount", String(values.includeShorts ? (values.clipCount ?? 9) : 0));
+      fd.append("clipCount", String(values.includeShorts ? (values.clipCount ?? 5) : 0));
       fd.append("clipDurationSeconds", String(values.clipDurationSeconds ?? 45));
+      fd.append("clipMode", values.clipMode ?? "ai");
+      fd.append("captionsEnabled", String(values.captionsEnabled ?? true));
+      fd.append("captionStyle", values.captionStyle ?? "classic");
+      fd.append("showTitle", String(values.showTitle ?? true));
+      fd.append("showWatermark", String(values.showWatermark ?? true));
       if (values.contentCta?.trim()) fd.append("contentCta", values.contentCta.trim());
       if (values.outroId && values.outroId !== "none") fd.append("outroId", values.outroId);
       if (values.brandId && values.brandId !== "none") fd.append("brandId", values.brandId);
@@ -533,8 +558,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
     const payload = {
       youtubeUrl: url,
-      clipCount: values.includeShorts ? (values.clipCount ?? 9) : 0,
+      clipCount: values.includeShorts ? (values.clipCount ?? 5) : 0,
       clipDurationSeconds: values.clipDurationSeconds ?? 45,
+      clipMode: values.clipMode ?? "ai",
+      captionsEnabled: values.captionsEnabled ?? true,
+      captionStyle: values.captionStyle ?? "classic",
+      showTitle: values.showTitle ?? true,
+      showWatermark: values.showWatermark ?? true,
       contentCta: values.contentCta?.trim() || undefined,
       outroId: values.outroId && values.outroId !== "none" ? parseInt(values.outroId, 10) : null,
       brandId: values.brandId && values.brandId !== "none" ? parseInt(values.brandId, 10) : null,
@@ -1597,18 +1627,55 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
                 {sourceType !== "transcript" && <div className="h-4 w-px bg-border/60 hidden sm:block" />}
 
+                {/* Clip selection mode — hidden in transcript mode */}
+                {sourceType !== "transcript" && (
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground font-medium shrink-0">Snippets:</span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => form.setValue("clipMode", "ai")}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+                          clipMode === "ai"
+                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                            : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        AI Auto-Pick
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => form.setValue("clipMode", "chapters")}
+                        disabled={sourceType === "upload"}
+                        title={sourceType === "upload" ? "Chapter mode requires a YouTube URL" : undefined}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                          clipMode === "chapters"
+                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                            : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        YouTube Chapters
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {sourceType !== "transcript" && <div className="h-4 w-px bg-border/60 hidden sm:block" />}
+
                 {/* Shorts toggle — hidden in transcript mode */}
                 {sourceType !== "transcript" && (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => form.setValue("includeShorts", !includeShorts)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${includeShorts ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                      disabled={clipMode === "chapters"}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${includeShorts ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
                     >
                       <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${includeShorts ? "translate-x-4" : "translate-x-0"}`} />
                     </button>
                     <span className="text-xs text-muted-foreground font-medium">Shorts clips</span>
-                    {includeShorts && (
+                    {includeShorts && clipMode === "ai" && (
                       <FormField
                         control={form.control}
                         name="clipCount"
@@ -1617,8 +1684,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                             <FormControl>
                               <Input
                                 type="number"
-                                min={1}
-                                max={10}
+                                min={3}
+                                max={6}
                                 className="h-7 text-xs text-center px-2 font-mono bg-background border-border/60"
                                 {...field}
                               />
@@ -1723,6 +1790,64 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                   )}
                 />
               </div>
+
+              {/* Row 3: Snippet styling — hidden in transcript mode */}
+              {sourceType !== "transcript" && (includeShorts || clipMode === "chapters") && (
+                <div className="flex flex-wrap gap-3 items-center pt-1">
+                  {/* Captions toggle + style */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("captionsEnabled", !captionsEnabled)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${captionsEnabled ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${captionsEnabled ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-muted-foreground font-medium">Captions</span>
+                    {captionsEnabled && (
+                      <Select value={captionStyle} onValueChange={(v) => form.setValue("captionStyle", v as any)}>
+                        <SelectTrigger className="h-7 w-28 bg-background border-border/60 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="classic">Classic</SelectItem>
+                          <SelectItem value="bold">Bold</SelectItem>
+                          <SelectItem value="boxed">Boxed</SelectItem>
+                          <SelectItem value="brand">Brand</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
+                  <div className="h-4 w-px bg-border/60 hidden sm:block" />
+
+                  {/* Title overlay toggle */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("showTitle", !showTitle)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${showTitle ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${showTitle ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-muted-foreground font-medium">Title overlay</span>
+                  </div>
+
+                  <div className="h-4 w-px bg-border/60 hidden sm:block" />
+
+                  {/* Watermark toggle */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("showWatermark", !showWatermark)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${showWatermark ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${showWatermark ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-muted-foreground font-medium">Logo watermark</span>
+                  </div>
+                </div>
+              )}
             </form>
           </Form>
         </div>

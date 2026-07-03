@@ -55,6 +55,11 @@ async function jobToJson(j: typeof jobsTable.$inferSelect) {
     errorMessage: j.errorMessage ?? null,
     clipCount: j.clipCount,
     clipDurationSeconds: j.clipDurationSeconds ?? 45,
+    clipMode: j.clipMode === "chapters" ? "chapters" : "ai",
+    captionsEnabled: j.captionsEnabled !== "false",
+    captionStyle: j.captionStyle ?? "classic",
+    showTitle: j.showTitle !== "false",
+    showWatermark: j.showWatermark !== "false",
     contentCta: j.contentCta ?? null,
     outroId: j.outroId ?? null,
     brandId: j.brandId ?? null,
@@ -85,7 +90,21 @@ router.post("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
-  const { youtubeUrl, clipCount, clipDurationSeconds, contentCta, outroId, brandId, manualTranscript, generatePodcast } = parsed.data;
+  const {
+    youtubeUrl,
+    clipCount,
+    clipDurationSeconds,
+    clipMode,
+    captionsEnabled,
+    captionStyle,
+    showTitle,
+    showWatermark,
+    contentCta,
+    outroId,
+    brandId,
+    manualTranscript,
+    generatePodcast,
+  } = parsed.data;
   const count = clipCount ?? 9;
   const clipDur = clipDurationSeconds ?? 45;
 
@@ -119,6 +138,11 @@ router.post("/jobs", async (req, res): Promise<void> => {
     youtubeUrl: resolvedUrl,
     clipCount: count,
     clipDurationSeconds: clipDur,
+    clipMode: clipMode === "chapters" ? "chapters" : "ai",
+    captionsEnabled: captionsEnabled === false ? "false" : "true",
+    captionStyle: captionStyle ?? "classic",
+    showTitle: showTitle === false ? "false" : "true",
+    showWatermark: showWatermark === false ? "false" : "true",
     contentCta: contentCta ?? null,
     status: "pending",
     outroId: outroId ?? null,
@@ -164,12 +188,23 @@ router.post("/jobs/upload", uploadVideoMiddleware.single("file"), async (req, re
     }
   }
 
+  const clipModeRaw = req.body.clipMode === "chapters" ? "chapters" : "ai";
+  const captionsEnabledRaw = req.body.captionsEnabled === "false" ? "false" : "true";
+  const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
+  const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
+  const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
+
   const [job] = await db.insert(jobsTable).values({
     userId,
     youtubeUrl: `upload://${req.file.originalname}`,
     localFilePath: req.file.path,
     clipCount: isNaN(clipCount) ? 9 : clipCount,
     clipDurationSeconds: isNaN(clipDur) ? 45 : clipDur,
+    clipMode: clipModeRaw,
+    captionsEnabled: captionsEnabledRaw,
+    captionStyle: captionStyleRaw,
+    showTitle: showTitleRaw,
+    showWatermark: showWatermarkRaw,
     contentCta: req.body.contentCta?.trim() || null,
     status: "pending",
     outroId: outroIdRaw,

@@ -99,16 +99,51 @@ export interface UpdateBrandBody {
   exportFolderUrl?: string | null;
 }
 
+/**
+ * How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter.
+ */
+export type CreateJobBodyClipMode =
+  (typeof CreateJobBodyClipMode)[keyof typeof CreateJobBodyClipMode];
+
+export const CreateJobBodyClipMode = {
+  ai: "ai",
+  chapters: "chapters",
+} as const;
+
+/**
+ * Visual style preset for burned-in captions
+ */
+export type CreateJobBodyCaptionStyle =
+  (typeof CreateJobBodyCaptionStyle)[keyof typeof CreateJobBodyCaptionStyle];
+
+export const CreateJobBodyCaptionStyle = {
+  classic: "classic",
+  bold: "bold",
+  boxed: "boxed",
+  brand: "brand",
+} as const;
+
 export interface CreateJobBody {
   /** YouTube or Facebook video URL. Required unless manualTranscript is provided. */
   youtubeUrl?: string;
   /**
+   * Number of clips for AI mode (used only when clipMode is "ai"; the app clamps this to 3-6). Ignored in "chapters" mode.
    * @minimum 0
    * @maximum 10
    */
   clipCount?: number;
-  /** Target duration in seconds for each short clip (15, 30, 45, 60, 90) */
+  /** Target duration in seconds for each short clip (15, 30, 45, 60, 90). Only used in AI mode. */
   clipDurationSeconds?: number;
+  /** How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter. */
+  clipMode?: CreateJobBodyClipMode;
+  /** Whether to burn auto-generated closed captions into each snippet */
+  captionsEnabled?: boolean;
+  /** Visual style preset for burned-in captions */
+  captionStyle?: CreateJobBodyCaptionStyle;
+  /** Whether to overlay the snippet title text at the top of the video */
+  showTitle?: boolean;
+  /** Whether to overlay the brand logo as a watermark in the top-left corner (requires a brand with a logo) */
+  showWatermark?: boolean;
   /**
    * Call-to-action text to append to all text content
    * @nullable
@@ -144,6 +179,23 @@ export const JobStatus = {
   failed: "failed",
 } as const;
 
+export type JobClipMode = (typeof JobClipMode)[keyof typeof JobClipMode];
+
+export const JobClipMode = {
+  ai: "ai",
+  chapters: "chapters",
+} as const;
+
+export type JobCaptionStyle =
+  (typeof JobCaptionStyle)[keyof typeof JobCaptionStyle];
+
+export const JobCaptionStyle = {
+  classic: "classic",
+  bold: "bold",
+  boxed: "boxed",
+  brand: "brand",
+} as const;
+
 export interface Job {
   id: number;
   youtubeUrl: string;
@@ -154,6 +206,11 @@ export interface Job {
   errorMessage?: string | null;
   clipCount: number;
   clipDurationSeconds: number;
+  clipMode: JobClipMode;
+  captionsEnabled: boolean;
+  captionStyle: JobCaptionStyle;
+  showTitle: boolean;
+  showWatermark: boolean;
   /** @nullable */
   contentCta?: string | null;
   /** @nullable */

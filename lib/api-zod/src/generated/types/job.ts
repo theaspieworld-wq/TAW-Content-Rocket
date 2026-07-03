@@ -5,6 +5,8 @@
  * YouTube Shorts Generator API
  * OpenAPI spec version: 0.1.0
  */
+import type { JobCaptionStyle } from "./jobCaptionStyle";
+import type { JobClipMode } from "./jobClipMode";
 import type { JobStatus } from "./jobStatus";
 
 export interface Job {
@@ -17,6 +19,11 @@ export interface Job {
   errorMessage?: string | null;
   clipCount: number;
   clipDurationSeconds: number;
+  clipMode: JobClipMode;
+  captionsEnabled: boolean;
+  captionStyle: JobCaptionStyle;
+  showTitle: boolean;
+  showWatermark: boolean;
   /** @nullable */
   contentCta?: string | null;
   /** @nullable */

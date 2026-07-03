@@ -665,10 +665,33 @@ components:
           default: 9
           minimum: 0
           maximum: 10
+          description: Number of clips for AI mode (used only when clipMode is "ai"; the app clamps this to 3-6). Ignored in "chapters" mode.
         clipDurationSeconds:
           type: integer
           default: 45
-          description: Target duration in seconds for each short clip (15, 30, 45, 60, 90)
+          description: Target duration in seconds for each short clip (15, 30, 45, 60, 90). Only used in AI mode.
+        clipMode:
+          type: string
+          enum: [ai, chapters]
+          default: ai
+          description: How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter.
+        captionsEnabled:
+          type: boolean
+          default: true
+          description: Whether to burn auto-generated closed captions into each snippet
+        captionStyle:
+          type: string
+          enum: [classic, bold, boxed, brand]
+          default: classic
+          description: Visual style preset for burned-in captions
+        showTitle:
+          type: boolean
+          default: true
+          description: Whether to overlay the snippet title text at the top of the video
+        showWatermark:
+          type: boolean
+          default: true
+          description: Whether to overlay the brand logo as a watermark in the top-left corner (requires a brand with a logo)
         contentCta:
           type: ["string", "null"]
           description: Call-to-action text to append to all text content
@@ -704,6 +727,18 @@ components:
           type: integer
         clipDurationSeconds:
           type: integer
+        clipMode:
+          type: string
+          enum: [ai, chapters]
+        captionsEnabled:
+          type: boolean
+        captionStyle:
+          type: string
+          enum: [classic, bold, boxed, brand]
+        showTitle:
+          type: boolean
+        showWatermark:
+          type: boolean
         contentCta:
           type: ["string", "null"]
         outroId:
@@ -735,6 +770,11 @@ components:
         - status
         - clipCount
         - clipDurationSeconds
+        - clipMode
+        - captionsEnabled
+        - captionStyle
+        - showTitle
+        - showWatermark
         - hasContent
         - hasFacebookVideo
         - hasPodcast

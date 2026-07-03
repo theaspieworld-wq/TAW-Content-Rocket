@@ -5,17 +5,30 @@
  * YouTube Shorts Generator API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateJobBodyCaptionStyle } from "./createJobBodyCaptionStyle";
+import type { CreateJobBodyClipMode } from "./createJobBodyClipMode";
 
 export interface CreateJobBody {
   /** YouTube or Facebook video URL. Required unless manualTranscript is provided. */
   youtubeUrl?: string;
   /**
+   * Number of clips for AI mode (used only when clipMode is "ai"; the app clamps this to 3-6). Ignored in "chapters" mode.
    * @minimum 0
    * @maximum 10
    */
   clipCount?: number;
-  /** Target duration in seconds for each short clip (15, 30, 45, 60, 90) */
+  /** Target duration in seconds for each short clip (15, 30, 45, 60, 90). Only used in AI mode. */
   clipDurationSeconds?: number;
+  /** How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter. */
+  clipMode?: CreateJobBodyClipMode;
+  /** Whether to burn auto-generated closed captions into each snippet */
+  captionsEnabled?: boolean;
+  /** Visual style preset for burned-in captions */
+  captionStyle?: CreateJobBodyCaptionStyle;
+  /** Whether to overlay the snippet title text at the top of the video */
+  showTitle?: boolean;
+  /** Whether to overlay the brand logo as a watermark in the top-left corner (requires a brand with a logo) */
+  showWatermark?: boolean;
   /**
    * Call-to-action text to append to all text content
    * @nullable

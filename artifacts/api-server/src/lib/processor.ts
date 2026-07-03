@@ -476,6 +476,134 @@ Titles must be ALL CAPS, max 8 words, punchy and hook-oriented. Return ONLY the 
   return makeFallbackClips(clipCount, videoDuration, clipDurationSeconds);
 }
 
+interface VideoChapter {
+  title: string;
+  start: number;
+  end: number;
+}
+
+// Fetch YouTube chapter markers via yt-dlp metadata (no download).
+async function getVideoChapters(youtubeUrl: string): Promise<VideoChapter[]> {
+  const proxy = process.env.YTDLP_PROXY?.trim();
+  const proxyArgs = proxy ? ["--proxy", proxy] : [];
+  const clientArgs = ["--extractor-args", "youtube:player_client=android,web"];
+
+  try {
+    const { stdout } = await execFileAsync(YTDLP, [
+      "--no-playlist",
+      ...proxyArgs,
+      ...clientArgs,
+      "--dump-json",
+      "--skip-download",
+      youtubeUrl,
+    ], { timeout: 60000, env: process.env, maxBuffer: 20 * 1024 * 1024 });
+
+    const firstLine = stdout.trim().split("\n")[0] || "{}";
+    const info = JSON.parse(firstLine) as { chapters?: Array<{ title?: string; start_time?: number; end_time?: number }> };
+    const rawChapters = Array.isArray(info.chapters) ? info.chapters : [];
+
+    return rawChapters
+      .map((c): VideoChapter => ({
+        title: typeof c.title === "string" && c.title.trim() ? c.title.trim() : "Chapter",
+        start: Number(c.start_time) || 0,
+        end: Number(c.end_time) || 0,
+      }))
+      .filter((c) => c.end > c.start);
+  } catch (e) {
+    logger.warn({ e }, "Failed to fetch video chapters");
+    return [];
+  }
+}
+
+const MAX_CHAPTER_CLIPS = 12;
+const MIN_CHAPTER_DURATION_SECONDS = 5;
+
+// AI-generate per-clip Instagram captions for arbitrary (non-AI-selected) clip
+// segments, e.g. clips derived from YouTube chapters.
+async function generateInstagramCaptionsForClips(
+  clips: Array<{ title: string; startSeconds: number; endSeconds: number }>,
+  transcript: TranscriptSegment[],
+  options?: { brandVoice?: string | null; contentCta?: string | null },
+): Promise<string[]> {
+  if (clips.length === 0) return [];
+
+  const brandVoiceNote = options?.brandVoice
+    ? `\n\nBRAND VOICE STYLE: ${options.brandVoice}\nApply this voice consistently.`
+    : "";
+  const ctaNote = options?.contentCta
+    ? `\n\nCTA TO APPEND: "${options.contentCta}" — include this as the final call-to-action.`
+    : "";
+
+  const clipsWithText = clips.map((c, i) => {
+    const text = transcript
+      .filter((s) => s.end > c.startSeconds && s.start < c.endSeconds)
+      .map((s) => s.text)
+      .join(" ")
+      .slice(0, 2000);
+    return { index: i, title: c.title, text: text || c.title };
+  });
+
+  const prompt = `You are a social media copywriter. For each video snippet below, write a ready-to-post Instagram caption.${brandVoiceNote}${ctaNote}
+
+SNIPPETS:
+${clipsWithText.map((c) => `[${c.index}] TITLE: ${c.title}\nTRANSCRIPT: ${c.text}`).join("\n\n")}
+
+Return ONLY a valid JSON array of exactly ${clips.length} strings, one caption per snippet, in the same order (index 0 first, index ${clips.length - 1} last). Each caption: hook line (no emoji), 2-3 short punchy first-person paragraphs, a relatable question, then 6-8 relevant hashtags on their own line. 150-220 words total. Return raw JSON only — no markdown fences, no explanation.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 3000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const content = response.choices[0]?.message?.content || "";
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      const parsed = JSON.parse(arrayMatch[0]) as unknown[];
+      if (Array.isArray(parsed)) {
+        return clips.map((_, i) => (typeof parsed[i] === "string" ? (parsed[i] as string) : ""));
+      }
+    }
+  } catch (e) {
+    logger.warn({ e }, "Instagram caption generation for chapter clips failed");
+  }
+  return clips.map(() => "");
+}
+
+// Build one ClipSegment per usable YouTube chapter, with AI-generated
+// Instagram captions backfilled per clip.
+async function selectClipsFromChapters(
+  youtubeUrl: string,
+  transcript: TranscriptSegment[],
+  videoDuration: number,
+  options: { brandVoice?: string | null; contentCta?: string | null },
+): Promise<ClipSegment[]> {
+  if (!/^https?:\/\//i.test(youtubeUrl)) {
+    throw new Error("Chapter mode requires a YouTube URL — choose AI auto-pick mode instead.");
+  }
+
+  const chapters = await getVideoChapters(youtubeUrl);
+  const usable = chapters
+    .filter((c) => c.end - c.start >= MIN_CHAPTER_DURATION_SECONDS && c.start < videoDuration)
+    .map((c) => ({ ...c, end: Math.min(c.end, videoDuration) }))
+    .slice(0, MAX_CHAPTER_CLIPS);
+
+  if (usable.length === 0) {
+    throw new Error("This video has no YouTube chapters — choose AI auto-pick mode instead, or add chapters to the video description.");
+  }
+
+  const baseSegments: ClipSegment[] = usable.map((c) => ({
+    title: c.title.toUpperCase(),
+    startSeconds: c.start,
+    endSeconds: c.end,
+    reasoning: "YouTube chapter",
+    instagramCaption: "",
+  }));
+
+  const captions = await generateInstagramCaptionsForClips(baseSegments, transcript, options);
+  return baseSegments.map((seg, i) => ({ ...seg, instagramCaption: captions[i] || "" }));
+}
+
 async function getVideoDuration(videoPath: string): Promise<number> {
   const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "quiet", "-print_format", "json", "-show_format", videoPath,
@@ -694,29 +822,152 @@ export async function generatePodcastAudio(
   }
 }
 
+interface CaptionStylePreset {
+  fontsize: number;
+  fontcolor: string;
+  borderw: number;
+  bordercolor: string;
+  box: boolean;
+  boxcolor?: string;
+  uppercase: boolean;
+}
+
+// 4 default burned-in caption presets — all rendered lower-third, centered.
+function getCaptionStyle(style: string | null | undefined, brand: typeof brandsTable.$inferSelect | null): CaptionStylePreset {
+  switch (style) {
+    case "bold":
+      return { fontsize: 62, fontcolor: "0xFFD400", borderw: 5, bordercolor: "black", box: false, uppercase: true };
+    case "boxed":
+      return { fontsize: 50, fontcolor: "white", borderw: 0, bordercolor: "black", box: true, boxcolor: "black@0.6", uppercase: false };
+    case "brand": {
+      const brandHex = brand?.primaryColor ? hexToFfmpeg(brand.primaryColor) : "0xf21178";
+      return { fontsize: 56, fontcolor: brandHex, borderw: 4, bordercolor: "white", box: false, uppercase: true };
+    }
+    case "classic":
+    default:
+      return { fontsize: 54, fontcolor: "white", borderw: 3, bordercolor: "black", box: false, uppercase: false };
+  }
+}
+
+interface CaptionChunk {
+  start: number;
+  end: number;
+  text: string;
+}
+
+// Slice the transcript to the clip's time range, rebase to clip-relative
+// timestamps, and split into short (~5 word) burst-caption chunks.
+function buildCaptionChunks(transcript: TranscriptSegment[], clipStart: number, clipEnd: number, maxWordsPerChunk = 5): CaptionChunk[] {
+  const chunks: CaptionChunk[] = [];
+  const clipDuration = clipEnd - clipStart;
+  const overlapping = transcript
+    .filter((s) => s.end > clipStart && s.start < clipEnd && s.text.trim())
+    .sort((a, b) => a.start - b.start);
+
+  for (const seg of overlapping) {
+    const segStart = Math.max(seg.start, clipStart);
+    const segEnd = Math.min(seg.end, clipEnd);
+    if (segEnd <= segStart) continue;
+    const segDuration = segEnd - segStart;
+    const words = seg.text.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) continue;
+
+    for (let i = 0; i < words.length; i += maxWordsPerChunk) {
+      const chunkWords = words.slice(i, i + maxWordsPerChunk);
+      const fracStart = i / words.length;
+      const fracEnd = Math.min(1, (i + chunkWords.length) / words.length);
+      const chunkStart = Math.max(0, segStart + fracStart * segDuration - clipStart);
+      const chunkEnd = Math.min(clipDuration, segStart + fracEnd * segDuration - clipStart);
+      if (chunkEnd <= chunkStart) continue;
+      chunks.push({ start: chunkStart, end: chunkEnd, text: chunkWords.join(" ") });
+    }
+  }
+  return chunks;
+}
+
 async function renderMainClip(
   videoPath: string,
   clipId: number,
   title: string,
   startSeconds: number,
   endSeconds: number,
-  _transcript: TranscriptSegment[],
+  transcript: TranscriptSegment[],
   outputPath: string,
+  options: {
+    captionsEnabled: boolean;
+    captionStyle: string;
+    showTitle: boolean;
+    showWatermark: boolean;
+    watermarkLocalPath: string | null;
+    brand: typeof brandsTable.$inferSelect | null;
+  },
 ): Promise<void> {
   const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
+  const fontFile = await getFontPath(options.brand?.fontFamily ?? null);
+  const filterStages: string[] = [portraitCrop];
 
-  await execFileAsync(FFMPEG, [
+  if (options.showTitle && title.trim()) {
+    const barColor = options.brand?.primaryColor ? hexToFfmpeg(options.brand.primaryColor) : "black";
+    const titleLines = wrapText(title.toUpperCase(), 22).slice(0, 3);
+    const barHeight = 70 + titleLines.length * 70;
+    filterStages.push(`drawbox=x=0:y=0:w=1080:h=${barHeight}:color=${barColor}@0.88:t=fill`);
+    titleLines.forEach((line, i) => {
+      filterStages.push(
+        `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=56:fontcolor=white:x=(w-text_w)/2:y=${40 + i * 70}:shadowx=2:shadowy=2:shadowcolor=black@0.8`,
+      );
+    });
+  }
+
+  if (options.captionsEnabled) {
+    const style = getCaptionStyle(options.captionStyle, options.brand);
+    const chunks = buildCaptionChunks(transcript, startSeconds, endSeconds);
+    for (const chunk of chunks) {
+      const rawText = style.uppercase ? chunk.text.toUpperCase() : chunk.text;
+      const lines = wrapText(rawText, 22);
+      lines.forEach((line, li) => {
+        const yExpr = `(h*0.72)+${li * (style.fontsize + 10)}`;
+        const enable = `enable='between(t\\,${chunk.start.toFixed(2)}\\,${chunk.end.toFixed(2)})'`;
+        if (style.box) {
+          filterStages.push(
+            `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=${style.fontsize}:fontcolor=${style.fontcolor}:box=1:boxcolor=${style.boxcolor}:boxborderw=14:x=(w-text_w)/2:y=${yExpr}:${enable}`,
+          );
+        } else {
+          filterStages.push(
+            `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=${style.fontsize}:fontcolor=${style.fontcolor}:borderw=${style.borderw}:bordercolor=${style.bordercolor}:x=(w-text_w)/2:y=${yExpr}:${enable}`,
+          );
+        }
+      });
+    }
+  }
+
+  const useWatermark = options.showWatermark && !!options.watermarkLocalPath;
+  const args: string[] = [
     "-ss", startSeconds.toString(),
     "-i", videoPath,
     "-t", (endSeconds - startSeconds).toString(),
-    "-vf", portraitCrop,
+  ];
+
+  if (useWatermark) {
+    args.push("-loop", "1", "-i", options.watermarkLocalPath as string);
+    const filterComplex =
+      `[0:v]${filterStages.join(",")}[base];` +
+      `[1:v]scale=160:-1[wm];` +
+      `[base][wm]overlay=36:36:shortest=1[vout]`;
+    args.push("-filter_complex", filterComplex, "-map", "[vout]", "-map", "0:a?");
+  } else {
+    args.push("-vf", filterStages.join(","));
+  }
+
+  args.push(
     "-sn",
     "-c:v", "libx264", "-preset", "fast", "-crf", "23",
     "-c:a", "aac", "-b:a", "128k",
     "-metadata", `title=${title}`,
     "-movflags", "+faststart",
     outputPath, "-y",
-  ], { timeout: 300000 });
+  );
+
+  await execFileAsync(FFMPEG, args, { timeout: 300000 });
 
   void clipId;
 }
@@ -1275,10 +1526,19 @@ export async function processJob(jobId: number): Promise<void> {
 
     let insertedClips: (typeof clipsTable.$inferSelect)[] = [];
 
+    const clipMode = job.clipMode === "chapters" ? "chapters" : "ai";
+    const clipSelectionPromise: Promise<ClipSegment[]> =
+      clipMode === "chapters"
+        ? selectClipsFromChapters(job.youtubeUrl, transcript, videoDuration, {
+            brandVoice: brand?.voiceStyle ?? null,
+            contentCta: job.contentCta ?? null,
+          })
+        : job.clipCount > 0
+          ? selectBestClips(transcript, Math.min(6, Math.max(3, job.clipCount)), videoDuration, clipDuration)
+          : Promise.resolve([] as ClipSegment[]);
+
     const [clipsResult, contentResult] = await Promise.allSettled([
-      job.clipCount > 0
-        ? selectBestClips(transcript, job.clipCount, videoDuration, clipDuration)
-        : Promise.resolve([] as ClipSegment[]),
+      clipSelectionPromise,
       generateContent(job.youtubeUrl, title, transcript, {
         brandVoice: brand?.voiceStyle ?? null,
         contentCta: job.contentCta ?? null,
@@ -1296,7 +1556,7 @@ export async function processJob(jobId: number): Promise<void> {
       throw clipsResult.reason as Error;
     }
     const clipSegments = clipsResult.value;
-    if (job.clipCount > 0 && clipSegments.length === 0) {
+    if ((clipMode === "chapters" || job.clipCount > 0) && clipSegments.length === 0) {
       throw new Error("No clip segments were selected — the video may be too short or have no audio");
     }
     if (clipSegments.length > 0) {
@@ -1357,6 +1617,22 @@ export async function processJob(jobId: number): Promise<void> {
         logger.info({ jobId, count: preparedBrandOutros.length }, "Brand outros prepared for rotation");
       }
 
+      // Prepare brand logo watermark (downloaded once, reused for every clip)
+      const showWatermark = job.showWatermark !== "false";
+      let watermarkLocalPath: string | null = null;
+      if (showWatermark && brand?.logoPath && (await objectExists(brand.logoPath))) {
+        try {
+          watermarkLocalPath = path.join(tempDir, `watermark_logo${path.extname(brand.logoPath) || ".png"}`);
+          await downloadToLocalFile(brand.logoPath, watermarkLocalPath);
+        } catch (e) {
+          logger.warn({ e, jobId }, "Failed to download brand logo watermark — skipping");
+          watermarkLocalPath = null;
+        }
+      }
+      const captionsEnabled = job.captionsEnabled !== "false";
+      const captionStyle = job.captionStyle || "classic";
+      const showTitle = job.showTitle !== "false";
+
       // Single-source fallback (brand shortFormOutroPath or global outro)
       let singleOutroPath: string | null = null;
       let singleOutroPosition = "end";
@@ -1402,6 +1678,14 @@ export async function processJob(jobId: number): Promise<void> {
               parseFloat(clip.endSeconds),
               transcript,
               mainClipPath,
+              {
+                captionsEnabled,
+                captionStyle,
+                showTitle,
+                showWatermark,
+                watermarkLocalPath,
+                brand,
+              },
             );
 
             // Name the final file using the clip's AI-generated title for easy identification
