@@ -75,6 +75,14 @@ async function registerStripeWebhook() {
   }
 }
 
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "Uncaught exception — process will continue running");
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "Unhandled promise rejection — process will continue running");
+});
+
 const rawPort = process.env["PORT"];
 if (!rawPort) throw new Error("PORT environment variable is required");
 const port = Number(rawPort);
