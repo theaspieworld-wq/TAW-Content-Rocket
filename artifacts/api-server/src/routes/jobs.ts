@@ -13,9 +13,9 @@ import {
   DownloadClipParams,
 } from "@workspace/api-zod";
 import { processJob, generateContent, generatePodcastAudio } from "../lib/processor";
+import { objectExists, deleteObject, streamToResponse, getReadStream } from "../lib/storage";
 
 const router: IRouter = Router();
-const CLIPS_DIR = path.join(process.cwd(), "clips");
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -40,9 +40,13 @@ const uploadVideoMiddleware = multer({
   },
 });
 
-function jobToJson(j: typeof jobsTable.$inferSelect) {
-  const facebookPath = path.join(CLIPS_DIR, `job_${j.id}_facebook.mp4`);
-  const podcastPath = path.join(CLIPS_DIR, `job_${j.id}_podcast.mp3`);
+async function jobToJson(j: typeof jobsTable.$inferSelect) {
+  const facebookKey = `clips/job_${j.id}_facebook.mp4`;
+  const podcastKey = `clips/job_${j.id}_podcast.mp3`;
+  const [hasFacebookVideo, hasPodcast] = await Promise.all([
+    objectExists(facebookKey),
+    objectExists(podcastKey),
+  ]);
   return {
     id: j.id,
     youtubeUrl: j.youtubeUrl,
@@ -55,8 +59,8 @@ function jobToJson(j: typeof jobsTable.$inferSelect) {
     outroId: j.outroId ?? null,
     brandId: j.brandId ?? null,
     hasContent: j.generatedContent != null,
-    hasFacebookVideo: fs.existsSync(facebookPath),
-    hasPodcast: fs.existsSync(podcastPath),
+    hasFacebookVideo,
+    hasPodcast,
     generatePodcast: j.generatePodcast !== "false",
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
@@ -68,7 +72,7 @@ router.get("/jobs", async (req, res): Promise<void> => {
   const jobs = await db.select().from(jobsTable)
     .where(eq(jobsTable.userId, userId))
     .orderBy(jobsTable.createdAt);
-  res.json(jobs.map(jobToJson));
+  res.json(await Promise.all(jobs.map(jobToJson)));
 });
 
 router.post("/jobs", async (req, res): Promise<void> => {
@@ -125,7 +129,7 @@ router.post("/jobs", async (req, res): Promise<void> => {
 
   processJob(job.id).catch(() => {});
 
-  res.status(201).json(jobToJson(job));
+  res.status(201).json(await jobToJson(job));
 });
 
 // Upload a local video file and create a job
@@ -174,7 +178,7 @@ router.post("/jobs/upload", uploadVideoMiddleware.single("file"), async (req, re
 
   processJob(job.id).catch(() => {});
 
-  res.status(201).json(jobToJson(job));
+  res.status(201).json(await jobToJson(job));
 });
 
 router.get("/jobs/:id", async (req, res): Promise<void> => {
@@ -195,7 +199,7 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
   const clips = await db.select().from(clipsTable).where(eq(clipsTable.jobId, job.id));
 
   res.json({
-    ...jobToJson(job),
+    ...(await jobToJson(job)),
     clips: clips.map((c) => ({
       id: c.id,
       jobId: c.jobId,
@@ -231,29 +235,21 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
   }
 
   for (const clip of clips) {
-    if (clip.filePath && fs.existsSync(clip.filePath)) {
-      try { fs.unlinkSync(clip.filePath); } catch (_) {}
+    if (clip.filePath) {
+      await deleteObject(clip.filePath);
     }
   }
 
-  const jobFiles = [
-    path.join(CLIPS_DIR, `job_${job.id}_facebook.mp4`),
-    path.join(CLIPS_DIR, `job_${job.id}_podcast.mp3`),
-  ];
-  for (const f of jobFiles) {
-    if (fs.existsSync(f)) {
-      try { fs.unlinkSync(f); } catch (_) {}
-    }
-  }
+  await deleteObject(`clips/job_${job.id}_facebook.mp4`);
+  await deleteObject(`clips/job_${job.id}_podcast.mp3`);
 
-  const carouselPattern = new RegExp(`^carousel_${job.id}_\\d+\\.png$`);
-  try {
-    for (const file of fs.readdirSync(CLIPS_DIR)) {
-      if (carouselPattern.test(file)) {
-        try { fs.unlinkSync(path.join(CLIPS_DIR, file)); } catch (_) {}
-      }
-    }
-  } catch (_) {}
+  // Carousel slides use an unknown extension and a variable slide count, so
+  // check a reasonable range of indices for both .png and .jpg outputs.
+  for (let i = 1; i <= 8; i++) {
+    await deleteObject(`clips/carousel_${job.id}_${i}.png`);
+  }
+  await deleteObject(`clips/carousel_${job.id}_end.png`);
+  await deleteObject(`clips/carousel_${job.id}_end.jpg`);
 
   res.sendStatus(204);
 });
@@ -323,20 +319,20 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
   res.json(content);
 });
 
-router.get("/images/:filename", (req, res): void => {
+router.get("/images/:filename", async (req, res): Promise<void> => {
   const { filename } = req.params;
   if (!/^[\w\-]+\.(jpg|jpeg|png)$/i.test(filename)) {
     res.status(400).json({ error: "Invalid filename" });
     return;
   }
-  const filePath = path.join(CLIPS_DIR, filename);
-  if (!fs.existsSync(filePath)) {
+  const found = await streamToResponse(`clips/${filename}`, res, {
+    contentType: filename.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg",
+    cacheControl: "public, max-age=86400",
+    inline: true,
+  });
+  if (!found) {
     res.status(404).json({ error: "Image not found" });
-    return;
   }
-  res.setHeader("Content-Type", filename.endsWith(".png") ? "image/png" : "image/jpeg");
-  res.setHeader("Cache-Control", "public, max-age=86400");
-  fs.createReadStream(filePath).pipe(res);
 });
 
 router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
@@ -361,15 +357,14 @@ router.get("/clips/:clipId/download", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!fs.existsSync(clip.filePath)) {
-    res.status(404).json({ error: "Clip file not found on disk" });
-    return;
-  }
-
   const filename = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`;
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.setHeader("Content-Type", "video/mp4");
-  fs.createReadStream(clip.filePath).pipe(res);
+  const found = await streamToResponse(clip.filePath, res, {
+    contentType: "video/mp4",
+    filename,
+  });
+  if (!found) {
+    res.status(404).json({ error: "Clip file not found" });
+  }
 });
 
 router.get("/jobs/:id/download-facebook", async (req, res): Promise<void> => {
@@ -387,17 +382,15 @@ router.get("/jobs/:id/download-facebook", async (req, res): Promise<void> => {
     return;
   }
 
-  const facebookPath = path.join(CLIPS_DIR, `job_${job.id}_facebook.mp4`);
-  if (!fs.existsSync(facebookPath)) {
-    res.status(404).json({ error: "Facebook video not ready yet" });
-    return;
-  }
-
   const safeTitle = (job.videoTitle ?? `job_${job.id}`)
     .replace(/[^a-z0-9]/gi, "_").toLowerCase().slice(0, 60);
-  res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}_facebook_1x1.mp4"`);
-  res.setHeader("Content-Type", "video/mp4");
-  fs.createReadStream(facebookPath).pipe(res);
+  const found = await streamToResponse(`clips/job_${job.id}_facebook.mp4`, res, {
+    contentType: "video/mp4",
+    filename: `${safeTitle}_facebook_1x1.mp4`,
+  });
+  if (!found) {
+    res.status(404).json({ error: "Facebook video not ready yet" });
+  }
 });
 
 router.get("/jobs/:id/download-podcast", async (req, res): Promise<void> => {
@@ -415,17 +408,15 @@ router.get("/jobs/:id/download-podcast", async (req, res): Promise<void> => {
     return;
   }
 
-  const podcastPath = path.join(CLIPS_DIR, `job_${job.id}_podcast.mp3`);
-  if (!fs.existsSync(podcastPath)) {
-    res.status(404).json({ error: "Podcast not ready — it is generated automatically after processing completes" });
-    return;
-  }
-
   const safeTitle = (job.videoTitle ?? `job_${job.id}`)
     .replace(/[^a-z0-9]/gi, "_").toLowerCase().slice(0, 60);
-  res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}_podcast.mp3"`);
-  res.setHeader("Content-Type", "audio/mpeg");
-  fs.createReadStream(podcastPath).pipe(res);
+  const found = await streamToResponse(`clips/job_${job.id}_podcast.mp3`, res, {
+    contentType: "audio/mpeg",
+    filename: `${safeTitle}_podcast.mp3`,
+  });
+  if (!found) {
+    res.status(404).json({ error: "Podcast not ready — it is generated automatically after processing completes" });
+  }
 });
 
 router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
@@ -460,29 +451,30 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
 
   const folder = safeTitle;
 
-  const completedClips = clips.filter(c => c.status === "completed" && c.filePath && fs.existsSync(c.filePath));
-  if (completedClips.length > 0) {
-    for (const clip of completedClips) {
-      const clipName = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`;
-      archive.file(clip.filePath!, { name: `${folder}/shorts/${clipName}` });
-    }
+  const completedClips = clips.filter(c => c.status === "completed" && c.filePath);
+  const clipExistChecks = await Promise.all(completedClips.map(c => objectExists(c.filePath)));
+  for (let i = 0; i < completedClips.length; i++) {
+    if (!clipExistChecks[i]) continue;
+    const clip = completedClips[i];
+    const clipName = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`;
+    archive.append(getReadStream(clip.filePath!), { name: `${folder}/shorts/${clipName}` });
   }
 
-  const fbPath = path.join(CLIPS_DIR, `job_${job.id}_facebook.mp4`);
-  if (fs.existsSync(fbPath)) {
-    archive.file(fbPath, { name: `${folder}/facebook_1x1.mp4` });
+  const fbKey = `clips/job_${job.id}_facebook.mp4`;
+  if (await objectExists(fbKey)) {
+    archive.append(getReadStream(fbKey), { name: `${folder}/facebook_1x1.mp4` });
   }
 
-  const podcastPath = path.join(CLIPS_DIR, `job_${job.id}_podcast.mp3`);
-  if (fs.existsSync(podcastPath)) {
-    archive.file(podcastPath, { name: `${folder}/podcast.mp3` });
+  const podcastKey = `clips/job_${job.id}_podcast.mp3`;
+  if (await objectExists(podcastKey)) {
+    archive.append(getReadStream(podcastKey), { name: `${folder}/podcast.mp3` });
   }
 
   if (content?.carouselImages?.length > 0) {
     for (let i = 0; i < content.carouselImages.length; i++) {
-      const imgPath = path.join(CLIPS_DIR, content.carouselImages[i]);
-      if (fs.existsSync(imgPath)) {
-        archive.file(imgPath, { name: `${folder}/carousel/slide_${i + 1}.png` });
+      const imgKey = `clips/${content.carouselImages[i]}`;
+      if (await objectExists(imgKey)) {
+        archive.append(getReadStream(imgKey), { name: `${folder}/carousel/slide_${i + 1}.png` });
       }
     }
   }

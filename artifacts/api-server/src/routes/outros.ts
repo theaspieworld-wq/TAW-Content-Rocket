@@ -1,7 +1,6 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import path from "path";
-import fs from "fs";
 import { db, outrosTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -11,21 +10,10 @@ import {
   DeleteOutroParams,
   SetDefaultOutroParams,
 } from "@workspace/api-zod";
-import { logger } from "../lib/logger";
-
-const OUTROS_DIR = path.join(process.cwd(), "outros");
-fs.mkdirSync(OUTROS_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, OUTROS_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname) || ".mp4";
-    cb(null, `outro_${Date.now()}${ext}`);
-  },
-});
+import { uploadBuffer, deleteObject } from "../lib/storage";
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"];
@@ -77,10 +65,14 @@ router.post("/outros/upload", upload.single("file"), async (req, res): Promise<v
   const validPositions = ["beginning", "end"];
   const outroPosition = validPositions.includes(position) ? position : "end";
 
+  const ext = path.extname(req.file.originalname) || ".mp4";
+  const key = `outros/outro_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+  await uploadBuffer(key, req.file.buffer, req.file.mimetype);
+
   const [outro] = await db.insert(outrosTable).values({
     userId,
     name: name.trim(),
-    filePath: req.file.path,
+    filePath: key,
     isDefault: "false",
     position: outroPosition,
     ctaText: ctaText?.trim() || null,
@@ -142,11 +134,7 @@ router.delete("/outros/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  try {
-    if (fs.existsSync(outro.filePath)) fs.unlinkSync(outro.filePath);
-  } catch (e) {
-    logger.warn({ e }, "Could not delete outro file");
-  }
+  await deleteObject(outro.filePath);
 
   res.sendStatus(204);
 });

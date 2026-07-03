@@ -7,6 +7,7 @@ import { db, jobsTable, clipsTable, outrosTable, brandsTable, brandOutrosTable, 
 import { eq, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
+import { downloadToLocalFile, uploadLocalFile, objectExists } from "./storage";
 
 const execFileAsync = promisify(execFile);
 
@@ -97,9 +98,6 @@ function writeCookiesFile(): string | null {
     return null;
   }
 }
-
-const CLIPS_DIR = path.join(process.cwd(), "clips");
-fs.mkdirSync(CLIPS_DIR, { recursive: true });
 
 const FONTS_CACHE_DIR = path.join(process.cwd(), "fonts");
 fs.mkdirSync(FONTS_CACHE_DIR, { recursive: true });
@@ -535,7 +533,7 @@ async function generateCarouselSlides(
     slides.map(async (slide, i) => {
       const bgPath = bgPaths[i];
       const filename = `carousel_${jobId}_${i + 1}.png`;
-      const outputPath = path.join(CLIPS_DIR, filename);
+      const outputPath = path.join(tempDir, filename);
 
       const titleLines = wrapText(slide.title.toUpperCase(), 20);
       const bullets = slide.bullets.slice(0, 4).map(b => wrapText(b, 26)[0] || b);
@@ -587,6 +585,9 @@ async function generateCarouselSlides(
         try { fs.unlinkSync(bgPath); } catch (_) {}
       }
 
+      await uploadLocalFile(`clips/${filename}`, outputPath, "image/png");
+      try { fs.unlinkSync(outputPath); } catch (_) {}
+
       logger.info({ jobId, slideIndex: i + 1, hasBg: !!bgPath }, "Carousel slide rendered");
       return filename;
     })
@@ -598,12 +599,14 @@ async function generateCarouselSlides(
     return [];
   });
 
-  if (brand?.carouselEndSlidePath && fs.existsSync(brand.carouselEndSlidePath)) {
+  if (brand?.carouselEndSlidePath && await objectExists(brand.carouselEndSlidePath)) {
     const ext = path.extname(brand.carouselEndSlidePath) || ".png";
     const endSlideFilename = `carousel_${jobId}_end${ext}`;
-    const endSlideDest = path.join(CLIPS_DIR, endSlideFilename);
+    const endSlideLocal = path.join(tempDir, endSlideFilename);
     try {
-      fs.copyFileSync(brand.carouselEndSlidePath, endSlideDest);
+      await downloadToLocalFile(brand.carouselEndSlidePath, endSlideLocal);
+      await uploadLocalFile(`clips/${endSlideFilename}`, endSlideLocal, ext === ".png" ? "image/png" : "image/jpeg");
+      try { fs.unlinkSync(endSlideLocal); } catch (_) {}
       generated.push(endSlideFilename);
       logger.info({ jobId }, "Appended brand carousel end slide");
     } catch (e) {
@@ -619,15 +622,21 @@ export async function generatePodcastAudio(
   videoPath: string,
   brand: typeof brandsTable.$inferSelect | null,
 ): Promise<string | null> {
-  const podcastPath = path.join(CLIPS_DIR, `job_${jobId}_podcast.mp3`);
+  const podcastKey = `clips/job_${jobId}_podcast.mp3`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `podcast_${jobId}_`));
+  const podcastLocalPath = path.join(tempDir, `job_${jobId}_podcast.mp3`);
 
   try {
-    const introPath = brand?.introAudioPath && fs.existsSync(brand.introAudioPath)
-      ? brand.introAudioPath
-      : null;
-    const outroPath = brand?.outroAudioPath && fs.existsSync(brand.outroAudioPath)
-      ? brand.outroAudioPath
-      : null;
+    let introPath: string | null = null;
+    if (brand?.introAudioPath && await objectExists(brand.introAudioPath)) {
+      introPath = path.join(tempDir, `intro${path.extname(brand.introAudioPath) || ".mp3"}`);
+      await downloadToLocalFile(brand.introAudioPath, introPath);
+    }
+    let outroPath: string | null = null;
+    if (brand?.outroAudioPath && await objectExists(brand.outroAudioPath)) {
+      outroPath = path.join(tempDir, `outro${path.extname(brand.outroAudioPath) || ".mp3"}`);
+      await downloadToLocalFile(brand.outroAudioPath, outroPath);
+    }
 
     if (!introPath && !outroPath) {
       // Simple extraction — no mixing needed
@@ -638,11 +647,10 @@ export async function generatePodcastAudio(
         "-b:a", "192k",
         "-ar", "44100",
         "-ac", "2",
-        podcastPath, "-y",
+        podcastLocalPath, "-y",
       ], { timeout: 600000 });
     } else {
       // Extract main audio first
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `podcast_${jobId}_`));
       const mainAudioPath = path.join(tempDir, "main.mp3");
 
       await execFileAsync(FFMPEG, [
@@ -671,17 +679,18 @@ export async function generatePodcastAudio(
         "-b:a", "192k",
         "-ar", "44100",
         "-ac", "2",
-        podcastPath, "-y",
+        podcastLocalPath, "-y",
       ], { timeout: 600000 });
-
-      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
     }
 
+    await uploadLocalFile(podcastKey, podcastLocalPath, "audio/mpeg");
     logger.info({ jobId }, "Podcast audio generated");
-    return podcastPath;
+    return podcastKey;
   } catch (err) {
     logger.warn({ jobId, err }, "Podcast generation failed");
     return null;
+  } finally {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
   }
 }
 
@@ -1155,7 +1164,7 @@ export async function processJob(jobId: number): Promise<void> {
     let outro: typeof outrosTable.$inferSelect | null = null;
     if (job.outroId) {
       const [found] = await db.select().from(outrosTable).where(eq(outrosTable.id, job.outroId));
-      if (found && fs.existsSync(found.filePath)) {
+      if (found && await objectExists(found.filePath)) {
         outro = found;
       } else {
         logger.warn({ jobId, outroId: job.outroId }, "Outro not found or file missing, skipping");
@@ -1177,9 +1186,11 @@ export async function processJob(jobId: number): Promise<void> {
         if (ids.length > 0) {
           const found = await db.select().from(brandOutrosTable).where(inArray(brandOutrosTable.id, ids));
           // Keep the user-defined ordering and filter missing files
-          brandOutros = ids
+          const ordered = ids
             .map(id => found.find(o => o.id === id))
-            .filter((o): o is typeof brandOutrosTable.$inferSelect => !!o && fs.existsSync(o.filePath));
+            .filter((o): o is typeof brandOutrosTable.$inferSelect => !!o);
+          const existsFlags = await Promise.all(ordered.map(o => objectExists(o.filePath)));
+          brandOutros = ordered.filter((_, i) => existsFlags[i]);
         }
       } catch (e) {
         logger.warn({ e, jobId }, "Failed to parse brandOutroIds — skipping rotation");
@@ -1330,11 +1341,14 @@ export async function processJob(jobId: number): Promise<void> {
         for (const bo of brandOutros) {
           const preparedPath = path.join(tempDir, `brand_outro_${bo.id}.mp4`);
           try {
+            const localSource = path.join(tempDir, `brand_outro_src_${bo.id}.mp4`);
+            await downloadToLocalFile(bo.filePath, localSource);
             if (bo.ctaText) {
-              await prepareOutroWithCta(bo.filePath, bo.ctaText, null, preparedPath);
+              await prepareOutroWithCta(localSource, bo.ctaText, null, preparedPath);
             } else {
-              fs.copyFileSync(bo.filePath, preparedPath);
+              fs.copyFileSync(localSource, preparedPath);
             }
+            try { fs.unlinkSync(localSource); } catch (_) {}
             preparedBrandOutros.push({ path: preparedPath, id: bo.id });
           } catch (e) {
             logger.warn({ e, outroId: bo.id }, "Failed to prepare brand outro — skipping");
@@ -1347,19 +1361,23 @@ export async function processJob(jobId: number): Promise<void> {
       let singleOutroPath: string | null = null;
       let singleOutroPosition = "end";
       if (preparedBrandOutros.length === 0) {
-        if (brand?.shortFormOutroPath && fs.existsSync(brand.shortFormOutroPath)) {
-          singleOutroPath = brand.shortFormOutroPath;
+        if (brand?.shortFormOutroPath && await objectExists(brand.shortFormOutroPath)) {
+          singleOutroPath = path.join(tempDir, `brand_short_form_outro${path.extname(brand.shortFormOutroPath) || ".mp4"}`);
+          await downloadToLocalFile(brand.shortFormOutroPath, singleOutroPath);
           singleOutroPosition = "end";
           logger.info({ jobId }, "Using brand short-form outro video");
         } else if (outro) {
+          const outroLocalSource = path.join(tempDir, "global_outro_src.mp4");
+          await downloadToLocalFile(outro.filePath, outroLocalSource);
           singleOutroPath = path.join(tempDir, "outro_cta.mp4");
           singleOutroPosition = outro.position;
           await prepareOutroWithCta(
-            outro.filePath,
+            outroLocalSource,
             outro.ctaText ?? null,
             outro.ctaStartSeconds ? parseFloat(outro.ctaStartSeconds) : null,
             singleOutroPath,
           );
+          try { fs.unlinkSync(outroLocalSource); } catch (_) {}
         }
       }
 
@@ -1388,7 +1406,7 @@ export async function processJob(jobId: number): Promise<void> {
 
             // Name the final file using the clip's AI-generated title for easy identification
             const safeTitle = sanitizeFilename(clip.title);
-            const finalPath = path.join(CLIPS_DIR, `${safeTitle}_${clip.id}.mp4`);
+            const finalPath = path.join(tempDir, `${safeTitle}_${clip.id}.mp4`);
 
             // Pick outro for this specific clip (rotation or single source)
             const clipOutroPath = preparedBrandOutros.length > 0
@@ -1409,9 +1427,13 @@ export async function processJob(jobId: number): Promise<void> {
               fs.copyFileSync(mainClipPath, finalPath);
             }
 
+            const clipKey = `clips/${safeTitle}_${clip.id}.mp4`;
+            await uploadLocalFile(clipKey, finalPath, "video/mp4");
+            try { fs.unlinkSync(finalPath); } catch (_) {}
+
             await db.update(clipsTable).set({
               status: "completed",
-              filePath: finalPath,
+              filePath: clipKey,
             }).where(eq(clipsTable.id, clip.id));
 
             logger.info({ clipId: clip.id, title: clip.title }, "Clip rendered successfully");
@@ -1428,8 +1450,10 @@ export async function processJob(jobId: number): Promise<void> {
       await Promise.allSettled([
         (async () => {
           try {
-            const facebookPath = path.join(CLIPS_DIR, `job_${jobId}_facebook.mp4`);
-            await renderFullFacebookVideo(videoPath, jobId, transcript, facebookPath);
+            const facebookLocalPath = path.join(tempDir, `job_${jobId}_facebook.mp4`);
+            await renderFullFacebookVideo(videoPath, jobId, transcript, facebookLocalPath);
+            await uploadLocalFile(`clips/job_${jobId}_facebook.mp4`, facebookLocalPath, "video/mp4");
+            try { fs.unlinkSync(facebookLocalPath); } catch (_) {}
             logger.info({ jobId }, "Full Facebook 1:1 video rendered");
           } catch (fbErr) {
             logger.warn({ jobId, err: fbErr }, "Full Facebook video render failed — skipping");
