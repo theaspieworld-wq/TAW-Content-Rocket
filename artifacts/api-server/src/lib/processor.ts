@@ -240,10 +240,14 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
 
 async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
   // Proxy: residential proxy routes traffic through a home IP so YouTube
-  // doesn't flag it as a datacenter bot. Cookies are not used — the proxy
-  // alone is sufficient and avoids the cookie-expiry maintenance problem.
+  // doesn't flag it as a datacenter bot. Cookies (when configured) are also
+  // passed — YouTube increasingly requires an authenticated session on top
+  // of a clean IP ("Sign in to confirm you're not a bot" errors happen even
+  // through a good proxy without cookies).
   const proxy = process.env.YTDLP_PROXY?.trim();
   const proxyArgs = proxy ? ["--proxy", proxy] : [];
+  const cookiePath = writeCookiesFile();
+  const cookieArgs = cookiePath ? ["--cookies", cookiePath] : [];
 
   // Use the Android player client first: YouTube's Android API has lighter
   // bot-detection than the browser client and often works from server IPs.
@@ -261,11 +265,12 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
   const baseArgs = [
     "--no-playlist",
     ...proxyArgs,
+    ...cookieArgs,
     ...clientArgs,
     ...resilienceArgs,
   ];
 
-  logger.info({ hasProxy: !!proxy }, "yt-dlp download starting");
+  logger.info({ hasProxy: !!proxy, hasCookies: !!cookiePath }, "yt-dlp download starting");
 
   const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
   let title = "Untitled Video";
@@ -291,9 +296,11 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
     const msg = e instanceof Error ? e.message : String(e);
     if (/Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i.test(msg)) {
       throw new Error(
-        proxy
-          ? "YouTube is blocking downloads — the residential proxy may be flagged. Try a different proxy endpoint."
-          : "YouTube is blocking downloads from this server's IP. Set YTDLP_PROXY to a residential proxy URL (e.g. http://user:pass@host:port).",
+        cookiePath
+          ? "YouTube is blocking downloads even with cookies and a proxy configured — the cookies may be expired/invalid, or the proxy IP may be flagged. Try refreshing YOUTUBE_COOKIES from a logged-in browser session, or use a different proxy endpoint."
+          : proxy
+            ? "YouTube is blocking downloads — the residential proxy may be flagged, and no YOUTUBE_COOKIES are configured to help authenticate the session. Set YOUTUBE_COOKIES or try a different proxy endpoint."
+            : "YouTube is blocking downloads from this server's IP. Set YTDLP_PROXY to a residential proxy URL (e.g. http://user:pass@host:port) and/or YOUTUBE_COOKIES.",
       );
     }
     throw e;
@@ -486,12 +493,15 @@ interface VideoChapter {
 async function getVideoChapters(youtubeUrl: string): Promise<VideoChapter[]> {
   const proxy = process.env.YTDLP_PROXY?.trim();
   const proxyArgs = proxy ? ["--proxy", proxy] : [];
+  const cookiePath = writeCookiesFile();
+  const cookieArgs = cookiePath ? ["--cookies", cookiePath] : [];
   const clientArgs = ["--extractor-args", "youtube:player_client=android,web"];
 
   try {
     const { stdout } = await execFileAsync(YTDLP, [
       "--no-playlist",
       ...proxyArgs,
+      ...cookieArgs,
       ...clientArgs,
       "--dump-json",
       "--skip-download",
