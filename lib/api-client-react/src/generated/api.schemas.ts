@@ -332,6 +332,15 @@ export interface UpdateBrandOutroBody {
   ctaText?: string | null;
 }
 
+export interface BrandCarouselTemplate {
+  id: number;
+  brandId: number;
+  name: string;
+  filePath: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface BrandDocument {
   id: number;
   brandId: number;
@@ -364,6 +373,11 @@ export type UploadBrandOutroBody = {
   file?: Blob;
   name?: string;
   ctaText?: string;
+};
+
+export type UploadBrandCarouselTemplateBody = {
+  file?: Blob;
+  name?: string;
 };
 
 export type UploadBrandDocumentBody = {

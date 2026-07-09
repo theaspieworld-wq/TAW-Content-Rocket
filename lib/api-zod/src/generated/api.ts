@@ -137,6 +137,53 @@ export const DeleteBrandOutroParams = zod.object({
 });
 
 /**
+ * @summary List all carousel background template images for a brand
+ */
+export const ListBrandCarouselTemplatesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListBrandCarouselTemplatesResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  name: zod.string(),
+  filePath: zod.string(),
+  sortOrder: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListBrandCarouselTemplatesResponse = zod.array(
+  ListBrandCarouselTemplatesResponseItem,
+);
+
+/**
+ * @summary Upload a new carousel background template image for a brand
+ */
+export const UploadBrandCarouselTemplateParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UploadBrandCarouselTemplateBody = zod.object({
+  file: zod.instanceof(File).optional(),
+  name: zod.string().optional(),
+});
+
+/**
+ * @summary Fetch a brand carousel template's image bytes
+ */
+export const GetBrandCarouselTemplateImageParams = zod.object({
+  id: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+/**
+ * @summary Delete a brand carousel background template image
+ */
+export const DeleteBrandCarouselTemplateParams = zod.object({
+  id: zod.coerce.number(),
+  templateId: zod.coerce.number(),
+});
+
+/**
  * @summary List all documents for a brand
  */
 export const ListBrandDocumentsParams = zod.object({

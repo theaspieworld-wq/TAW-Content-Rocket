@@ -65,6 +65,20 @@ export const insertBrandOutroSchema = createInsertSchema(brandOutrosTable).omit(
 export type InsertBrandOutro = z.infer<typeof insertBrandOutroSchema>;
 export type BrandOutro = typeof brandOutrosTable.$inferSelect;
 
+export const brandCarouselTemplatesTable = pgTable("brand_carousel_templates", {
+  id: serial("id").primaryKey(),
+  brandId: integer("brand_id").notNull().references(() => brandsTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  filePath: text("file_path").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("brand_carousel_templates_brand_id_idx").on(t.brandId)]);
+
+export const insertBrandCarouselTemplateSchema = createInsertSchema(brandCarouselTemplatesTable).omit({ id: true, createdAt: true });
+export type InsertBrandCarouselTemplate = z.infer<typeof insertBrandCarouselTemplateSchema>;
+export type BrandCarouselTemplate = typeof brandCarouselTemplatesTable.$inferSelect;
+
 export const brandDocumentsTable = pgTable("brand_documents", {
   id: serial("id").primaryKey(),
   brandId: integer("brand_id").notNull().references(() => brandsTable.id, { onDelete: "cascade" }),

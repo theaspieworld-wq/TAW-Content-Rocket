@@ -21,6 +21,9 @@ import {
   useListBrandDocuments,
   useUploadBrandDocument,
   useDeleteBrandDocument,
+  useListBrandCarouselTemplates,
+  useUploadBrandCarouselTemplate,
+  useDeleteBrandCarouselTemplate,
   getGetJobQueryKey,
   getListJobsQueryKey,
   getHealthCheckQueryKey,
@@ -28,6 +31,7 @@ import {
   getListBrandsQueryKey,
   getGetJobContentQueryKey,
   getListBrandDocumentsQueryKey,
+  getListBrandCarouselTemplatesQueryKey,
   type Brand,
   type BrandDocument,
 } from "@workspace/api-client-react";
@@ -314,11 +318,19 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const deleteBrand = useDeleteBrand();
   const uploadBrandDoc = useUploadBrandDocument();
   const deleteBrandDocMutation = useDeleteBrandDocument();
+  const uploadCarouselTemplate = useUploadBrandCarouselTemplate();
+  const deleteCarouselTemplateMutation = useDeleteBrandCarouselTemplate();
 
   // Load documents for whichever brand is currently expanded
   const { data: brandDocuments } = useListBrandDocuments(
     expandedBrandId ?? 0,
     { query: { enabled: expandedBrandId !== null, queryKey: getListBrandDocumentsQueryKey(expandedBrandId ?? 0) } }
+  );
+
+  // Load carousel template images for whichever brand is currently expanded
+  const { data: carouselTemplates } = useListBrandCarouselTemplates(
+    expandedBrandId ?? 0,
+    { query: { enabled: expandedBrandId !== null, queryKey: getListBrandCarouselTemplatesQueryKey(expandedBrandId ?? 0) } }
   );
 
   const { data: jobContent, isLoading: isContentLoading } = useGetJobContent(
@@ -1261,6 +1273,57 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                   );
                                 })}
                               </div>
+                            </div>
+
+                            {/* Carousel Slide Templates */}
+                            <div className="space-y-2 pt-1">
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Carousel Slide Templates</p>
+                              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">Upload background images to use for carousel slides instead of AI-generated art. They'll be cycled through in order across the slides.</p>
+
+                              {expandedBrandId !== null && carouselTemplates && carouselTemplates.length > 0 && (
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {carouselTemplates.map((tpl) => (
+                                    <div key={tpl.id} className="relative group rounded-lg border border-emerald-500/20 bg-emerald-500/5 aspect-square overflow-hidden">
+                                      <img src={`/api/brands/${expandedBrandId}/carousel-templates/${tpl.id}/image`} alt={tpl.name} className="w-full h-full object-cover" />
+                                      <Button
+                                        variant="ghost" size="icon"
+                                        className="absolute top-0.5 right-0.5 h-5 w-5 bg-black/60 hover:bg-destructive/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => deleteCarouselTemplateMutation.mutate(
+                                          { id: expandedBrandId!, templateId: tpl.id },
+                                          { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListBrandCarouselTemplatesQueryKey(expandedBrandId!) }) }
+                                        )}
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <label className={`flex items-center gap-2 p-2.5 rounded-lg border border-dashed cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/30 ${uploadCarouselTemplate.isPending ? "opacity-60 pointer-events-none" : "border-border/50 bg-card/30"}`}>
+                                {uploadCarouselTemplate.isPending
+                                  ? <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+                                  : <LayoutGrid className="w-3.5 h-3.5 text-muted-foreground" />
+                                }
+                                <span className="text-[10px] text-muted-foreground">{uploadCarouselTemplate.isPending ? "Uploading…" : "Upload template image"}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file || expandedBrandId === null) return;
+                                    try {
+                                      await uploadCarouselTemplate.mutateAsync({ id: expandedBrandId, data: { file, name: file.name } });
+                                      queryClient.invalidateQueries({ queryKey: getListBrandCarouselTemplatesQueryKey(expandedBrandId) });
+                                      toast({ title: "Carousel template uploaded" });
+                                    } catch {
+                                      toast({ title: "Upload failed", variant: "destructive" });
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
                             </div>
 
                             {/* ── Outros ──────────────────────────────── */}

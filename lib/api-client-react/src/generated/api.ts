@@ -18,6 +18,7 @@ import type {
 
 import type {
   Brand,
+  BrandCarouselTemplate,
   BrandDocument,
   BrandOutro,
   CreateBrandBody,
@@ -31,6 +32,7 @@ import type {
   UpdateBrandBody,
   UpdateBrandOutroBody,
   UpdateOutroBody,
+  UploadBrandCarouselTemplateBody,
   UploadBrandDocumentBody,
   UploadBrandOutroBody,
 } from "./api.schemas";
@@ -633,6 +635,393 @@ export const useDeleteBrandOutro = <
   TContext
 > => {
   return useMutation(getDeleteBrandOutroMutationOptions(options));
+};
+
+/**
+ * @summary List all carousel background template images for a brand
+ */
+export const getListBrandCarouselTemplatesUrl = (id: number) => {
+  return `/api/brands/${id}/carousel-templates`;
+};
+
+export const listBrandCarouselTemplates = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BrandCarouselTemplate[]> => {
+  return customFetch<BrandCarouselTemplate[]>(
+    getListBrandCarouselTemplatesUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListBrandCarouselTemplatesQueryKey = (id: number) => {
+  return [`/api/brands/${id}/carousel-templates`] as const;
+};
+
+export const getListBrandCarouselTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBrandCarouselTemplates>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBrandCarouselTemplates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListBrandCarouselTemplatesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBrandCarouselTemplates>>
+  > = ({ signal }) =>
+    listBrandCarouselTemplates(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBrandCarouselTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBrandCarouselTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBrandCarouselTemplates>>
+>;
+export type ListBrandCarouselTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all carousel background template images for a brand
+ */
+
+export function useListBrandCarouselTemplates<
+  TData = Awaited<ReturnType<typeof listBrandCarouselTemplates>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBrandCarouselTemplates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBrandCarouselTemplatesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a new carousel background template image for a brand
+ */
+export const getUploadBrandCarouselTemplateUrl = (id: number) => {
+  return `/api/brands/${id}/carousel-templates`;
+};
+
+export const uploadBrandCarouselTemplate = async (
+  id: number,
+  uploadBrandCarouselTemplateBody: UploadBrandCarouselTemplateBody,
+  options?: RequestInit,
+): Promise<BrandCarouselTemplate> => {
+  const formData = new FormData();
+  if (uploadBrandCarouselTemplateBody.file !== undefined) {
+    formData.append(`file`, uploadBrandCarouselTemplateBody.file);
+  }
+  if (uploadBrandCarouselTemplateBody.name !== undefined) {
+    formData.append(`name`, uploadBrandCarouselTemplateBody.name);
+  }
+
+  return customFetch<BrandCarouselTemplate>(
+    getUploadBrandCarouselTemplateUrl(id),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getUploadBrandCarouselTemplateMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadBrandCarouselTemplate>>,
+    TError,
+    { id: number; data: BodyType<UploadBrandCarouselTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadBrandCarouselTemplate>>,
+  TError,
+  { id: number; data: BodyType<UploadBrandCarouselTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadBrandCarouselTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadBrandCarouselTemplate>>,
+    { id: number; data: BodyType<UploadBrandCarouselTemplateBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return uploadBrandCarouselTemplate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadBrandCarouselTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadBrandCarouselTemplate>>
+>;
+export type UploadBrandCarouselTemplateMutationBody =
+  BodyType<UploadBrandCarouselTemplateBody>;
+export type UploadBrandCarouselTemplateMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload a new carousel background template image for a brand
+ */
+export const useUploadBrandCarouselTemplate = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadBrandCarouselTemplate>>,
+    TError,
+    { id: number; data: BodyType<UploadBrandCarouselTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadBrandCarouselTemplate>>,
+  TError,
+  { id: number; data: BodyType<UploadBrandCarouselTemplateBody> },
+  TContext
+> => {
+  return useMutation(getUploadBrandCarouselTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Fetch a brand carousel template's image bytes
+ */
+export const getGetBrandCarouselTemplateImageUrl = (
+  id: number,
+  templateId: number,
+) => {
+  return `/api/brands/${id}/carousel-templates/${templateId}/image`;
+};
+
+export const getBrandCarouselTemplateImage = async (
+  id: number,
+  templateId: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(
+    getGetBrandCarouselTemplateImageUrl(id, templateId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetBrandCarouselTemplateImageQueryKey = (
+  id: number,
+  templateId: number,
+) => {
+  return [`/api/brands/${id}/carousel-templates/${templateId}/image`] as const;
+};
+
+export const getGetBrandCarouselTemplateImageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  templateId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetBrandCarouselTemplateImageQueryKey(id, templateId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>
+  > = ({ signal }) =>
+    getBrandCarouselTemplateImage(id, templateId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(id && templateId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrandCarouselTemplateImageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>
+>;
+export type GetBrandCarouselTemplateImageQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Fetch a brand carousel template's image bytes
+ */
+
+export function useGetBrandCarouselTemplateImage<
+  TData = Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  templateId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrandCarouselTemplateImage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrandCarouselTemplateImageQueryOptions(
+    id,
+    templateId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete a brand carousel background template image
+ */
+export const getDeleteBrandCarouselTemplateUrl = (
+  id: number,
+  templateId: number,
+) => {
+  return `/api/brands/${id}/carousel-templates/${templateId}`;
+};
+
+export const deleteBrandCarouselTemplate = async (
+  id: number,
+  templateId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteBrandCarouselTemplateUrl(id, templateId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteBrandCarouselTemplateMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrandCarouselTemplate>>,
+    TError,
+    { id: number; templateId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBrandCarouselTemplate>>,
+  TError,
+  { id: number; templateId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteBrandCarouselTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBrandCarouselTemplate>>,
+    { id: number; templateId: number }
+  > = (props) => {
+    const { id, templateId } = props ?? {};
+
+    return deleteBrandCarouselTemplate(id, templateId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBrandCarouselTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBrandCarouselTemplate>>
+>;
+
+export type DeleteBrandCarouselTemplateMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a brand carousel background template image
+ */
+export const useDeleteBrandCarouselTemplate = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrandCarouselTemplate>>,
+    TError,
+    { id: number; templateId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBrandCarouselTemplate>>,
+  TError,
+  { id: number; templateId: number },
+  TContext
+> => {
+  return useMutation(getDeleteBrandCarouselTemplateMutationOptions(options));
 };
 
 /**

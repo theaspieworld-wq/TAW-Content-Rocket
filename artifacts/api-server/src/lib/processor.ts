@@ -3,7 +3,7 @@ import { promisify } from "util";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { db, jobsTable, clipsTable, outrosTable, brandsTable, brandOutrosTable, brandDocumentsTable } from "@workspace/db";
+import { db, jobsTable, clipsTable, outrosTable, brandsTable, brandOutrosTable, brandDocumentsTable, brandCarouselTemplatesTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
@@ -643,6 +643,7 @@ async function generateCarouselSlides(
   slides: CarouselSlide[],
   brand: typeof brandsTable.$inferSelect | null,
   tempDir: string,
+  templateKeys: string[] = [],
 ): Promise<string[]> {
   const fontFile = await getFontPath(brand?.fontFamily ?? null);
   const primary = brand?.primaryColor ?? "#f21178";
@@ -651,10 +652,32 @@ async function generateCarouselSlides(
   const secondaryFf = hexToFfmpeg(secondary);
   const brandLabel = brand?.name ?? "Content Rocket";
 
-  // Step A: generate all AI backgrounds in parallel — independent API calls
-  const bgPaths = await Promise.all(
-    slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir))
-  );
+  // Step A: use brand-provided template images if any, cycling through them;
+  // otherwise fall back to AI-generated backgrounds per slide.
+  let bgPaths: (string | null)[];
+  if (templateKeys.length > 0) {
+    const localTemplatePaths = await Promise.all(
+      templateKeys.map(async (key, i) => {
+        try {
+          const ext = path.extname(key) || ".png";
+          const localPath = path.join(tempDir, `carousel_template_${jobId}_${i}${ext}`);
+          await downloadToLocalFile(key, localPath);
+          return localPath;
+        } catch (e) {
+          logger.warn({ jobId, key, e }, "Failed to download brand carousel template — skipping");
+          return null;
+        }
+      })
+    );
+    const validTemplates = localTemplatePaths.filter((p): p is string => !!p);
+    bgPaths = validTemplates.length > 0
+      ? slides.map((_, i) => validTemplates[i % validTemplates.length])
+      : await Promise.all(slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir)));
+  } else {
+    bgPaths = await Promise.all(
+      slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir))
+    );
+  }
 
   // Step B: render all slides in parallel — each ffmpeg call is fully independent
   const results = await Promise.allSettled(
@@ -709,7 +732,7 @@ async function generateCarouselSlides(
 
       await execFileAsync(FFMPEG, ffmpegArgs, { timeout: 30000 });
 
-      if (bgPath) {
+      if (bgPath && templateKeys.length === 0) {
         try { fs.unlinkSync(bgPath); } catch (_) {}
       }
 
@@ -1185,6 +1208,7 @@ export async function generateContent(
     jobId?: number;
     brand?: typeof brandsTable.$inferSelect | null;
     tempDir?: string;
+    carouselTemplates?: string[];
   },
 ): Promise<GeneratedContent> {
   const thumbnailUrl = getThumbnailUrl(youtubeUrl);
@@ -1379,7 +1403,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       title: s.title ?? "Key Insight",
       bullets: Array.isArray(s.bullets) ? s.bullets : [],
     }));
-    carouselImages = await generateCarouselSlides(jobId, slides, options?.brand ?? null, options?.tempDir ?? os.tmpdir());
+    carouselImages = await generateCarouselSlides(jobId, slides, options?.brand ?? null, options?.tempDir ?? os.tmpdir(), options?.carouselTemplates ?? []);
   }
 
   return {
@@ -1462,6 +1486,19 @@ export async function processJob(jobId: number): Promise<void> {
       }
     }
 
+    // Load brand carousel template images to use as carousel slide backgrounds
+    let brandCarouselTemplateKeys: string[] = [];
+    if (job.brandId) {
+      try {
+        const templates = await db.select().from(brandCarouselTemplatesTable)
+          .where(eq(brandCarouselTemplatesTable.brandId, job.brandId))
+          .orderBy(brandCarouselTemplatesTable.sortOrder, brandCarouselTemplatesTable.createdAt);
+        brandCarouselTemplateKeys = templates.map(t => t.filePath);
+      } catch (e) {
+        logger.warn({ e, jobId }, "Failed to load brand carousel templates");
+      }
+    }
+
     const clipDuration = job.clipDurationSeconds ?? 45;
     const wantPodcast = job.generatePodcast !== "false";
 
@@ -1485,6 +1522,7 @@ export async function processJob(jobId: number): Promise<void> {
           jobId,
           brand,
           tempDir,
+          carouselTemplates: brandCarouselTemplateKeys,
         });
         await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
         logger.info({ jobId }, "Content generation completed for transcript job");
@@ -1548,6 +1586,7 @@ export async function processJob(jobId: number): Promise<void> {
         jobId,
         brand,
         tempDir,
+        carouselTemplates: brandCarouselTemplateKeys,
       }),
     ]);
 

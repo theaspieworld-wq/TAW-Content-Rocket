@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import archiver from "archiver";
 import multer from "multer";
-import { db, jobsTable, clipsTable, outrosTable, brandsTable } from "@workspace/db";
+import { db, jobsTable, clipsTable, outrosTable, brandsTable, brandCarouselTemplatesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import {
@@ -342,12 +343,30 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
   const transcript = JSON.parse(job.transcript);
   const videoTitle = job.videoTitle ?? "Untitled Video";
 
-  const content = await generateContent(job.youtubeUrl, videoTitle, transcript, {
-    brandVoice: brand?.voiceStyle ?? null,
-    contentCta: job.contentCta ?? null,
-    brandName: brand?.name ?? null,
-    jobId: job.id,
-  });
+  let carouselTemplateKeys: string[] = [];
+  if (job.brandId) {
+    const templates = await db.select().from(brandCarouselTemplatesTable)
+      .where(eq(brandCarouselTemplatesTable.brandId, job.brandId))
+      .orderBy(brandCarouselTemplatesTable.sortOrder, brandCarouselTemplatesTable.createdAt);
+    carouselTemplateKeys = templates.map(t => t.filePath);
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `regen_${job.id}_`));
+  let content;
+  try {
+    content = await generateContent(job.youtubeUrl, videoTitle, transcript, {
+      brandVoice: brand?.voiceStyle ?? null,
+      contentCta: job.contentCta ?? null,
+      brandName: brand?.name ?? null,
+      brandWebsite: brand?.website ?? null,
+      jobId: job.id,
+      brand,
+      tempDir,
+      carouselTemplates: carouselTemplateKeys,
+    });
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 
   await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, job.id));
 

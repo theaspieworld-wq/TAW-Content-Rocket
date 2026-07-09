@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import path from "path";
-import { db, brandsTable, brandOutrosTable, brandDocumentsTable } from "@workspace/db";
+import { db, brandsTable, brandOutrosTable, brandDocumentsTable, brandCarouselTemplatesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import {
@@ -103,6 +103,17 @@ function brandOutroToJson(o: typeof brandOutrosTable.$inferSelect) {
   };
 }
 
+function brandCarouselTemplateToJson(t: typeof brandCarouselTemplatesTable.$inferSelect) {
+  return {
+    id: t.id,
+    brandId: t.brandId,
+    name: t.name,
+    filePath: t.filePath,
+    sortOrder: t.sortOrder,
+    createdAt: t.createdAt.toISOString(),
+  };
+}
+
 function brandDocumentToJson(d: typeof brandDocumentsTable.$inferSelect) {
   return {
     id: d.id,
@@ -197,12 +208,15 @@ router.delete("/brands/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const templates = await db.select().from(brandCarouselTemplatesTable)
+    .where(eq(brandCarouselTemplatesTable.brandId, brand.id));
+
   await Promise.all(
-    [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath, brand.carouselEndSlidePath]
+    [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath, brand.carouselEndSlidePath, ...templates.map(t => t.filePath)]
       .map((key) => deleteObject(key))
   );
 
-  // brand_outros and brand_documents are cascade-deleted by the DB
+  // brand_outros, brand_documents, and brand_carousel_templates are cascade-deleted by the DB
   await db.delete(brandsTable)
     .where(and(eq(brandsTable.id, params.data.id), eq(brandsTable.userId, userId)));
   res.status(204).send();
@@ -432,6 +446,84 @@ router.delete("/brands/:id/outros/:outroId", async (req, res): Promise<void> => 
   await deleteObject(outro.filePath);
 
   await db.delete(brandOutrosTable).where(eq(brandOutrosTable.id, outroId));
+  res.status(204).send();
+});
+
+// ── Brand Carousel Templates ─────────────────────────────────────────────────
+
+router.get("/brands/:id/carousel-templates", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
+  if (!brand) { res.status(404).json({ error: "Brand not found" }); return; }
+
+  const templates = await db.select().from(brandCarouselTemplatesTable)
+    .where(eq(brandCarouselTemplatesTable.brandId, id))
+    .orderBy(brandCarouselTemplatesTable.sortOrder, brandCarouselTemplatesTable.createdAt);
+
+  res.json(templates.map(brandCarouselTemplateToJson));
+});
+
+router.post("/brands/:id/carousel-templates", uploadLogo.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No image file provided" }); return; }
+
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
+  if (!brand) {
+    res.status(404).json({ error: "Brand not found" });
+    return;
+  }
+
+  const name = (req.body?.name as string | undefined) || path.parse(req.file.originalname).name;
+  const key = objectKeyFor("brands/carousel-template", req.file.originalname, ".png");
+  await uploadBuffer(key, req.file.buffer, req.file.mimetype);
+
+  const existingCount = await db.$count(brandCarouselTemplatesTable, eq(brandCarouselTemplatesTable.brandId, id));
+
+  const [template] = await db.insert(brandCarouselTemplatesTable).values({
+    brandId: id,
+    userId,
+    name,
+    filePath: key,
+    sortOrder: existingCount,
+  }).returning();
+
+  res.status(201).json(brandCarouselTemplateToJson(template));
+});
+
+router.get("/brands/:id/carousel-templates/:templateId/image", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id, 10);
+  const templateId = parseInt(req.params.templateId, 10);
+  if (isNaN(id) || isNaN(templateId)) { res.status(400).json({ error: "Invalid ID" }); return; }
+
+  const [template] = await db.select().from(brandCarouselTemplatesTable)
+    .where(and(eq(brandCarouselTemplatesTable.id, templateId), eq(brandCarouselTemplatesTable.brandId, id), eq(brandCarouselTemplatesTable.userId, userId)));
+  if (!template) { res.status(404).json({ error: "Brand carousel template not found" }); return; }
+
+  const found = await streamToResponse(template.filePath, res, { cacheControl: "public, max-age=86400" });
+  if (!found) res.status(404).json({ error: "Image not found" });
+});
+
+router.delete("/brands/:id/carousel-templates/:templateId", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id, 10);
+  const templateId = parseInt(req.params.templateId, 10);
+  if (isNaN(id) || isNaN(templateId)) { res.status(400).json({ error: "Invalid ID" }); return; }
+
+  const [template] = await db.select().from(brandCarouselTemplatesTable)
+    .where(and(eq(brandCarouselTemplatesTable.id, templateId), eq(brandCarouselTemplatesTable.brandId, id), eq(brandCarouselTemplatesTable.userId, userId)));
+  if (!template) { res.status(404).json({ error: "Brand carousel template not found" }); return; }
+
+  await deleteObject(template.filePath);
+
+  await db.delete(brandCarouselTemplatesTable).where(eq(brandCarouselTemplatesTable.id, templateId));
   res.status(204).send();
 });
 

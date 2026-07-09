@@ -44,6 +44,7 @@ artifacts-monorepo/
 - Clips rendered with title overlay + burned-in captions; optional outro overlay
 - Shorts toggle (include/exclude vertical clips), configurable clip count (0–10)
 - Multi-brand support: logos, voice style, default CTA, intro/outro audio files, Google Font family, primary/secondary brand colors
+- Brand carousel slide templates: brands can upload their own background images to use for carousel slides (cycled through in order) instead of AI-generated art
 - Podcast audio extraction at 192kbps with brand intro/outro concat
 - 4-slide carousel infographic PNG generation: AI-generated photographic background per slide via gpt-image-1, brand colors (primary accent bar + secondary divider), brand Google Font downloaded + cached, brand name in footer
 - Full content pack: blog post HTML, newsletter email, social posts, quotes + Instagram captions, carousel caption
@@ -57,6 +58,7 @@ artifacts-monorepo/
 - `jobs` table: id, youtube_url, video_title, status, error_message, clip_count, clip_duration_seconds, content_cta, outro_id, brand_id, transcript, generated_content, created_at, updated_at
 - `clips` table: id, job_id, title, start_seconds, end_seconds, duration_seconds, file_path, status, created_at
 - `outros` table: id, name, file_path, is_default, position, cta_text, cta_start_seconds, created_at
+- `brand_carousel_templates` table: id, brand_id, user_id, name, file_path, sort_order, created_at
 
 ## API Routes
 
@@ -77,6 +79,10 @@ artifacts-monorepo/
 - `POST /api/brands/:id/intro-audio` — upload brand intro audio
 - `POST /api/brands/:id/outro-audio` — upload brand outro audio
 - `GET /api/brands/:id/logo` — serve brand logo
+- `GET /api/brands/:id/carousel-templates` — list brand carousel slide template images
+- `POST /api/brands/:id/carousel-templates` — upload a carousel slide template image
+- `DELETE /api/brands/:id/carousel-templates/:templateId` — delete a carousel slide template image
+- `GET /api/brands/:id/carousel-templates/:templateId/image` — serve a carousel slide template image
 - `GET /api/outros` — list outros
 - `POST /api/outros/upload` — upload outro video
 - `PUT /api/outros/:id` — update outro

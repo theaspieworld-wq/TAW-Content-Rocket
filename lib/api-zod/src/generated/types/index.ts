@@ -7,6 +7,7 @@
  */
 
 export * from "./brand";
+export * from "./brandCarouselTemplate";
 export * from "./brandDocument";
 export * from "./brandOutro";
 export * from "./clip";
@@ -30,5 +31,6 @@ export * from "./updateBrandBody";
 export * from "./updateBrandOutroBody";
 export * from "./updateOutroBody";
 export * from "./updateOutroBodyPosition";
+export * from "./uploadBrandCarouselTemplateBody";
 export * from "./uploadBrandDocumentBody";
 export * from "./uploadBrandOutroBody";

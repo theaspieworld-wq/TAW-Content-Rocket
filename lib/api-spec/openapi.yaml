@@ -181,6 +181,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/carousel-templates:
+    get:
+      operationId: listBrandCarouselTemplates
+      tags: [brands]
+      summary: List all carousel background template images for a brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of brand carousel templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrandCarouselTemplate"
+    post:
+      operationId: uploadBrandCarouselTemplate
+      tags: [brands]
+      summary: Upload a new carousel background template image for a brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Brand carousel template created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandCarouselTemplate"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/carousel-templates/{templateId}/image:
+    get:
+      operationId: getBrandCarouselTemplateImage
+      tags: [brands]
+      summary: Fetch a brand carousel template's image bytes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Image bytes
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/{id}/carousel-templates/{templateId}:
+    delete:
+      operationId: deleteBrandCarouselTemplate
+      tags: [brands]
+      summary: Delete a brand carousel background template image
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /brands/{id}/documents:
     get:
       operationId: listBrandDocuments
@@ -961,6 +1071,29 @@ components:
           type: string
         ctaText:
           type: ["string", "null"]
+    BrandCarouselTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        name:
+          type: string
+        filePath:
+          type: string
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandId
+        - name
+        - filePath
+        - sortOrder
+        - createdAt
     BrandDocument:
       type: object
       properties:
