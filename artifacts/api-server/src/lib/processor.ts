@@ -238,16 +238,12 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
   }).where(eq(jobsTable.id, jobId));
 }
 
-async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
-  // Proxy: residential proxy routes traffic through a home IP so YouTube
-  // doesn't flag it as a datacenter bot. Cookies (when configured) are also
-  // passed — YouTube increasingly requires an authenticated session on top
-  // of a clean IP ("Sign in to confirm you're not a bot" errors happen even
-  // through a good proxy without cookies).
-  const proxy = process.env.YTDLP_PROXY?.trim();
+const BOT_CHECK_PATTERN = /Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i;
+
+function buildYtdlpBaseArgs(opts: { useProxy: boolean; cookiePath: string | null }): string[] {
+  const proxy = opts.useProxy ? process.env.YTDLP_PROXY?.trim() : undefined;
   const proxyArgs = proxy ? ["--proxy", proxy] : [];
-  const cookiePath = writeCookiesFile();
-  const cookieArgs = cookiePath ? ["--cookies", cookiePath] : [];
+  const cookieArgs = opts.cookiePath ? ["--cookies", opts.cookiePath] : [];
 
   // Use the Android player client first: YouTube's Android API has lighter
   // bot-detection than the browser client and often works from server IPs.
@@ -262,54 +258,90 @@ async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ v
     "--socket-timeout", "30",
     "--force-ipv4",
   ];
-  const baseArgs = [
+  return [
     "--no-playlist",
     ...proxyArgs,
     ...cookieArgs,
     ...clientArgs,
     ...resilienceArgs,
   ];
+}
 
-  logger.info({ hasProxy: !!proxy, hasCookies: !!cookiePath }, "yt-dlp download starting");
+async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
+  // Proxy: residential proxy routes traffic through a home IP so YouTube
+  // doesn't flag it as a datacenter bot. Cookies (when configured) are also
+  // passed — YouTube increasingly requires an authenticated session on top
+  // of a clean IP ("Sign in to confirm you're not a bot" errors happen even
+  // through a good proxy without cookies).
+  //
+  // Some proxy plans hand out a single static/sticky IP rather than a
+  // rotating one. A static IP that has been used for scraping can end up
+  // MORE flagged than this server's own IP for specific videos. So if the
+  // proxy attempt gets bot-checked, we automatically retry once without the
+  // proxy before giving up.
+  const proxy = process.env.YTDLP_PROXY?.trim();
+  const cookiePath = writeCookiesFile();
+  const videoPath = path.join(outputDir, "video.mp4");
 
-  const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
-  let title = "Untitled Video";
-  try {
-    const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 60000, env: process.env });
-    title = stdout.trim().split("\n")[0] || title;
-  } catch (e) {
-    logger.warn({ e }, "Could not fetch video title");
+  async function attempt(useProxy: boolean): Promise<{ videoPath: string; title: string }> {
+    const baseArgs = buildYtdlpBaseArgs({ useProxy, cookiePath });
+    logger.info({ hasProxy: useProxy && !!proxy, hasCookies: !!cookiePath }, "yt-dlp download starting");
+
+    const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
+    let title = "Untitled Video";
+    try {
+      const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 60000, env: process.env });
+      title = stdout.trim().split("\n")[0] || title;
+    } catch (e) {
+      logger.warn({ e }, "Could not fetch video title");
+    }
+
+    const dlArgs = [
+      ...baseArgs,
+      "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+      "--merge-output-format", "mp4",
+      "-o", videoPath,
+      youtubeUrl,
+    ];
+    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
+    return { videoPath, title };
   }
 
-  const videoPath = path.join(outputDir, "video.mp4");
-  const dlArgs = [
-    ...baseArgs,
-    "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-    "--merge-output-format", "mp4",
-    "-o", videoPath,
-    youtubeUrl,
-  ];
-
+  let result: { videoPath: string; title: string };
   try {
-    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
+    result = await attempt(true);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i.test(msg)) {
+    if (proxy && BOT_CHECK_PATTERN.test(msg)) {
+      logger.warn({ msg }, "yt-dlp bot-check via proxy — retrying without proxy (this server's own IP)");
+      try {
+        result = await attempt(false);
+      } catch (e2) {
+        const msg2 = e2 instanceof Error ? e2.message : String(e2);
+        if (BOT_CHECK_PATTERN.test(msg2)) {
+          throw new Error(
+            cookiePath
+              ? "YouTube is blocking downloads even with cookies, and both the proxy and this server's direct IP were bot-checked — the cookies are likely expired/invalid. Refresh YOUTUBE_COOKIES from a logged-in browser session."
+              : "YouTube is blocking downloads even after retrying without the proxy — both the proxy IP and this server's direct IP were bot-checked. Set YOUTUBE_COOKIES from a logged-in browser session to authenticate the download.",
+          );
+        }
+        throw e2;
+      }
+    } else if (BOT_CHECK_PATTERN.test(msg)) {
       throw new Error(
         cookiePath
-          ? "YouTube is blocking downloads even with cookies and a proxy configured — the cookies may be expired/invalid, or the proxy IP may be flagged. Try refreshing YOUTUBE_COOKIES from a logged-in browser session, or use a different proxy endpoint."
-          : proxy
-            ? "YouTube is blocking downloads — the residential proxy may be flagged, and no YOUTUBE_COOKIES are configured to help authenticate the session. Set YOUTUBE_COOKIES or try a different proxy endpoint."
-            : "YouTube is blocking downloads from this server's IP. Set YTDLP_PROXY to a residential proxy URL (e.g. http://user:pass@host:port) and/or YOUTUBE_COOKIES.",
+          ? "YouTube is blocking downloads even with cookies configured — the cookies may be expired/invalid. Refresh YOUTUBE_COOKIES from a logged-in browser session."
+          : "YouTube is blocking downloads from this server's IP. Set YOUTUBE_COOKIES from a logged-in browser session, and/or YTDLP_PROXY to a rotating residential proxy URL.",
       );
+    } else {
+      throw e;
     }
-    throw e;
   }
 
-  if (!fs.existsSync(videoPath)) {
+  if (!fs.existsSync(result.videoPath)) {
     throw new Error("Video download failed — output file not found");
   }
-  return { videoPath, title };
+  return result;
 }
 
 async function extractAudio(videoPath: string, outputDir: string): Promise<string> {
@@ -492,17 +524,12 @@ interface VideoChapter {
 // Fetch YouTube chapter markers via yt-dlp metadata (no download).
 async function getVideoChapters(youtubeUrl: string): Promise<VideoChapter[]> {
   const proxy = process.env.YTDLP_PROXY?.trim();
-  const proxyArgs = proxy ? ["--proxy", proxy] : [];
   const cookiePath = writeCookiesFile();
-  const cookieArgs = cookiePath ? ["--cookies", cookiePath] : [];
-  const clientArgs = ["--extractor-args", "youtube:player_client=android,web"];
 
-  try {
+  async function attempt(useProxy: boolean): Promise<VideoChapter[]> {
+    const baseArgs = buildYtdlpBaseArgs({ useProxy, cookiePath });
     const { stdout } = await execFileAsync(YTDLP, [
-      "--no-playlist",
-      ...proxyArgs,
-      ...cookieArgs,
-      ...clientArgs,
+      ...baseArgs,
       "--dump-json",
       "--skip-download",
       youtubeUrl,
@@ -519,7 +546,20 @@ async function getVideoChapters(youtubeUrl: string): Promise<VideoChapter[]> {
         end: Number(c.end_time) || 0,
       }))
       .filter((c) => c.end > c.start);
+  }
+
+  try {
+    return await attempt(true);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (proxy && BOT_CHECK_PATTERN.test(msg)) {
+      try {
+        return await attempt(false);
+      } catch (e2) {
+        logger.warn({ e2 }, "Failed to fetch video chapters (proxy and direct both failed)");
+        return [];
+      }
+    }
     logger.warn({ e }, "Failed to fetch video chapters");
     return [];
   }
