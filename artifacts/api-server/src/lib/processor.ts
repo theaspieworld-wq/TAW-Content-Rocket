@@ -470,6 +470,30 @@ async function getVideoDuration(videoPath: string): Promise<number> {
   return parseFloat(info.format?.duration || "0");
 }
 
+const AUTO_THUMBNAILS_DIR = path.join(process.cwd(), "uploads", "thumbnails");
+fs.mkdirSync(AUTO_THUMBNAILS_DIR, { recursive: true });
+
+// Grabs a good-looking still frame from the uploaded video to use as the
+// blog/email header image when the user did not upload their own thumbnail.
+// Picks a timestamp ~25% into the video (skipping intros/black frames at the
+// very start) and falls back to the very first frame if the video is very short.
+async function extractAutoThumbnail(videoPath: string, videoDuration: number, jobId: number): Promise<string | null> {
+  const timestamp = videoDuration > 4 ? Math.min(videoDuration * 0.25, videoDuration - 1) : 0;
+  const outputPath = path.join(AUTO_THUMBNAILS_DIR, `auto_${jobId}_${Date.now()}.jpg`);
+  try {
+    await execFileAsync(FFMPEG, [
+      "-ss", String(timestamp), "-i", videoPath, "-frames:v", "1", "-q:v", "2", outputPath, "-y",
+    ], { timeout: 30000 });
+    if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) {
+      return outputPath;
+    }
+    return null;
+  } catch (e) {
+    logger.warn({ e, jobId }, "Failed to auto-extract thumbnail frame from video");
+    return null;
+  }
+}
+
 function escapeFfmpegText(text: string): string {
   return text
     .replace(/\\/g, "\\\\")
@@ -1422,6 +1446,18 @@ export async function processJob(jobId: number): Promise<void> {
     await updateJobStatus(jobId, "downloading", { videoTitle: title });
     const videoDuration = await getVideoDuration(videoPath);
 
+    // If the user didn't upload their own thumbnail, grab a still frame from
+    // the video to use as the blog/email header image instead.
+    let thumbnailPath = job.thumbnailPath;
+    if (!thumbnailPath) {
+      const autoThumbnailPath = await extractAutoThumbnail(videoPath, videoDuration, jobId);
+      if (autoThumbnailPath) {
+        thumbnailPath = autoThumbnailPath;
+        await db.update(jobsTable).set({ thumbnailPath: autoThumbnailPath }).where(eq(jobsTable.id, jobId));
+        logger.info({ jobId, autoThumbnailPath }, "Auto-extracted thumbnail frame from uploaded video");
+      }
+    }
+
     // Step 2: Extract audio and transcribe
     await updateJobStatus(jobId, "transcribing");
     const audioPath = await extractAudio(videoPath, tempDir);
@@ -1457,7 +1493,7 @@ export async function processJob(jobId: number): Promise<void> {
         brand,
         tempDir,
         carouselTemplates: brandCarouselTemplateKeys,
-        thumbnailUrl: getUploadedThumbnailUrl(jobId, !!job.thumbnailPath),
+        thumbnailUrl: getUploadedThumbnailUrl(jobId, !!thumbnailPath),
       }),
     ]);
 
