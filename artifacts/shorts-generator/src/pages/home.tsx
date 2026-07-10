@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
   useListJobs,
   useCreateJob,
@@ -458,8 +458,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const defaultOutro = outros?.find(o => o.isDefault);
 
   const form = useForm<z.infer<typeof formSchema>>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(formSchema as any),
+    resolver: zodResolver(formSchema),
     defaultValues: {
       clipCount: 5,
       clipDurationSeconds: 45,
