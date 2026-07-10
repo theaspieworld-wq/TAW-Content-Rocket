@@ -239,11 +239,14 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [sourceType, setSourceType] = useState<"upload" | "transcript">("upload");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [userVideoTitle, setUserVideoTitle] = useState("");
+  const [userVideoDescription, setUserVideoDescription] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [chapters, setChapters] = useState<{ title: string; start: string; end: string }[]>([
     { title: "", start: "", end: "" },
   ]);
+  const [chaptersPasteText, setChaptersPasteText] = useState("");
 
   const timecodeToSeconds = (tc: string): number | null => {
     const trimmed = tc.trim();
@@ -254,6 +257,52 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     if (parts.length === 2) return parts[0] * 60 + parts[1];
     if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
     return null;
+  };
+
+  const secondsToTimecode = (totalSeconds: number): string => {
+    const s = Math.max(0, Math.round(totalSeconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+  };
+
+  // Parses pasted YouTube-style chapter lists, e.g. "00:00 Introduction" or
+  // "1:03:08 - Why Autistic Adults Collect Toys" — one chapter per line. The
+  // end of each chapter is inferred as the start of the next one; the final
+  // chapter's end is left open (large sentinel) and clamped server-side to
+  // the actual video duration.
+  const parseChaptersPasteText = (text: string): { title: string; start: string; end: string }[] => {
+    const lineRegex = /^\s*(\d{1,2}(?::\d{1,2}){1,2})\s*[-–—:.)]?\s*(.+?)\s*$/;
+    const parsed: { title: string; startSeconds: number }[] = [];
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const match = line.match(lineRegex);
+      if (!match) continue;
+      const startSeconds = timecodeToSeconds(match[1]);
+      const title = match[2].trim();
+      if (startSeconds === null || !title) continue;
+      parsed.push({ title, startSeconds });
+    }
+    if (parsed.length === 0) return [];
+    parsed.sort((a, b) => a.startSeconds - b.startSeconds);
+    return parsed.map((c, idx) => ({
+      title: c.title,
+      start: secondsToTimecode(c.startSeconds),
+      end: idx < parsed.length - 1 ? secondsToTimecode(parsed[idx + 1].startSeconds) : secondsToTimecode(c.startSeconds + 999999),
+    }));
+  };
+
+  const handleParseChaptersPaste = () => {
+    const result = parseChaptersPasteText(chaptersPasteText);
+    if (result.length === 0) {
+      toast({ title: "Couldn't parse chapters", description: "Paste lines like \"00:00 Chapter title\", one per line.", variant: "destructive" });
+      return;
+    }
+    setChapters(result);
+    toast({ title: "Chapters parsed", description: `Added ${result.length} chapter${result.length === 1 ? "" : "s"} from your paste.` });
   };
 
   const { toast } = useToast();
@@ -550,6 +599,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     if (values.outroId && values.outroId !== "none") fd.append("outroId", values.outroId);
     if (values.brandId && values.brandId !== "none") fd.append("brandId", values.brandId);
     if (manualChaptersJson) fd.append("manualChapters", manualChaptersJson);
+    if (userVideoTitle.trim()) fd.append("userVideoTitle", userVideoTitle.trim());
+    if (userVideoDescription.trim()) fd.append("userVideoDescription", userVideoDescription.trim());
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -566,6 +617,9 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         setUploadFile(null);
         setThumbnailFile(null);
         setChapters([{ title: "", start: "", end: "" }]);
+        setChaptersPasteText("");
+        setUserVideoTitle("");
+        setUserVideoDescription("");
         form.reset(sharedReset);
         setSelectedJobId(newJob.id);
         toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
@@ -1615,6 +1669,20 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                           }
                         </label>
                       </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Input
+                          placeholder="Video title (optional — overrides the filename)"
+                          value={userVideoTitle}
+                          onChange={(e) => setUserVideoTitle(e.target.value)}
+                          className="h-9 text-xs bg-background border-border/60"
+                        />
+                      </div>
+                      <Textarea
+                        placeholder="Video description (optional) — extra context about the video to help the AI write more accurate content"
+                        value={userVideoDescription}
+                        onChange={(e) => setUserVideoDescription(e.target.value)}
+                        className="bg-background border-border/60 text-xs min-h-[52px] resize-none"
+                      />
                       {isUploading && (
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-xs text-muted-foreground">
@@ -1895,6 +1963,27 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                   <span className="text-xs text-muted-foreground font-medium">
                     Chapters (title, start, end — mm:ss or hh:mm:ss)
                   </span>
+
+                  <div className="flex flex-col gap-1.5 pb-1 border-b border-border/60">
+                    <span className="text-xs text-muted-foreground">
+                      Or paste a full chapter list at once — one per line, e.g. "00:00 Introduction":
+                    </span>
+                    <Textarea
+                      placeholder={"00:00 Introduction: Is It Really Immaturity?\n00:13 Childish Fears & Phobias in Autism\n03:08 Why Autistic Adults Collect Toys & Objects"}
+                      value={chaptersPasteText}
+                      onChange={(e) => setChaptersPasteText(e.target.value)}
+                      className="bg-background border-border/60 text-xs min-h-[70px] resize-none font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleParseChaptersPaste}
+                      disabled={!chaptersPasteText.trim()}
+                      className="self-start px-2.5 py-1 rounded-full text-xs font-semibold border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Parse chapters from paste
+                    </button>
+                  </div>
+
                   {chapters.map((chapter, idx) => (
                     <div key={idx} className="flex flex-wrap items-center gap-2">
                       <Input

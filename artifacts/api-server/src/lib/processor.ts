@@ -1106,6 +1106,7 @@ export async function generateContent(
     tempDir?: string;
     carouselTemplates?: string[];
     thumbnailUrl?: string | null;
+    videoDescription?: string | null;
   },
 ): Promise<GeneratedContent> {
   const thumbnailUrl = options?.thumbnailUrl ?? getThumbnailUrl(youtubeUrl);
@@ -1114,6 +1115,10 @@ export async function generateContent(
 
   const brandVoiceNote = options?.brandVoice
     ? `\n\nBRAND VOICE STYLE: ${options.brandVoice}\nApply this voice consistently across all content.`
+    : "";
+
+  const videoDescriptionNote = options?.videoDescription
+    ? `\n\nCREATOR-PROVIDED VIDEO DESCRIPTION (extra context on what this video is about — use it to inform accuracy and framing, don't just quote it):\n${options.videoDescription.slice(0, 2000)}`
     : "";
 
   const brandDocsNote = options?.brandDocuments?.length
@@ -1125,7 +1130,7 @@ export async function generateContent(
     : "";
 
   // ── Call A: short-form content ──────────────────────────────────────────
-  const promptA = `You are a professional content creator. Based on this YouTube video transcript, generate short-form social content.${brandVoiceNote}${brandDocsNote}${ctaNote}
+  const promptA = `You are a professional content creator. Based on this YouTube video transcript, generate short-form social content.${brandVoiceNote}${videoDescriptionNote}${brandDocsNote}${ctaNote}
 
 VIDEO TITLE: ${videoTitle}
 VIDEO URL: ${youtubeUrl}
@@ -1190,7 +1195,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     ? ` End the post with this call-to-action: "${options.contentCta}".`
     : "";
 
-  const promptB = `You are a professional content creator. Based on this YouTube video transcript, generate long-form written content.${brandVoiceNote}
+  const promptB = `You are a professional content creator. Based on this YouTube video transcript, generate long-form written content.${brandVoiceNote}${videoDescriptionNote}
 
 VIDEO TITLE: ${videoTitle}
 VIDEO URL: ${youtubeUrl}
@@ -1442,7 +1447,8 @@ export async function processJob(jobId: number): Promise<void> {
     const rawName = job.youtubeUrl.startsWith("upload://")
       ? job.youtubeUrl.slice(9)
       : path.basename(job.localFilePath);
-    const title = path.parse(rawName).name.replace(/[_\-]+/g, " ").trim() || "Uploaded Video";
+    const derivedTitle = path.parse(rawName).name.replace(/[_\-]+/g, " ").trim() || "Uploaded Video";
+    const title = job.userVideoTitle?.trim() || derivedTitle;
     await updateJobStatus(jobId, "downloading", { videoTitle: title });
     const videoDuration = await getVideoDuration(videoPath);
 
@@ -1494,6 +1500,7 @@ export async function processJob(jobId: number): Promise<void> {
         tempDir,
         carouselTemplates: brandCarouselTemplateKeys,
         thumbnailUrl: getUploadedThumbnailUrl(jobId, !!thumbnailPath),
+        videoDescription: job.userVideoDescription ?? null,
       }),
     ]);
 

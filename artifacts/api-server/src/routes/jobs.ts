@@ -253,6 +253,8 @@ router.post(
       localFilePath: videoFile.path,
       thumbnailPath: thumbnailFile?.path ?? null,
       manualChapters: manualChaptersRaw,
+      userVideoTitle: req.body.userVideoTitle?.trim() || null,
+      userVideoDescription: req.body.userVideoDescription?.trim() || null,
       clipCount: isNaN(clipCount) ? 9 : clipCount,
       clipDurationSeconds: isNaN(clipDur) ? 45 : clipDur,
       clipMode: clipModeRaw,

@@ -101,6 +101,8 @@ export const jobsTable = pgTable("jobs", {
   thumbnailPath: text("thumbnail_path"),
   manualChapters: text("manual_chapters"),
   videoTitle: text("video_title"),
+  userVideoTitle: text("user_video_title"),
+  userVideoDescription: text("user_video_description"),
   status: text("status").notNull().default("pending"),
   errorMessage: text("error_message"),
   clipCount: integer("clip_count").notNull().default(3),
