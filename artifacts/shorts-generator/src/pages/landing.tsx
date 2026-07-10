@@ -26,9 +26,9 @@ const FEATURES = [
 const STEPS = [
   {
     number: "01",
-    title: "Paste a YouTube URL",
-    desc: "No uploading. No transcription tools. Just paste any YouTube URL — long-form, interview, tutorial, podcast episode — and hit go.",
-    keyword: "Works with any public YouTube video",
+    title: "Upload your video",
+    desc: "No downloaders. No transcription tools. Just upload your video file — long-form, interview, tutorial, podcast episode — and hit go.",
+    keyword: "Works with any video file you own",
   },
   {
     number: "02",
@@ -99,7 +99,7 @@ const COMPARISON = [
 const FAQS = [
   {
     q: "What is Content Rocket?",
-    a: "Content Rocket is an AI content repurposing platform by TAW Media that turns a single YouTube video into a complete multi-channel content pack — YouTube Shorts, blog post, email newsletter, carousel post, podcast audio, social media threads, and quote graphics. It's built for creators, coaches, and media teams who want to publish across every platform without spending 10+ hours repurposing each video manually.",
+    a: "Content Rocket is an AI content repurposing platform by TAW Media that turns a single uploaded video into a complete multi-channel content pack — YouTube Shorts, blog post, email newsletter, carousel post, podcast audio, social media threads, and quote graphics. It's built for creators, coaches, and media teams who want to publish across every platform without spending 10+ hours repurposing each video manually.",
   },
   {
     q: "How does Content Rocket generate YouTube Shorts?",
@@ -107,7 +107,7 @@ const FAQS = [
   },
   {
     q: "Do I need to upload my video file?",
-    a: "No — you only need a YouTube URL. Content Rocket fetches and processes the video directly from YouTube. This means no waiting for large file uploads and no storage limits on your end.",
+    a: "Yes — Content Rocket works directly from a video file you upload (plus an optional thumbnail). Nothing is scraped from YouTube or Facebook, so you stay fully in control of the source file.",
   },
   {
     q: "How is Content Rocket different from Opus Clip?",
@@ -197,14 +197,14 @@ export default function LandingPage() {
         </div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white mb-6 leading-[1.1] tracking-tight">
-          Turn one YouTube video<br />into a{" "}
+          Turn one video<br />into a{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#f21178] to-violet-400">
             full content pack
           </span>
         </h1>
 
         <p className="text-slate-400 text-lg sm:text-xl mb-10 leading-relaxed max-w-2xl mx-auto">
-          Content Rocket is the AI-powered repurposing platform built by <strong className="text-slate-300">TAW Media</strong>. Paste a YouTube URL and get YouTube Shorts, a blog post, email newsletter, carousel post, podcast audio, social threads, and quote graphics — all in your brand voice, in minutes.
+          Content Rocket is the AI-powered repurposing platform built by <strong className="text-slate-300">TAW Media</strong>. Upload your video and get YouTube Shorts, a blog post, email newsletter, carousel post, podcast audio, social threads, and quote graphics — all in your brand voice, in minutes.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
@@ -260,10 +260,10 @@ export default function LandingPage() {
               Your AI content team — for the price of a coffee a day
             </h2>
             <p className="text-slate-400 leading-relaxed mb-5">
-              Most creators spend 10–15 hours manually repurposing each YouTube video into shorts, blog posts, emails, and social content. That's time you should spend creating, not copy-pasting.
+              Most creators spend 10–15 hours manually repurposing each video into shorts, blog posts, emails, and social content. That's time you should spend creating, not copy-pasting.
             </p>
             <p className="text-slate-400 leading-relaxed mb-5">
-              Content Rocket is a <strong className="text-slate-300">purpose-built AI platform</strong> that automates the entire repurposing workflow. You paste one YouTube URL. The AI analyses the video, identifies the best moments, writes all the copy in your brand voice, and hands you a complete content pack.
+              Content Rocket is a <strong className="text-slate-300">purpose-built AI platform</strong> that automates the entire repurposing workflow. You upload one video. The AI analyses it, identifies the best moments, writes all the copy in your brand voice, and hands you a complete content pack.
             </p>
             <p className="text-slate-400 leading-relaxed">
               Built by <strong className="text-slate-300">TAW Media</strong> and <strong className="text-slate-300">The Aspie World</strong> — a creator-run team that processes hundreds of videos per month and built this tool to solve their own problem first.
@@ -423,7 +423,7 @@ export default function LandingPage() {
           ))}
         </div>
         <blockquote className="text-xl sm:text-2xl font-medium text-white max-w-2xl mx-auto leading-relaxed mb-6">
-          "I used to spend a full day turning each YouTube video into content for every channel. Content Rocket does it in 5 minutes. It's like having an extra team member."
+          "I used to spend a full day turning each video into content for every channel. Content Rocket does it in 5 minutes. It's like having an extra team member."
         </blockquote>
         <p className="text-slate-500 text-sm">
           <strong className="text-slate-400">Dan Jones</strong> — Creator, The Aspie World (1M+ subscribers)

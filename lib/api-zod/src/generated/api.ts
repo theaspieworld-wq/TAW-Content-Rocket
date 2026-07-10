@@ -324,6 +324,15 @@ export const ListJobsResponseItem = zod.object({
     .describe("Whether AI content has been generated for this job"),
   hasFacebookVideo: zod.boolean(),
   hasPodcast: zod.boolean(),
+  hasThumbnail: zod
+    .boolean()
+    .describe("Whether a thumbnail image was uploaded for this job"),
+  manualChapters: zod
+    .string()
+    .nullish()
+    .describe(
+      'JSON array of manually-entered chapters ({title,start,end}[]) used when clipMode is \"chapters\"',
+    ),
   generatePodcast: zod
     .boolean()
     .describe("Whether podcast generation was requested for this job"),
@@ -348,11 +357,11 @@ export const createJobBodyShowWatermarkDefault = true;
 export const createJobBodyGeneratePodcastDefault = true;
 
 export const CreateJobBody = zod.object({
-  youtubeUrl: zod
+  manualTranscript: zod
     .string()
     .optional()
     .describe(
-      "YouTube or Facebook video URL. Required unless manualTranscript is provided.",
+      "Paste a transcript directly. No video is downloaded or rendered — only written content is generated.",
     ),
   clipCount: zod
     .number()
@@ -372,7 +381,7 @@ export const CreateJobBody = zod.object({
     .enum(["ai", "chapters"])
     .default(createJobBodyClipModeDefault)
     .describe(
-      'How snippets are selected. \"ai\" lets the model pick 3-6 best moments; \"chapters\" creates one snippet per YouTube chapter.',
+      'How snippets are selected. \"ai\" lets the model pick 3-6 best moments; \"chapters\" creates one snippet per manually-entered chapter (see manualChapters, upload endpoint only).',
     ),
   captionsEnabled: zod
     .boolean()
@@ -407,12 +416,6 @@ export const CreateJobBody = zod.object({
     .nullish()
     .describe(
       'JSON array of brand outro IDs to rotate through, e.g. \"[1,2,3]\"',
-    ),
-  manualTranscript: zod
-    .string()
-    .nullish()
-    .describe(
-      "Paste a transcript directly to skip YouTube download and transcription. When provided, youtubeUrl is optional and no video clips or podcast will be generated.",
     ),
   generatePodcast: zod
     .boolean()
@@ -463,6 +466,15 @@ export const GetJobResponse = zod
       .describe("Whether AI content has been generated for this job"),
     hasFacebookVideo: zod.boolean(),
     hasPodcast: zod.boolean(),
+    hasThumbnail: zod
+      .boolean()
+      .describe("Whether a thumbnail image was uploaded for this job"),
+    manualChapters: zod
+      .string()
+      .nullish()
+      .describe(
+        'JSON array of manually-entered chapters ({title,start,end}[]) used when clipMode is \"chapters\"',
+      ),
     generatePodcast: zod
       .boolean()
       .describe("Whether podcast generation was requested for this job"),

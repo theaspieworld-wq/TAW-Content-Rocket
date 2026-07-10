@@ -7,7 +7,7 @@
  */
 
 /**
- * How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter.
+ * How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per manually-entered chapter (see manualChapters, upload endpoint only).
  */
 export type CreateJobBodyClipMode =
   (typeof CreateJobBodyClipMode)[keyof typeof CreateJobBodyClipMode];

@@ -48,8 +48,6 @@ import {
   Layers,
   Activity,
   Upload,
-  Youtube,
-  Facebook,
   Settings,
   Star,
   Film,
@@ -122,7 +120,6 @@ const GOOGLE_FONTS = [
 ] as const;
 
 const formSchema = z.object({
-  youtubeUrl: z.string().optional(),
   clipCount: z.coerce.number().min(0).max(10).default(5),
   clipDurationSeconds: z.coerce.number().default(45),
   clipMode: z.enum(["ai", "chapters"]).default("ai"),
@@ -239,10 +236,25 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [editPosition, setEditPosition] = useState<"beginning" | "end">("end");
   const [editCtaText, setEditCtaText] = useState("");
   const [editCtaStartSeconds, setEditCtaStartSeconds] = useState<number | "">("");
-  const [sourceType, setSourceType] = useState<"youtube" | "facebook" | "upload" | "transcript">("youtube");
+  const [sourceType, setSourceType] = useState<"upload" | "transcript">("upload");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [chapters, setChapters] = useState<{ title: string; start: string; end: string }[]>([
+    { title: "", start: "", end: "" },
+  ]);
+
+  const timecodeToSeconds = (tc: string): number | null => {
+    const trimmed = tc.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(":").map((p) => Number(p));
+    if (parts.some((p) => isNaN(p))) return null;
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return null;
+  };
 
   const { toast } = useToast();
 
@@ -400,7 +412,6 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(formSchema as any),
     defaultValues: {
-      youtubeUrl: "",
       clipCount: 5,
       clipDurationSeconds: 45,
       clipMode: "ai",
@@ -458,7 +469,6 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const sharedReset = {
-      youtubeUrl: "",
       clipCount: 5,
       clipDurationSeconds: values.clipDurationSeconds,
       clipMode: values.clipMode,
@@ -504,105 +514,77 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       return;
     }
 
-    if (sourceType === "upload") {
-      if (!uploadFile) {
-        toast({ title: "No file selected", description: "Please choose a video file to upload.", variant: "destructive" });
+    // Upload path (video file, optional thumbnail, optional manual chapters)
+    if (!uploadFile) {
+      toast({ title: "No file selected", description: "Please choose a video file to upload.", variant: "destructive" });
+      return;
+    }
+
+    let manualChaptersJson: string | undefined;
+    if (values.clipMode === "chapters") {
+      const parsedChapters = chapters
+        .map((c) => ({
+          title: c.title.trim(),
+          startSeconds: timecodeToSeconds(c.start),
+          endSeconds: timecodeToSeconds(c.end),
+        }))
+        .filter((c) => c.title && c.startSeconds !== null && c.endSeconds !== null);
+      if (!parsedChapters.length) {
+        toast({ title: "No chapters entered", description: "Add at least one chapter with a title, start, and end time.", variant: "destructive" });
         return;
       }
-      const fd = new FormData();
-      fd.append("file", uploadFile);
-      fd.append("clipCount", String(values.includeShorts ? (values.clipCount ?? 5) : 0));
-      fd.append("clipDurationSeconds", String(values.clipDurationSeconds ?? 45));
-      fd.append("clipMode", values.clipMode ?? "ai");
-      fd.append("captionsEnabled", String(values.captionsEnabled ?? true));
-      fd.append("captionStyle", values.captionStyle ?? "classic");
-      fd.append("showTitle", String(values.showTitle ?? true));
-      fd.append("showWatermark", String(values.showWatermark ?? true));
-      if (values.contentCta?.trim()) fd.append("contentCta", values.contentCta.trim());
-      if (values.outroId && values.outroId !== "none") fd.append("outroId", values.outroId);
-      if (values.brandId && values.brandId !== "none") fd.append("brandId", values.brandId);
-
-      setIsUploading(true);
-      setUploadProgress(0);
-
-      const basePath = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-      const xhr = new XMLHttpRequest();
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
-      };
-      xhr.onload = () => {
-        setIsUploading(false);
-        if (xhr.status === 201) {
-          const newJob = JSON.parse(xhr.responseText);
-          setUploadFile(null);
-          form.reset(sharedReset);
-          setSelectedJobId(newJob.id);
-          toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
-          queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
-        } else {
-          try {
-            const err = JSON.parse(xhr.responseText);
-            toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
-          } catch {
-            toast({ title: "Upload failed", description: "Server error — please try again.", variant: "destructive" });
-          }
-        }
-      };
-      xhr.onerror = () => {
-        setIsUploading(false);
-        toast({ title: "Upload failed", description: "Network error — please try again.", variant: "destructive" });
-      };
-      xhr.open("POST", `${basePath}/api/jobs/upload`);
-      xhr.send(fd);
-      return;
+      manualChaptersJson = JSON.stringify(parsedChapters);
     }
 
-    // YouTube / Facebook URL path
-    const url = (values.youtubeUrl ?? "").trim();
-    if (!url) {
-      form.setError("youtubeUrl", { message: "Please enter a video URL" });
-      return;
-    }
-    try { new URL(url); } catch {
-      form.setError("youtubeUrl", { message: "Please enter a valid URL" });
-      return;
-    }
+    const fd = new FormData();
+    fd.append("file", uploadFile);
+    if (thumbnailFile) fd.append("thumbnail", thumbnailFile);
+    fd.append("clipCount", String(values.includeShorts ? (values.clipCount ?? 5) : 0));
+    fd.append("clipDurationSeconds", String(values.clipDurationSeconds ?? 45));
+    fd.append("clipMode", values.clipMode ?? "ai");
+    fd.append("captionsEnabled", String(values.captionsEnabled ?? true));
+    fd.append("captionStyle", values.captionStyle ?? "classic");
+    fd.append("showTitle", String(values.showTitle ?? true));
+    fd.append("showWatermark", String(values.showWatermark ?? true));
+    if (values.contentCta?.trim()) fd.append("contentCta", values.contentCta.trim());
+    if (values.outroId && values.outroId !== "none") fd.append("outroId", values.outroId);
+    if (values.brandId && values.brandId !== "none") fd.append("brandId", values.brandId);
+    if (manualChaptersJson) fd.append("manualChapters", manualChaptersJson);
 
-    const payload = {
-      youtubeUrl: url,
-      clipCount: values.includeShorts ? (values.clipCount ?? 5) : 0,
-      clipDurationSeconds: values.clipDurationSeconds ?? 45,
-      clipMode: values.clipMode ?? "ai",
-      captionsEnabled: values.captionsEnabled ?? true,
-      captionStyle: values.captionStyle ?? "classic",
-      showTitle: values.showTitle ?? true,
-      showWatermark: values.showWatermark ?? true,
-      contentCta: values.contentCta?.trim() || undefined,
-      outroId: values.outroId && values.outroId !== "none" ? parseInt(values.outroId, 10) : null,
-      brandId: values.brandId && values.brandId !== "none" ? parseInt(values.brandId, 10) : null,
-      generatePodcast: values.generatePodcast ?? true,
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const basePath = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
     };
-
-    createJob.mutate({ data: payload }, {
-      onSuccess: (newJob) => {
+    xhr.onload = () => {
+      setIsUploading(false);
+      if (xhr.status === 201) {
+        const newJob = JSON.parse(xhr.responseText);
+        setUploadFile(null);
+        setThumbnailFile(null);
+        setChapters([{ title: "", start: "", end: "" }]);
         form.reset(sharedReset);
         setSelectedJobId(newJob.id);
-        toast({ title: "Job Created 🚀", description: "Video processing has started." });
+        toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
         queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
-      },
-      onError: (error: any) => {
-        const message =
-          error?.data?.error ||
-          error?.message?.replace(/^HTTP \d+ [^:]+:\s*/, "") ||
-          "Failed to create job.";
-        toast({
-          title: "Error",
-          description: message,
-          variant: "destructive",
-        });
-      },
-      throwOnError: false,
-    });
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText);
+          toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+        } catch {
+          toast({ title: "Upload failed", description: "Server error — please try again.", variant: "destructive" });
+        }
+      }
+    };
+    xhr.onerror = () => {
+      setIsUploading(false);
+      toast({ title: "Upload failed", description: "Network error — please try again.", variant: "destructive" });
+    };
+    xhr.open("POST", `${basePath}/api/jobs/upload`);
+    xhr.send(fd);
   };
 
   const handleDeleteJob = (e: React.MouseEvent, id: number) => {
@@ -1551,15 +1533,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                 {/* Source type pills */}
                 <div className="flex items-center gap-1 bg-background/60 border border-border/60 rounded-xl p-1 w-fit">
                   {([ 
-                    { type: "youtube" as const,     label: "YouTube",         Icon: Youtube },
-                    { type: "facebook" as const,    label: "Facebook",        Icon: Facebook },
                     { type: "upload" as const,      label: "Upload File",     Icon: Upload },
                     { type: "transcript" as const,  label: "Paste Transcript", Icon: FileText },
                   ]).map(({ type, label, Icon }) => (
                     <button
                       key={type}
                       type="button"
-                      onClick={() => { setSourceType(type); setUploadFile(null); form.clearErrors("youtubeUrl"); form.clearErrors("manualTranscript"); }}
+                      onClick={() => { setSourceType(type); setUploadFile(null); form.clearErrors("manualTranscript"); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         sourceType === type
                           ? "bg-primary text-primary-foreground shadow-sm"
@@ -1591,51 +1571,50 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                         </FormItem>
                       )}
                     />
-                  ) : sourceType !== "upload" ? (
-                    <FormField
-                      control={form.control}
-                      name="youtubeUrl"
-                      render={({ field }) => (
-                        <FormItem className="flex-1 w-full">
-                          <FormControl>
-                            <div className="relative group">
-                              {sourceType === "youtube"
-                                ? <Youtube className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                                : <Facebook className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                              }
-                              <Input
-                                placeholder={sourceType === "youtube" ? "Paste YouTube URL here…" : "Paste Facebook video URL here…"}
-                                className="pl-12 bg-background border-border/60 hover:border-border focus-visible:ring-primary/30 focus-visible:border-primary/50 text-base h-13 shadow-sm transition-all rounded-xl"
-                                {...field}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage className="text-xs ml-1" />
-                        </FormItem>
-                      )}
-                    />
                   ) : (
                     <div className="flex-1 w-full flex flex-col gap-1.5">
-                      <label
-                        htmlFor="video-file-input"
-                        className={`flex items-center justify-center gap-2 w-full h-13 rounded-xl border-2 border-dashed cursor-pointer transition-all text-sm font-medium px-4 ${
-                          uploadFile
-                            ? "border-primary/60 bg-primary/5 text-primary"
-                            : "border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5 text-muted-foreground"
-                        }`}
-                      >
-                        <input
-                          id="video-file-input"
-                          type="file"
-                          accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv"
-                          className="hidden"
-                          onChange={(e) => { setUploadFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
-                        />
-                        {uploadFile
-                          ? <span className="truncate max-w-full">{uploadFile.name}</span>
-                          : <><Upload className="w-4 h-4 shrink-0" /> Choose a video file (MP4, MOV, MKV…)</>
-                        }
-                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <label
+                          htmlFor="video-file-input"
+                          className={`flex items-center justify-center gap-2 flex-1 h-13 rounded-xl border-2 border-dashed cursor-pointer transition-all text-sm font-medium px-4 ${
+                            uploadFile
+                              ? "border-primary/60 bg-primary/5 text-primary"
+                              : "border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5 text-muted-foreground"
+                          }`}
+                        >
+                          <input
+                            id="video-file-input"
+                            type="file"
+                            accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv"
+                            className="hidden"
+                            onChange={(e) => { setUploadFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                          />
+                          {uploadFile
+                            ? <span className="truncate max-w-full">{uploadFile.name}</span>
+                            : <><Upload className="w-4 h-4 shrink-0" /> Choose a video file (MP4, MOV, MKV…)</>
+                          }
+                        </label>
+                        <label
+                          htmlFor="thumbnail-file-input"
+                          className={`flex items-center justify-center gap-2 h-13 rounded-xl border-2 border-dashed cursor-pointer transition-all text-sm font-medium px-4 shrink-0 ${
+                            thumbnailFile
+                              ? "border-primary/60 bg-primary/5 text-primary"
+                              : "border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5 text-muted-foreground"
+                          }`}
+                        >
+                          <input
+                            id="thumbnail-file-input"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => { setThumbnailFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                          />
+                          {thumbnailFile
+                            ? <span className="truncate max-w-[140px]">{thumbnailFile.name}</span>
+                            : <><Upload className="w-4 h-4 shrink-0" /> Thumbnail (optional)</>
+                          }
+                        </label>
+                      </div>
                       {isUploading && (
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-xs text-muted-foreground">
@@ -1710,15 +1689,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       <button
                         type="button"
                         onClick={() => form.setValue("clipMode", "chapters")}
-                        disabled={sourceType === "upload"}
-                        title={sourceType === "upload" ? "Chapter mode requires a YouTube URL" : undefined}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
                           clipMode === "chapters"
                             ? "border-primary bg-primary text-primary-foreground shadow-sm"
                             : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
                         }`}
                       >
-                        YouTube Chapters
+                        Manual Chapters
                       </button>
                     </div>
                   </div>
@@ -1911,6 +1888,64 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                   </div>
                 </div>
               )}
+
+              {/* Manual chapters editor — upload mode only, chapters clip mode */}
+              {sourceType === "upload" && clipMode === "chapters" && (
+                <div className="flex flex-col gap-2 pt-1 border border-border/60 rounded-xl p-3 bg-background/40">
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Chapters (title, start, end — mm:ss or hh:mm:ss)
+                  </span>
+                  {chapters.map((chapter, idx) => (
+                    <div key={idx} className="flex flex-wrap items-center gap-2">
+                      <Input
+                        placeholder="Chapter title"
+                        value={chapter.title}
+                        onChange={(e) => {
+                          const next = [...chapters];
+                          next[idx] = { ...next[idx], title: e.target.value };
+                          setChapters(next);
+                        }}
+                        className="h-8 text-xs flex-1 min-w-[140px] bg-background border-border/60"
+                      />
+                      <Input
+                        placeholder="Start (mm:ss)"
+                        value={chapter.start}
+                        onChange={(e) => {
+                          const next = [...chapters];
+                          next[idx] = { ...next[idx], start: e.target.value };
+                          setChapters(next);
+                        }}
+                        className="h-8 text-xs w-28 bg-background border-border/60"
+                      />
+                      <Input
+                        placeholder="End (mm:ss)"
+                        value={chapter.end}
+                        onChange={(e) => {
+                          const next = [...chapters];
+                          next[idx] = { ...next[idx], end: e.target.value };
+                          setChapters(next);
+                        }}
+                        className="h-8 text-xs w-28 bg-background border-border/60"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setChapters(chapters.filter((_, i) => i !== idx))}
+                        disabled={chapters.length === 1}
+                        className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setChapters([...chapters, { title: "", start: "", end: "" }])}
+                    className="self-start px-2.5 py-1 rounded-full text-xs font-semibold border border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground transition-all"
+                  >
+                    + Add chapter
+                  </button>
+                </div>
+              )}
             </form>
           </Form>
         </div>
@@ -1925,7 +1960,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
               </div>
               <h2 className="text-xl font-semibold text-foreground mb-3">Workspace Empty</h2>
               <p className="text-sm text-muted-foreground/70 leading-relaxed">
-                Paste a YouTube URL and hit <span className="text-foreground font-semibold">Multiply My Content</span>. The AI will analyse the video, extract the best moments as vertical shorts, and generate a full content pack — blog, newsletter, social posts, carousel slides, and more.
+                Upload a video and hit <span className="text-foreground font-semibold">Multiply My Content</span>. The AI will analyse the video, extract the best moments as vertical shorts, and generate a full content pack — blog, newsletter, social posts, carousel slides, and more.
               </p>
             </div>
           ) : jobWithClips ? (

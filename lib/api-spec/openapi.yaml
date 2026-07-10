@@ -767,9 +767,9 @@ components:
     CreateJobBody:
       type: object
       properties:
-        youtubeUrl:
+        manualTranscript:
           type: string
-          description: YouTube or Facebook video URL. Required unless manualTranscript is provided.
+          description: Paste a transcript directly. No video is downloaded or rendered — only written content is generated.
         clipCount:
           type: integer
           default: 9
@@ -784,7 +784,7 @@ components:
           type: string
           enum: [ai, chapters]
           default: ai
-          description: How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter.
+          description: How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per manually-entered chapter (see manualChapters, upload endpoint only).
         captionsEnabled:
           type: boolean
           default: true
@@ -812,9 +812,6 @@ components:
         brandOutroIds:
           type: ["string", "null"]
           description: JSON array of brand outro IDs to rotate through, e.g. "[1,2,3]"
-        manualTranscript:
-          type: ["string", "null"]
-          description: Paste a transcript directly to skip YouTube download and transcription. When provided, youtubeUrl is optional and no video clips or podcast will be generated.
         generatePodcast:
           type: boolean
           default: true
@@ -865,6 +862,12 @@ components:
           type: boolean
         hasPodcast:
           type: boolean
+        hasThumbnail:
+          type: boolean
+          description: Whether a thumbnail image was uploaded for this job
+        manualChapters:
+          type: ["string", "null"]
+          description: JSON array of manually-entered chapters ({title,start,end}[]) used when clipMode is "chapters"
         generatePodcast:
           type: boolean
           description: Whether podcast generation was requested for this job
@@ -888,6 +891,7 @@ components:
         - hasContent
         - hasFacebookVideo
         - hasPodcast
+        - hasThumbnail
         - generatePodcast
         - createdAt
         - updatedAt

@@ -39,66 +39,6 @@ function resolveBinary(name: string): string {
 const FFMPEG  = resolveBinary("ffmpeg");
 const FFPROBE = resolveBinary("ffprobe");
 
-const YTDLP = fs.existsSync("/home/runner/workspace/bin/yt-dlp")
-  ? "/home/runner/workspace/bin/yt-dlp"
-  : "yt-dlp";
-
-
-// Write YOUTUBE_COOKIES to a temp file and return its path, or null if unset.
-// Accepts:
-//   1. Raw Netscape cookies.txt content (actual newlines + tabs)
-//   2. Escaped version where \n/\t are literal two-character sequences
-//      (Replit secrets UI sometimes stores multiline values this way)
-//   3. Base64-encoded Netscape cookies.txt
-function writeCookiesFile(): string | null {
-  const raw = process.env.YOUTUBE_COOKIES;
-  if (!raw || !raw.trim()) {
-    logger.info("YOUTUBE_COOKIES not set — downloading without cookies");
-    return null;
-  }
-  try {
-    logger.info(
-      { len: raw.length, hasActualNewline: raw.includes("\n"), hasEscapedNewline: raw.includes("\\n"), hasTab: /\t/.test(raw), hasEscapedTab: raw.includes("\\t"), preview: raw.slice(0, 60).replace(/\n/g, "↵") },
-      "YOUTUBE_COOKIES detected — processing",
-    );
-
-    let content = raw;
-
-    // If the secret was stored with escaped sequences (no actual newlines but
-    // has literal \n), unescape it first so the rest of the logic works.
-    if (!raw.includes("\n") && raw.includes("\\n")) {
-      content = raw.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-      logger.info("YOUTUBE_COOKIES: unescaped \\n/\\t sequences");
-    }
-
-    // Detect raw Netscape format: has header comment or tab-separated cookie rows.
-    // If it doesn't look like Netscape, assume it's base64-encoded.
-    const looksLikeNetscape =
-      content.includes("# Netscape HTTP Cookie File") ||
-      content.includes("# HTTP Cookie File") ||
-      content.includes("youtube.com") ||
-      /\t/.test(content);
-
-    if (!looksLikeNetscape) {
-      logger.info("YOUTUBE_COOKIES: attempting base64 decode");
-      content = Buffer.from(content.trim(), "base64").toString("utf8");
-    }
-
-    if (!content.includes("\n")) {
-      logger.warn({ len: content.length }, "YOUTUBE_COOKIES has no newlines after processing — invalid format, proceeding without cookies");
-      return null;
-    }
-
-    const cookiePath = path.join(os.tmpdir(), `yt_cookies_${process.pid}.txt`);
-    fs.writeFileSync(cookiePath, content, { mode: 0o600 });
-    logger.info({ cookiePath, lines: content.split("\n").length }, "YOUTUBE_COOKIES written to temp file");
-    return cookiePath;
-  } catch (e) {
-    logger.warn({ e }, "Failed to write YouTube cookies file — proceeding without cookies");
-    return null;
-  }
-}
-
 const FONTS_CACHE_DIR = path.join(process.cwd(), "fonts");
 fs.mkdirSync(FONTS_CACHE_DIR, { recursive: true });
 
@@ -236,112 +176,6 @@ async function updateJobStatus(jobId: number, status: string, extra?: { videoTit
     ...(extra?.videoTitle ? { videoTitle: extra.videoTitle } : {}),
     ...(extra?.errorMessage ? { errorMessage: extra.errorMessage } : {}),
   }).where(eq(jobsTable.id, jobId));
-}
-
-const BOT_CHECK_PATTERN = /Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i;
-
-function buildYtdlpBaseArgs(opts: { useProxy: boolean; cookiePath: string | null }): string[] {
-  const proxy = opts.useProxy ? process.env.YTDLP_PROXY?.trim() : undefined;
-  const proxyArgs = proxy ? ["--proxy", proxy] : [];
-  const cookieArgs = opts.cookiePath ? ["--cookies", opts.cookiePath] : [];
-
-  // Use the Android player client first: YouTube's Android API has lighter
-  // bot-detection than the browser client and often works from server IPs.
-  // Falls back to web client automatically if Android fails.
-  const clientArgs = ["--extractor-args", "youtube:player_client=android,web"];
-
-  const resilienceArgs = [
-    "--retries", "5",
-    "--extractor-retries", "5",
-    "--retry-sleep", "exp=1:30",
-    "--sleep-requests", "1",
-    "--socket-timeout", "30",
-    "--force-ipv4",
-  ];
-  return [
-    "--no-playlist",
-    ...proxyArgs,
-    ...cookieArgs,
-    ...clientArgs,
-    ...resilienceArgs,
-  ];
-}
-
-async function downloadVideo(youtubeUrl: string, outputDir: string): Promise<{ videoPath: string; title: string }> {
-  // Proxy: residential proxy routes traffic through a home IP so YouTube
-  // doesn't flag it as a datacenter bot. Cookies (when configured) are also
-  // passed — YouTube increasingly requires an authenticated session on top
-  // of a clean IP ("Sign in to confirm you're not a bot" errors happen even
-  // through a good proxy without cookies).
-  //
-  // Some proxy plans hand out a single static/sticky IP rather than a
-  // rotating one. A static IP that has been used for scraping can end up
-  // MORE flagged than this server's own IP for specific videos. So if the
-  // proxy attempt gets bot-checked, we automatically retry once without the
-  // proxy before giving up.
-  const proxy = process.env.YTDLP_PROXY?.trim();
-  const cookiePath = writeCookiesFile();
-  const videoPath = path.join(outputDir, "video.mp4");
-
-  async function attempt(useProxy: boolean): Promise<{ videoPath: string; title: string }> {
-    const baseArgs = buildYtdlpBaseArgs({ useProxy, cookiePath });
-    logger.info({ hasProxy: useProxy && !!proxy, hasCookies: !!cookiePath }, "yt-dlp download starting");
-
-    const infoArgs = [...baseArgs, "--print", "%(title)s", youtubeUrl];
-    let title = "Untitled Video";
-    try {
-      const { stdout } = await execFileAsync(YTDLP, infoArgs, { timeout: 60000, env: process.env });
-      title = stdout.trim().split("\n")[0] || title;
-    } catch (e) {
-      logger.warn({ e }, "Could not fetch video title");
-    }
-
-    const dlArgs = [
-      ...baseArgs,
-      "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-      "--merge-output-format", "mp4",
-      "-o", videoPath,
-      youtubeUrl,
-    ];
-    await execFileAsync(YTDLP, dlArgs, { timeout: 300000, env: process.env });
-    return { videoPath, title };
-  }
-
-  let result: { videoPath: string; title: string };
-  try {
-    result = await attempt(true);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (proxy && BOT_CHECK_PATTERN.test(msg)) {
-      logger.warn({ msg }, "yt-dlp bot-check via proxy — retrying without proxy (this server's own IP)");
-      try {
-        result = await attempt(false);
-      } catch (e2) {
-        const msg2 = e2 instanceof Error ? e2.message : String(e2);
-        if (BOT_CHECK_PATTERN.test(msg2)) {
-          throw new Error(
-            cookiePath
-              ? "YouTube is blocking downloads even with cookies, and both the proxy and this server's direct IP were bot-checked — the cookies are likely expired/invalid. Refresh YOUTUBE_COOKIES from a logged-in browser session."
-              : "YouTube is blocking downloads even after retrying without the proxy — both the proxy IP and this server's direct IP were bot-checked. Set YOUTUBE_COOKIES from a logged-in browser session to authenticate the download.",
-          );
-        }
-        throw e2;
-      }
-    } else if (BOT_CHECK_PATTERN.test(msg)) {
-      throw new Error(
-        cookiePath
-          ? "YouTube is blocking downloads even with cookies configured — the cookies may be expired/invalid. Refresh YOUTUBE_COOKIES from a logged-in browser session."
-          : "YouTube is blocking downloads from this server's IP. Set YOUTUBE_COOKIES from a logged-in browser session, and/or YTDLP_PROXY to a rotating residential proxy URL.",
-      );
-    } else {
-      throw e;
-    }
-  }
-
-  if (!fs.existsSync(result.videoPath)) {
-    throw new Error("Video download failed — output file not found");
-  }
-  return result;
 }
 
 async function extractAudio(videoPath: string, outputDir: string): Promise<string> {
@@ -521,46 +355,24 @@ interface VideoChapter {
   end: number;
 }
 
-// Fetch YouTube chapter markers via yt-dlp metadata (no download).
-async function getVideoChapters(youtubeUrl: string): Promise<VideoChapter[]> {
-  const proxy = process.env.YTDLP_PROXY?.trim();
-  const cookiePath = writeCookiesFile();
-
-  async function attempt(useProxy: boolean): Promise<VideoChapter[]> {
-    const baseArgs = buildYtdlpBaseArgs({ useProxy, cookiePath });
-    const { stdout } = await execFileAsync(YTDLP, [
-      ...baseArgs,
-      "--dump-json",
-      "--skip-download",
-      youtubeUrl,
-    ], { timeout: 60000, env: process.env, maxBuffer: 20 * 1024 * 1024 });
-
-    const firstLine = stdout.trim().split("\n")[0] || "{}";
-    const info = JSON.parse(firstLine) as { chapters?: Array<{ title?: string; start_time?: number; end_time?: number }> };
-    const rawChapters = Array.isArray(info.chapters) ? info.chapters : [];
-
-    return rawChapters
+// Parse the manually-entered chapters JSON stored on the job into
+// VideoChapter objects. Manual chapters replace the old YouTube-metadata
+// based chapter lookup (this app is upload-only and no longer talks to
+// YouTube at all).
+function parseManualChapters(manualChaptersJson: string | null | undefined): VideoChapter[] {
+  if (!manualChaptersJson) return [];
+  try {
+    const raw = JSON.parse(manualChaptersJson) as Array<{ title?: string; start?: number; end?: number }>;
+    if (!Array.isArray(raw)) return [];
+    return raw
       .map((c): VideoChapter => ({
         title: typeof c.title === "string" && c.title.trim() ? c.title.trim() : "Chapter",
-        start: Number(c.start_time) || 0,
-        end: Number(c.end_time) || 0,
+        start: Number(c.start) || 0,
+        end: Number(c.end) || 0,
       }))
       .filter((c) => c.end > c.start);
-  }
-
-  try {
-    return await attempt(true);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (proxy && BOT_CHECK_PATTERN.test(msg)) {
-      try {
-        return await attempt(false);
-      } catch (e2) {
-        logger.warn({ e2 }, "Failed to fetch video chapters (proxy and direct both failed)");
-        return [];
-      }
-    }
-    logger.warn({ e }, "Failed to fetch video chapters");
+    logger.warn({ e }, "Failed to parse manual chapters JSON");
     return [];
   }
 }
@@ -623,23 +435,19 @@ Return ONLY a valid JSON array of exactly ${clips.length} strings, one caption p
 // Build one ClipSegment per usable YouTube chapter, with AI-generated
 // Instagram captions backfilled per clip.
 async function selectClipsFromChapters(
-  youtubeUrl: string,
+  manualChaptersJson: string | null | undefined,
   transcript: TranscriptSegment[],
   videoDuration: number,
   options: { brandVoice?: string | null; contentCta?: string | null },
 ): Promise<ClipSegment[]> {
-  if (!/^https?:\/\//i.test(youtubeUrl)) {
-    throw new Error("Chapter mode requires a YouTube URL — choose AI auto-pick mode instead.");
-  }
-
-  const chapters = await getVideoChapters(youtubeUrl);
+  const chapters = parseManualChapters(manualChaptersJson);
   const usable = chapters
     .filter((c) => c.end - c.start >= MIN_CHAPTER_DURATION_SECONDS && c.start < videoDuration)
     .map((c) => ({ ...c, end: Math.min(c.end, videoDuration) }))
     .slice(0, MAX_CHAPTER_CLIPS);
 
   if (usable.length === 0) {
-    throw new Error("This video has no YouTube chapters — choose AI auto-pick mode instead, or add chapters to the video description.");
+    throw new Error("No chapters were provided — add chapter markers or choose AI auto-pick mode instead.");
   }
 
   const baseSegments: ClipSegment[] = usable.map((c) => ({
@@ -1169,6 +977,8 @@ async function concatenateClipWithOutro(
   ], { timeout: 300000 });
 }
 
+// Unused now that YouTube URL fetching has been removed — retained only if
+// legacy jobs still carry a youtubeUrl string that happens to be a real URL.
 function extractVideoId(url: string): string | null {
   const patterns = [
     /youtu\.be\/([^?&/#]+)/,
@@ -1186,6 +996,18 @@ function extractVideoId(url: string): string | null {
 function getThumbnailUrl(youtubeUrl: string): string {
   const videoId = extractVideoId(youtubeUrl);
   return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : "";
+}
+
+const APP_URL = process.env.REPLIT_DOMAINS
+  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+  : "";
+
+// Builds a public URL for an uploaded job thumbnail (served via the
+// GET /api/jobs/:id/thumbnail route), for use in emails / content that
+// needs a real fetchable image URL.
+function getUploadedThumbnailUrl(jobId: number, hasThumbnail: boolean): string {
+  if (!hasThumbnail || !APP_URL) return "";
+  return `${APP_URL}/api/jobs/${jobId}/thumbnail`;
 }
 
 interface NewsletterSection {
@@ -1259,9 +1081,10 @@ export async function generateContent(
     brand?: typeof brandsTable.$inferSelect | null;
     tempDir?: string;
     carouselTemplates?: string[];
+    thumbnailUrl?: string | null;
   },
 ): Promise<GeneratedContent> {
-  const thumbnailUrl = getThumbnailUrl(youtubeUrl);
+  const thumbnailUrl = options?.thumbnailUrl ?? getThumbnailUrl(youtubeUrl);
   const transcriptText = transcript.map((s) => s.text).join(" ").slice(0, 10000);
   const jobId = options?.jobId ?? 0;
 
@@ -1573,6 +1396,7 @@ export async function processJob(jobId: number): Promise<void> {
           brand,
           tempDir,
           carouselTemplates: brandCarouselTemplateKeys,
+          thumbnailUrl: getUploadedThumbnailUrl(jobId, !!job.thumbnailPath),
         });
         await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
         logger.info({ jobId }, "Content generation completed for transcript job");
@@ -1584,21 +1408,17 @@ export async function processJob(jobId: number): Promise<void> {
       return;
     }
 
-    // Step 1: Download or use uploaded local file
+    // Step 1: Use the uploaded local file (this app is upload-only — no
+    // remote video fetching of any kind).
     await updateJobStatus(jobId, "downloading");
-    let videoPath: string;
-    let title: string;
-    if (job.localFilePath && fs.existsSync(job.localFilePath)) {
-      videoPath = job.localFilePath;
-      const rawName = job.youtubeUrl.startsWith("upload://")
-        ? job.youtubeUrl.slice(9)
-        : path.basename(job.localFilePath);
-      title = path.parse(rawName).name.replace(/[_\-]+/g, " ").trim() || "Uploaded Video";
-    } else {
-      const result = await downloadVideo(job.youtubeUrl, tempDir);
-      videoPath = result.videoPath;
-      title = result.title;
+    if (!job.localFilePath || !fs.existsSync(job.localFilePath)) {
+      throw new Error("No uploaded video file found for this job.");
     }
+    const videoPath = job.localFilePath;
+    const rawName = job.youtubeUrl.startsWith("upload://")
+      ? job.youtubeUrl.slice(9)
+      : path.basename(job.localFilePath);
+    const title = path.parse(rawName).name.replace(/[_\-]+/g, " ").trim() || "Uploaded Video";
     await updateJobStatus(jobId, "downloading", { videoTitle: title });
     const videoDuration = await getVideoDuration(videoPath);
 
@@ -1617,7 +1437,7 @@ export async function processJob(jobId: number): Promise<void> {
     const clipMode = job.clipMode === "chapters" ? "chapters" : "ai";
     const clipSelectionPromise: Promise<ClipSegment[]> =
       clipMode === "chapters"
-        ? selectClipsFromChapters(job.youtubeUrl, transcript, videoDuration, {
+        ? selectClipsFromChapters(job.manualChapters, transcript, videoDuration, {
             brandVoice: brand?.voiceStyle ?? null,
             contentCta: job.contentCta ?? null,
           })
@@ -1637,6 +1457,7 @@ export async function processJob(jobId: number): Promise<void> {
         brand,
         tempDir,
         carouselTemplates: brandCarouselTemplateKeys,
+        thumbnailUrl: getUploadedThumbnailUrl(jobId, !!job.thumbnailPath),
       }),
     ]);
 

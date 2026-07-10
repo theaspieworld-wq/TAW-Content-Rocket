@@ -39,6 +39,13 @@ export interface Job {
   hasContent: boolean;
   hasFacebookVideo: boolean;
   hasPodcast: boolean;
+  /** Whether a thumbnail image was uploaded for this job */
+  hasThumbnail: boolean;
+  /**
+   * JSON array of manually-entered chapters ({title,start,end}[]) used when clipMode is "chapters"
+   * @nullable
+   */
+  manualChapters?: string | null;
   /** Whether podcast generation was requested for this job */
   generatePodcast: boolean;
   createdAt: Date;

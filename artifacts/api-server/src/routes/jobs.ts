@@ -28,15 +28,39 @@ const videoUploadStorage = multer.diskStorage({
   },
 });
 
-const uploadVideoMiddleware = multer({
-  storage: videoUploadStorage,
+const THUMBNAILS_DIR = path.join(process.cwd(), "uploads", "thumbnails");
+fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
+
+// Accepts a video file ("file") and an optional thumbnail image ("thumbnail")
+// in the same multipart request.
+const uploadVideoAndThumbnailMiddleware = multer({
+  storage: multer.diskStorage({
+    destination: (_req, file, cb) => cb(null, file.fieldname === "thumbnail" ? THUMBNAILS_DIR : UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      if (file.fieldname === "thumbnail") {
+        const ext = path.extname(file.originalname) || ".jpg";
+        cb(null, `thumb_${Date.now()}${ext}`);
+      } else {
+        const ext = path.extname(file.originalname) || ".mp4";
+        cb(null, `upload_${Date.now()}${ext}`);
+      }
+    },
+  }),
   limits: { fileSize: 2 * 1024 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|ts|mts)$/i;
-    if (file.mimetype.startsWith("video/") || allowed.test(file.originalname)) {
-      cb(null, true);
+    if (file.fieldname === "thumbnail") {
+      if (file.mimetype.startsWith("image/") || /\.(png|jpg|jpeg|webp)$/i.test(file.originalname)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only image files are allowed for thumbnails"));
+      }
     } else {
-      cb(new Error("Only video files are allowed"));
+      const allowed = /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|ts|mts)$/i;
+      if (file.mimetype.startsWith("video/") || allowed.test(file.originalname)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only video files are allowed"));
+      }
     }
   },
 });
@@ -67,6 +91,8 @@ async function jobToJson(j: typeof jobsTable.$inferSelect) {
     hasContent: j.generatedContent != null,
     hasFacebookVideo,
     hasPodcast,
+    hasThumbnail: !!j.thumbnailPath && fs.existsSync(j.thumbnailPath),
+    manualChapters: j.manualChapters ?? null,
     generatePodcast: j.generatePodcast !== "false",
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
@@ -81,6 +107,9 @@ router.get("/jobs", async (req, res): Promise<void> => {
   res.json(await Promise.all(jobs.map(jobToJson)));
 });
 
+// Create a transcript-only job — no video is downloaded or rendered, only
+// written content is generated from a pasted transcript. For video jobs,
+// use POST /jobs/upload instead.
 router.post("/jobs", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId!;
   const parsed = CreateJobBody.safeParse(req.body);
@@ -92,7 +121,6 @@ router.post("/jobs", async (req, res): Promise<void> => {
   }
 
   const {
-    youtubeUrl,
     clipCount,
     clipDurationSeconds,
     clipMode,
@@ -109,12 +137,11 @@ router.post("/jobs", async (req, res): Promise<void> => {
   const count = clipCount ?? 9;
   const clipDur = clipDurationSeconds ?? 45;
 
-  // Either a URL or a manual transcript must be provided
-  const resolvedUrl = youtubeUrl?.trim() || (manualTranscript ? "transcript://manual" : "");
-  if (!resolvedUrl) {
-    res.status(400).json({ error: "Please provide a YouTube URL or paste a transcript" });
+  if (!manualTranscript?.trim()) {
+    res.status(400).json({ error: "Please paste a transcript" });
     return;
   }
+  const resolvedUrl = "transcript://manual";
 
   if (outroId != null) {
     const [outro] = await db.select().from(outrosTable)
@@ -157,64 +184,111 @@ router.post("/jobs", async (req, res): Promise<void> => {
   res.status(201).json(await jobToJson(job));
 });
 
-// Upload a local video file and create a job
-router.post("/jobs/upload", uploadVideoMiddleware.single("file"), async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId!;
+// Upload a local video file (plus optional thumbnail image) and create a job.
+// This is the only way to start a video job — no YouTube/Facebook URL fetching.
+router.post(
+  "/jobs/upload",
+  uploadVideoAndThumbnailMiddleware.fields([{ name: "file", maxCount: 1 }, { name: "thumbnail", maxCount: 1 }]),
+  async (req, res): Promise<void> => {
+    const userId = getAuth(req).userId!;
+    const files = req.files as { [field: string]: Express.Multer.File[] } | undefined;
+    const videoFile = files?.file?.[0];
+    const thumbnailFile = files?.thumbnail?.[0];
 
-  if (!req.file) {
-    res.status(400).json({ error: "No video file provided" });
+    if (!videoFile) {
+      res.status(400).json({ error: "No video file provided" });
+      return;
+    }
+
+    const clipCount = parseInt(req.body.clipCount ?? "9", 10);
+    const clipDur = parseInt(req.body.clipDurationSeconds ?? "45", 10);
+    const outroIdRaw = req.body.outroId ? parseInt(req.body.outroId, 10) : null;
+    const brandIdRaw = req.body.brandId ? parseInt(req.body.brandId, 10) : null;
+
+    if (outroIdRaw != null) {
+      const [outro] = await db.select().from(outrosTable)
+        .where(and(eq(outrosTable.id, outroIdRaw), eq(outrosTable.userId, userId)));
+      if (!outro) {
+        res.status(400).json({ error: "Specified outro not found" });
+        return;
+      }
+    }
+
+    if (brandIdRaw != null) {
+      const [brand] = await db.select().from(brandsTable)
+        .where(and(eq(brandsTable.id, brandIdRaw), eq(brandsTable.userId, userId)));
+      if (!brand) {
+        res.status(400).json({ error: "Specified brand not found" });
+        return;
+      }
+    }
+
+    const clipModeRaw = req.body.clipMode === "chapters" ? "chapters" : "ai";
+    const captionsEnabledRaw = req.body.captionsEnabled === "false" ? "false" : "true";
+    const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
+    const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
+    const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
+
+    let manualChaptersRaw: string | null = null;
+    if (clipModeRaw === "chapters" && req.body.manualChapters) {
+      try {
+        const parsedChapters = JSON.parse(req.body.manualChapters) as Array<{ title?: string; start?: number; end?: number }>;
+        if (!Array.isArray(parsedChapters) || parsedChapters.length === 0) {
+          res.status(400).json({ error: "Chapter mode requires at least one chapter" });
+          return;
+        }
+        manualChaptersRaw = JSON.stringify(parsedChapters);
+      } catch {
+        res.status(400).json({ error: "Invalid chapters data" });
+        return;
+      }
+    } else if (clipModeRaw === "chapters") {
+      res.status(400).json({ error: "Chapter mode requires at least one chapter" });
+      return;
+    }
+
+    const [job] = await db.insert(jobsTable).values({
+      userId,
+      youtubeUrl: `upload://${videoFile.originalname}`,
+      localFilePath: videoFile.path,
+      thumbnailPath: thumbnailFile?.path ?? null,
+      manualChapters: manualChaptersRaw,
+      clipCount: isNaN(clipCount) ? 9 : clipCount,
+      clipDurationSeconds: isNaN(clipDur) ? 45 : clipDur,
+      clipMode: clipModeRaw,
+      captionsEnabled: captionsEnabledRaw,
+      captionStyle: captionStyleRaw,
+      showTitle: showTitleRaw,
+      showWatermark: showWatermarkRaw,
+      contentCta: req.body.contentCta?.trim() || null,
+      status: "pending",
+      outroId: outroIdRaw,
+      brandId: brandIdRaw,
+    }).returning();
+
+    processJob(job.id).catch(() => {});
+
+    res.status(201).json(await jobToJson(job));
+  },
+);
+
+// Serve an uploaded job thumbnail image
+router.get("/jobs/:id/thumbnail", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid job ID" });
     return;
   }
 
-  const clipCount = parseInt(req.body.clipCount ?? "9", 10);
-  const clipDur = parseInt(req.body.clipDurationSeconds ?? "45", 10);
-  const outroIdRaw = req.body.outroId ? parseInt(req.body.outroId, 10) : null;
-  const brandIdRaw = req.body.brandId ? parseInt(req.body.brandId, 10) : null;
-
-  if (outroIdRaw != null) {
-    const [outro] = await db.select().from(outrosTable)
-      .where(and(eq(outrosTable.id, outroIdRaw), eq(outrosTable.userId, userId)));
-    if (!outro) {
-      res.status(400).json({ error: "Specified outro not found" });
-      return;
-    }
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, id), eq(jobsTable.userId, userId)));
+  if (!job || !job.thumbnailPath || !fs.existsSync(job.thumbnailPath)) {
+    res.status(404).json({ error: "Thumbnail not found" });
+    return;
   }
 
-  if (brandIdRaw != null) {
-    const [brand] = await db.select().from(brandsTable)
-      .where(and(eq(brandsTable.id, brandIdRaw), eq(brandsTable.userId, userId)));
-    if (!brand) {
-      res.status(400).json({ error: "Specified brand not found" });
-      return;
-    }
-  }
-
-  const clipModeRaw = req.body.clipMode === "chapters" ? "chapters" : "ai";
-  const captionsEnabledRaw = req.body.captionsEnabled === "false" ? "false" : "true";
-  const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
-  const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
-  const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
-
-  const [job] = await db.insert(jobsTable).values({
-    userId,
-    youtubeUrl: `upload://${req.file.originalname}`,
-    localFilePath: req.file.path,
-    clipCount: isNaN(clipCount) ? 9 : clipCount,
-    clipDurationSeconds: isNaN(clipDur) ? 45 : clipDur,
-    clipMode: clipModeRaw,
-    captionsEnabled: captionsEnabledRaw,
-    captionStyle: captionStyleRaw,
-    showTitle: showTitleRaw,
-    showWatermark: showWatermarkRaw,
-    contentCta: req.body.contentCta?.trim() || null,
-    status: "pending",
-    outroId: outroIdRaw,
-    brandId: brandIdRaw,
-  }).returning();
-
-  processJob(job.id).catch(() => {});
-
-  res.status(201).json(await jobToJson(job));
+  res.sendFile(job.thumbnailPath);
 });
 
 router.get("/jobs/:id", async (req, res): Promise<void> => {
@@ -274,6 +348,13 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
     if (clip.filePath) {
       await deleteObject(clip.filePath);
     }
+  }
+
+  if (job.localFilePath && fs.existsSync(job.localFilePath)) {
+    fs.unlink(job.localFilePath, () => {});
+  }
+  if (job.thumbnailPath && fs.existsSync(job.thumbnailPath)) {
+    fs.unlink(job.thumbnailPath, () => {});
   }
 
   await deleteObject(`clips/job_${job.id}_facebook.mp4`);

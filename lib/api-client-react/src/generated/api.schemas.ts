@@ -100,7 +100,7 @@ export interface UpdateBrandBody {
 }
 
 /**
- * How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter.
+ * How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per manually-entered chapter (see manualChapters, upload endpoint only).
  */
 export type CreateJobBodyClipMode =
   (typeof CreateJobBodyClipMode)[keyof typeof CreateJobBodyClipMode];
@@ -124,8 +124,8 @@ export const CreateJobBodyCaptionStyle = {
 } as const;
 
 export interface CreateJobBody {
-  /** YouTube or Facebook video URL. Required unless manualTranscript is provided. */
-  youtubeUrl?: string;
+  /** Paste a transcript directly. No video is downloaded or rendered — only written content is generated. */
+  manualTranscript?: string;
   /**
    * Number of clips for AI mode (used only when clipMode is "ai"; the app clamps this to 3-6). Ignored in "chapters" mode.
    * @minimum 0
@@ -134,7 +134,7 @@ export interface CreateJobBody {
   clipCount?: number;
   /** Target duration in seconds for each short clip (15, 30, 45, 60, 90). Only used in AI mode. */
   clipDurationSeconds?: number;
-  /** How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per YouTube chapter. */
+  /** How snippets are selected. "ai" lets the model pick 3-6 best moments; "chapters" creates one snippet per manually-entered chapter (see manualChapters, upload endpoint only). */
   clipMode?: CreateJobBodyClipMode;
   /** Whether to burn auto-generated closed captions into each snippet */
   captionsEnabled?: boolean;
@@ -158,11 +158,6 @@ export interface CreateJobBody {
    * @nullable
    */
   brandOutroIds?: string | null;
-  /**
-   * Paste a transcript directly to skip YouTube download and transcription. When provided, youtubeUrl is optional and no video clips or podcast will be generated.
-   * @nullable
-   */
-  manualTranscript?: string | null;
   /** Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided. */
   generatePodcast?: boolean;
 }
@@ -226,6 +221,13 @@ export interface Job {
   hasContent: boolean;
   hasFacebookVideo: boolean;
   hasPodcast: boolean;
+  /** Whether a thumbnail image was uploaded for this job */
+  hasThumbnail: boolean;
+  /**
+   * JSON array of manually-entered chapters ({title,start,end}[]) used when clipMode is "chapters"
+   * @nullable
+   */
+  manualChapters?: string | null;
   /** Whether podcast generation was requested for this job */
   generatePodcast: boolean;
   createdAt: string;
