@@ -34,3 +34,5 @@ export * from "./updateOutroBodyPosition";
 export * from "./uploadBrandCarouselTemplateBody";
 export * from "./uploadBrandDocumentBody";
 export * from "./uploadBrandOutroBody";
+export * from "./uploadUrlRequest";
+export * from "./uploadUrlResponse";

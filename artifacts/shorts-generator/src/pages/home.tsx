@@ -585,60 +585,123 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       manualChaptersJson = JSON.stringify(parsedChapters);
     }
 
-    const fd = new FormData();
-    fd.append("file", uploadFile);
-    if (thumbnailFile) fd.append("thumbnail", thumbnailFile);
-    fd.append("clipCount", String(values.includeShorts ? (values.clipCount ?? 5) : 0));
-    fd.append("clipDurationSeconds", String(values.clipDurationSeconds ?? 45));
-    fd.append("clipMode", values.clipMode ?? "ai");
-    fd.append("captionsEnabled", String(values.captionsEnabled ?? true));
-    fd.append("captionStyle", values.captionStyle ?? "classic");
-    fd.append("showTitle", String(values.showTitle ?? true));
-    fd.append("showWatermark", String(values.showWatermark ?? true));
-    if (values.contentCta?.trim()) fd.append("contentCta", values.contentCta.trim());
-    if (values.outroId && values.outroId !== "none") fd.append("outroId", values.outroId);
-    if (values.brandId && values.brandId !== "none") fd.append("brandId", values.brandId);
-    if (manualChaptersJson) fd.append("manualChapters", manualChaptersJson);
-    if (userVideoTitle.trim()) fd.append("userVideoTitle", userVideoTitle.trim());
-    if (userVideoDescription.trim()) fd.append("userVideoDescription", userVideoDescription.trim());
-
     setIsUploading(true);
     setUploadProgress(0);
 
     const basePath = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    const xhr = new XMLHttpRequest();
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+
+    const resetUploadState = () => {
+      setUploadFile(null);
+      setThumbnailFile(null);
+      setChapters([{ title: "", start: "", end: "" }]);
+      setChaptersPasteText("");
+      setUserVideoTitle("");
+      setUserVideoDescription("");
+      form.reset(sharedReset);
     };
-    xhr.onload = () => {
+
+    const failUpload = (description: string) => {
       setIsUploading(false);
-      if (xhr.status === 201) {
-        const newJob = JSON.parse(xhr.responseText);
-        setUploadFile(null);
-        setThumbnailFile(null);
-        setChapters([{ title: "", start: "", end: "" }]);
-        setChaptersPasteText("");
-        setUserVideoTitle("");
-        setUserVideoDescription("");
-        form.reset(sharedReset);
-        setSelectedJobId(newJob.id);
-        toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
-        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
-      } else {
-        try {
-          const err = JSON.parse(xhr.responseText);
-          toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
-        } catch {
-          toast({ title: "Upload failed", description: "Server error — please try again.", variant: "destructive" });
+      toast({ title: "Upload failed", description, variant: "destructive" });
+    };
+
+    // Uploads a file directly to object storage via a presigned URL, tracking
+    // progress within the [progressStart, progressEnd] range of the overall bar.
+    const uploadToPresignedUrl = (
+      file: File,
+      uploadURL: string,
+      progressStart: number,
+      progressEnd: number,
+    ): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const putXhr = new XMLHttpRequest();
+        putXhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const frac = e.loaded / e.total;
+            setUploadProgress(Math.round(progressStart + frac * (progressEnd - progressStart)));
+          }
+        };
+        putXhr.onload = () => {
+          if (putXhr.status >= 200 && putXhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error("Failed to upload file to storage"));
+          }
+        };
+        putXhr.onerror = () => reject(new Error("Network error while uploading file"));
+        putXhr.open("PUT", uploadURL);
+        putXhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        putXhr.send(file);
+      });
+    };
+
+    const requestUploadUrl = async (file: File): Promise<{ uploadURL: string; objectPath: string }> => {
+      const res = await fetch(`${basePath}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
+      });
+      if (!res.ok) throw new Error("Failed to request an upload URL");
+      return res.json();
+    };
+
+    (async () => {
+      try {
+        const { uploadURL: videoUploadURL, objectPath: videoObjectPath } = await requestUploadUrl(uploadFile);
+        // Reserve the tail of the progress bar for the thumbnail (if any) so the
+        // bar still reads sensibly when there are two uploads in sequence.
+        const videoProgressEnd = thumbnailFile ? 90 : 100;
+        await uploadToPresignedUrl(uploadFile, videoUploadURL, 0, videoProgressEnd);
+
+        let thumbnailObjectPath: string | undefined;
+        if (thumbnailFile) {
+          const { uploadURL: thumbUploadURL, objectPath: thumbObjectPath } = await requestUploadUrl(thumbnailFile);
+          await uploadToPresignedUrl(thumbnailFile, thumbUploadURL, videoProgressEnd, 100);
+          thumbnailObjectPath = thumbObjectPath;
         }
+
+        const payload: Record<string, unknown> = {
+          videoObjectPath,
+          videoFileName: uploadFile.name,
+          clipCount: String(values.includeShorts ? (values.clipCount ?? 5) : 0),
+          clipDurationSeconds: String(values.clipDurationSeconds ?? 45),
+          clipMode: values.clipMode ?? "ai",
+          captionsEnabled: String(values.captionsEnabled ?? true),
+          captionStyle: values.captionStyle ?? "classic",
+          showTitle: String(values.showTitle ?? true),
+          showWatermark: String(values.showWatermark ?? true),
+        };
+        if (thumbnailObjectPath) payload.thumbnailObjectPath = thumbnailObjectPath;
+        if (values.contentCta?.trim()) payload.contentCta = values.contentCta.trim();
+        if (values.outroId && values.outroId !== "none") payload.outroId = values.outroId;
+        if (values.brandId && values.brandId !== "none") payload.brandId = values.brandId;
+        if (manualChaptersJson) payload.manualChapters = manualChaptersJson;
+        if (userVideoTitle.trim()) payload.userVideoTitle = userVideoTitle.trim();
+        if (userVideoDescription.trim()) payload.userVideoDescription = userVideoDescription.trim();
+
+        const createRes = await fetch(`${basePath}/api/jobs/upload-from-storage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+
+        setIsUploading(false);
+        if (createRes.status === 201) {
+          const newJob = await createRes.json();
+          resetUploadState();
+          setSelectedJobId(newJob.id);
+          toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
+          queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        } else {
+          const err = await createRes.json().catch(() => ({}) as { error?: string });
+          toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+        }
+      } catch (e) {
+        failUpload(e instanceof Error ? e.message : "Network error — please try again.");
       }
-    };
-    xhr.onerror = () => {
-      setIsUploading(false);
-      toast({ title: "Upload failed", description: "Network error — please try again.", variant: "destructive" });
-    };
-    xhr.open("POST", `${basePath}/api/jobs/upload`);
-    xhr.send(fd);
+    })();
   };
 
   const handleDeleteJob = (e: React.MouseEvent, id: number) => {

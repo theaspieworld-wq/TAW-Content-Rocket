@@ -8,6 +8,9 @@ import { eq, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 import { downloadToLocalFile, uploadLocalFile, objectExists } from "./storage";
+import { ObjectStorageService } from "./objectStorage";
+
+const objectStorageService = new ObjectStorageService();
 
 const execFileAsync = promisify(execFile);
 
@@ -1437,16 +1440,28 @@ export async function processJob(jobId: number): Promise<void> {
       return;
     }
 
-    // Step 1: Use the uploaded local file (this app is upload-only — no
-    // remote video fetching of any kind).
+    // Step 1: Use the uploaded video (this app is upload-only — no
+    // remote video fetching of any kind). Videos uploaded directly to object
+    // storage (via presigned URL) need to be pulled down to local disk first;
+    // videos uploaded through the legacy multipart route are already local.
     await updateJobStatus(jobId, "downloading");
-    if (!job.localFilePath || !fs.existsSync(job.localFilePath)) {
-      throw new Error("No uploaded video file found for this job.");
+    let localVideoPath = job.localFilePath;
+    if (!localVideoPath || !fs.existsSync(localVideoPath)) {
+      if (job.videoObjectPath) {
+        logger.info({ jobId, videoObjectPath: job.videoObjectPath }, "Downloading uploaded video from object storage");
+        const objectFile = await objectStorageService.getObjectEntityFile(job.videoObjectPath);
+        const destPath = path.join(tempDir, `upload_${jobId}${path.extname(job.videoObjectPath) || ".mp4"}`);
+        await objectFile.download({ destination: destPath });
+        localVideoPath = destPath;
+        await db.update(jobsTable).set({ localFilePath: destPath }).where(eq(jobsTable.id, jobId));
+      } else {
+        throw new Error("No uploaded video file found for this job.");
+      }
     }
-    const videoPath = job.localFilePath;
+    const videoPath = localVideoPath;
     const rawName = job.youtubeUrl.startsWith("upload://")
       ? job.youtubeUrl.slice(9)
-      : path.basename(job.localFilePath);
+      : path.basename(videoPath);
     const derivedTitle = path.parse(rawName).name.replace(/[_\-]+/g, " ").trim() || "Uploaded Video";
     const title = job.userVideoTitle?.trim() || derivedTitle;
     await updateJobStatus(jobId, "downloading", { videoTitle: title });
@@ -1455,6 +1470,18 @@ export async function processJob(jobId: number): Promise<void> {
     // If the user didn't upload their own thumbnail, grab a still frame from
     // the video to use as the blog/email header image instead.
     let thumbnailPath = job.thumbnailPath;
+    if (!thumbnailPath && job.thumbnailObjectPath) {
+      try {
+        logger.info({ jobId, thumbnailObjectPath: job.thumbnailObjectPath }, "Downloading uploaded thumbnail from object storage");
+        const thumbFile = await objectStorageService.getObjectEntityFile(job.thumbnailObjectPath);
+        const destThumbPath = path.join(tempDir, `thumb_${jobId}${path.extname(job.thumbnailObjectPath) || ".jpg"}`);
+        await thumbFile.download({ destination: destThumbPath });
+        thumbnailPath = destThumbPath;
+        await db.update(jobsTable).set({ thumbnailPath: destThumbPath }).where(eq(jobsTable.id, jobId));
+      } catch (e) {
+        logger.warn({ e, jobId }, "Failed to download uploaded thumbnail from object storage");
+      }
+    }
     if (!thumbnailPath) {
       const autoThumbnailPath = await extractAutoThumbnail(videoPath, videoDuration, jobId);
       if (autoThumbnailPath) {

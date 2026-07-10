@@ -1,2 +1,3 @@
 - [Testing subagent + toggle defaults](testing-toggle-defaults.md) — when a feature toggle defaults to ON, tell the test plan not to click it "to turn it on" or it'll turn it off and cause false-positive UI bugs.
 - [System binaries must be in replit.nix](system-binaries-replit-nix.md) — dev shell has extra binaries (ffmpeg, etc.) not in replit.nix; deployed containers only get replit.nix deps, causing prod-only ENOENT.
+- [Large file uploads need object storage](large-file-uploads-object-storage.md) — multipart uploads >~1GB hang silently through the shared proxy; use presigned-URL direct-to-storage uploads instead.

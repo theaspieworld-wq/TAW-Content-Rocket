@@ -274,6 +274,90 @@ router.post(
   },
 );
 
+// Create a job from a video already uploaded directly to object storage
+// (via a presigned URL). Body is JSON metadata only — no file bytes.
+router.post("/jobs/upload-from-storage", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const { videoObjectPath, videoFileName, thumbnailObjectPath } = req.body ?? {};
+
+  if (!videoObjectPath || typeof videoObjectPath !== "string") {
+    res.status(400).json({ error: "No uploaded video object path provided" });
+    return;
+  }
+
+  const clipCount = parseInt(req.body.clipCount ?? "9", 10);
+  const clipDur = parseInt(req.body.clipDurationSeconds ?? "45", 10);
+  const outroIdRaw = req.body.outroId ? parseInt(req.body.outroId, 10) : null;
+  const brandIdRaw = req.body.brandId ? parseInt(req.body.brandId, 10) : null;
+
+  if (outroIdRaw != null) {
+    const [outro] = await db.select().from(outrosTable)
+      .where(and(eq(outrosTable.id, outroIdRaw), eq(outrosTable.userId, userId)));
+    if (!outro) {
+      res.status(400).json({ error: "Specified outro not found" });
+      return;
+    }
+  }
+
+  if (brandIdRaw != null) {
+    const [brand] = await db.select().from(brandsTable)
+      .where(and(eq(brandsTable.id, brandIdRaw), eq(brandsTable.userId, userId)));
+    if (!brand) {
+      res.status(400).json({ error: "Specified brand not found" });
+      return;
+    }
+  }
+
+  const clipModeRaw = req.body.clipMode === "chapters" ? "chapters" : "ai";
+  const captionsEnabledRaw = req.body.captionsEnabled === "false" ? "false" : "true";
+  const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
+  const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
+  const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
+
+  let manualChaptersRaw: string | null = null;
+  if (clipModeRaw === "chapters" && req.body.manualChapters) {
+    try {
+      const parsedChapters = JSON.parse(req.body.manualChapters) as Array<{ title?: string; start?: number; end?: number }>;
+      if (!Array.isArray(parsedChapters) || parsedChapters.length === 0) {
+        res.status(400).json({ error: "Chapter mode requires at least one chapter" });
+        return;
+      }
+      manualChaptersRaw = JSON.stringify(parsedChapters);
+    } catch {
+      res.status(400).json({ error: "Invalid chapters data" });
+      return;
+    }
+  } else if (clipModeRaw === "chapters") {
+    res.status(400).json({ error: "Chapter mode requires at least one chapter" });
+    return;
+  }
+
+  const [job] = await db.insert(jobsTable).values({
+    userId,
+    youtubeUrl: `upload://${videoFileName || "uploaded-video.mp4"}`,
+    videoObjectPath,
+    thumbnailObjectPath: thumbnailObjectPath || null,
+    manualChapters: manualChaptersRaw,
+    userVideoTitle: req.body.userVideoTitle?.trim() || null,
+    userVideoDescription: req.body.userVideoDescription?.trim() || null,
+    clipCount: isNaN(clipCount) ? 9 : clipCount,
+    clipDurationSeconds: isNaN(clipDur) ? 45 : clipDur,
+    clipMode: clipModeRaw,
+    captionsEnabled: captionsEnabledRaw,
+    captionStyle: captionStyleRaw,
+    showTitle: showTitleRaw,
+    showWatermark: showWatermarkRaw,
+    contentCta: req.body.contentCta?.trim() || null,
+    status: "pending",
+    outroId: outroIdRaw,
+    brandId: brandIdRaw,
+  }).returning();
+
+  processJob(job.id).catch(() => {});
+
+  res.status(201).json(await jobToJson(job));
+});
+
 // Serve an uploaded job thumbnail image
 router.get("/jobs/:id/thumbnail", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId!;
