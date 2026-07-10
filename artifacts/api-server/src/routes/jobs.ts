@@ -46,7 +46,7 @@ const uploadVideoAndThumbnailMiddleware = multer({
       }
     },
   }),
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  limits: { fileSize: 6 * 1024 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.fieldname === "thumbnail") {
       if (file.mimetype.startsWith("image/") || /\.(png|jpg|jpeg|webp)$/i.test(file.originalname)) {
