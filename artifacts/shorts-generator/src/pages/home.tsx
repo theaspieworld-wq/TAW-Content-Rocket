@@ -1643,7 +1643,17 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         {/* ── Form panel ── */}
         <div className="p-4 md:p-5 border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-3 max-w-4xl mx-auto w-full">
+            <form
+              onSubmit={form.handleSubmit(onSubmit, (errors) => {
+                const firstError = Object.values(errors)[0] as { message?: string } | undefined;
+                toast({
+                  title: "Can't submit yet",
+                  description: firstError?.message || "Please fill in the required fields before submitting.",
+                  variant: "destructive",
+                });
+              })}
+              className="flex flex-col gap-3 max-w-4xl mx-auto w-full"
+            >
 
               {/* Row 1: Source selector + input + submit */}
               <div className="flex flex-col gap-2.5 w-full">
