@@ -14,7 +14,7 @@ import {
   DownloadClipParams,
 } from "@workspace/api-zod";
 import { processJob, generateContent, generatePodcastAudio } from "../lib/processor";
-import { objectExists, deleteObject, streamToResponse, getReadStream } from "../lib/storage";
+import { objectExists, deleteObject, streamToResponse, streamRangeToResponse, getReadStream } from "../lib/storage";
 
 const router: IRouter = Router();
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -553,6 +553,37 @@ router.get("/images/:filename", async (req, res): Promise<void> => {
   });
   if (!found) {
     res.status(404).json({ error: "Image not found" });
+  }
+});
+
+router.get("/clips/:clipId/stream", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const params = DownloadClipParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [clip] = await db.select().from(clipsTable).where(eq(clipsTable.id, params.data.clipId));
+  if (!clip || !clip.filePath) {
+    res.status(404).json({ error: "Clip not found or not ready" });
+    return;
+  }
+
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, clip.jobId), eq(jobsTable.userId, userId)));
+  if (!job) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const filename = `${clip.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`;
+  const found = await streamRangeToResponse(clip.filePath, req, res, {
+    contentType: "video/mp4",
+    filename,
+  });
+  if (!found) {
+    res.status(404).json({ error: "Clip file not found" });
   }
 });
 

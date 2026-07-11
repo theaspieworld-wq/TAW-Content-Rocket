@@ -1,5 +1,5 @@
 import { Storage } from "@google-cloud/storage";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { logger } from "./logger";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
@@ -105,6 +105,71 @@ export async function deleteObject(relativeKey: string | null | undefined): Prom
 export function getReadStream(relativeKey: string) {
   const { bucketName, objectName } = resolveObject(relativeKey);
   return objectStorageClient.bucket(bucketName).file(objectName).createReadStream();
+}
+
+/**
+ * Streams an object to an Express response with HTTP Range request support.
+ * Enables video seeking in `<video>` elements.
+ * Returns false if the object doesn't exist.
+ */
+export async function streamRangeToResponse(
+  relativeKey: string,
+  req: Request,
+  res: Response,
+  opts: { contentType?: string; filename?: string } = {}
+): Promise<boolean> {
+  const { bucketName, objectName } = resolveObject(relativeKey);
+  const file = objectStorageClient.bucket(bucketName).file(objectName);
+  const [exists] = await file.exists();
+  if (!exists) return false;
+
+  const [metadata] = await file.getMetadata();
+  const fileSize = parseInt(String(metadata.size ?? 0), 10);
+
+  res.setHeader("Accept-Ranges", "bytes");
+  if (opts.contentType) res.setHeader("Content-Type", opts.contentType);
+  if (opts.filename) {
+    res.setHeader("Content-Disposition", `inline; filename="${opts.filename}"`);
+  }
+
+  const rangeHeader = req.headers.range;
+  if (rangeHeader) {
+    const [startStr, endStr] = rangeHeader.replace(/bytes=/, "").split("-");
+    const start = parseInt(startStr, 10);
+    const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+    res.setHeader("Content-Length", chunkSize);
+
+    return new Promise((resolve) => {
+      file
+        .createReadStream({ start, end })
+        .on("error", (err) => {
+          logger.error({ err, relativeKey }, "Range stream error");
+          if (!res.headersSent) res.status(500);
+          res.end();
+          resolve(true);
+        })
+        .on("end", () => resolve(true))
+        .pipe(res);
+    });
+  } else {
+    res.setHeader("Content-Length", fileSize);
+    return new Promise((resolve) => {
+      file
+        .createReadStream()
+        .on("error", (err) => {
+          logger.error({ err, relativeKey }, "Stream error");
+          if (!res.headersSent) res.status(500);
+          res.end();
+          resolve(true);
+        })
+        .on("end", () => resolve(true))
+        .pipe(res);
+    });
+  }
 }
 
 /** Streams an object directly to an Express response. Returns false if the object doesn't exist. */

@@ -243,7 +243,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [userVideoTitle, setUserVideoTitle] = useState("");
   const [userVideoDescription, setUserVideoDescription] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadSpeedBps, setUploadSpeedBps] = useState(0);
+  const uploadStartTimeRef = useRef<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [playingClipId, setPlayingClipId] = useState<number | null>(null);
   const [chapters, setChapters] = useState<{ title: string; start: string; end: string }[]>([
     { title: "", start: "", end: "" },
   ]);
@@ -614,6 +617,9 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
     // Uploads a file directly to object storage via a presigned URL, tracking
     // progress within the [progressStart, progressEnd] range of the overall bar.
+    uploadStartTimeRef.current = null;
+    setUploadSpeedBps(0);
+
     const uploadToPresignedUrl = (
       file: File,
       uploadURL: string,
@@ -624,6 +630,12 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         const putXhr = new XMLHttpRequest();
         putXhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
+            const now = Date.now();
+            if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
+            const elapsed = (now - uploadStartTimeRef.current) / 1000;
+            if (elapsed > 0 && e.loaded > 0) {
+              setUploadSpeedBps(e.loaded / elapsed);
+            }
             const frac = e.loaded / e.total;
             setUploadProgress(Math.round(progressStart + frac * (progressEnd - progressStart)));
           }
@@ -632,10 +644,12 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           if (putXhr.status >= 200 && putXhr.status < 300) {
             resolve();
           } else {
-            reject(new Error("Failed to upload file to storage"));
+            reject(new Error(`Upload failed (${putXhr.status}) — please try again`));
           }
         };
-        putXhr.onerror = () => reject(new Error("Network error while uploading file"));
+        putXhr.onerror = () => reject(new Error("Network error during upload — check your connection and try again"));
+        putXhr.ontimeout = () => reject(new Error("Upload timed out — file may be too large for your connection speed"));
+        putXhr.timeout = 14400000;
         putXhr.open("PUT", uploadURL);
         putXhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
         putXhr.send(file);
@@ -1784,9 +1798,20 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       {isUploading && (
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Uploading…</span><span>{uploadProgress}%</span>
+                            <span className="flex items-center gap-2">
+                              <span>Uploading…</span>
+                              {uploadSpeedBps > 0 && (
+                                <span className="font-mono">
+                                  {uploadSpeedBps >= 1048576
+                                    ? `${(uploadSpeedBps / 1048576).toFixed(1)} MB/s`
+                                    : `${(uploadSpeedBps / 1024).toFixed(0)} KB/s`}
+                                </span>
+                              )}
+                            </span>
+                            <span>{uploadProgress}%</span>
                           </div>
                           <Progress value={uploadProgress} className="h-1.5" />
+                          <p className="text-[10px] text-muted-foreground/60 pt-0.5">Large files can take several minutes — keep this tab open until complete.</p>
                         </div>
                       )}
                     </div>
@@ -2654,14 +2679,38 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       <Card key={clip.id} className="overflow-hidden border-border/60 shadow-sm hover:shadow-lg transition-all duration-300 bg-card group relative flex flex-col">
                         <div className="aspect-[9/16] bg-black/90 relative flex items-center justify-center overflow-hidden border-b border-border/30">
                           {clip.status === "completed" ? (
-                            <>
-                              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent z-10 opacity-60 group-hover:opacity-90 transition-opacity" />
-                              <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                <div className="w-14 h-14 rounded-full bg-primary/90 text-white flex items-center justify-center shadow-xl border border-white/20">
-                                  <PlayCircle className="w-7 h-7 ml-0.5" />
+                            playingClipId === clip.id ? (
+                              <>
+                                <video
+                                  src={`${(import.meta.env.BASE_URL as string).replace(/\/$/, "")}/api/clips/${clip.id}/stream`}
+                                  autoPlay
+                                  controls
+                                  playsInline
+                                  className="absolute inset-0 w-full h-full object-contain bg-black"
+                                  onEnded={() => setPlayingClipId(null)}
+                                />
+                                <button
+                                  className="absolute top-2 right-2 z-30 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black/90 transition-colors"
+                                  onClick={() => setPlayingClipId(null)}
+                                  aria-label="Close"
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none"
+                                onClick={() => setPlayingClipId(clip.id)}
+                                aria-label="Play clip"
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent z-10 opacity-60 group-hover:opacity-90 transition-opacity" />
+                                <div className="absolute inset-0 z-20 flex items-center justify-center">
+                                  <div className="w-14 h-14 rounded-full bg-primary/90 text-white flex items-center justify-center shadow-xl border border-white/20 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                    <PlayCircle className="w-7 h-7 ml-0.5" />
+                                  </div>
                                 </div>
-                              </div>
-                            </>
+                              </button>
+                            )
                           ) : (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground z-10">
                               <Loader2 className="w-8 h-8 animate-spin mb-3 text-primary" />

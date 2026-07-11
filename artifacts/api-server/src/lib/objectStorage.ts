@@ -124,7 +124,7 @@ export class ObjectStorageService {
       bucketName,
       objectName,
       method: "PUT",
-      ttlSec: 900,
+      ttlSec: 3600,
     });
   }
 
