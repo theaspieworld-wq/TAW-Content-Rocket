@@ -192,6 +192,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     }
   };
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileFormOpen, setMobileFormOpen] = useState(true);
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -514,6 +515,13 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     document.head.appendChild(link);
     return () => { document.head.removeChild(link); };
   }, []);
+
+  // Auto-collapse the form on mobile when a job is selected so results get full screen
+  useEffect(() => {
+    if (selectedJobId) {
+      setMobileFormOpen(false);
+    }
+  }, [selectedJobId]);
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const sharedReset = {
@@ -1640,7 +1648,25 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         </div>
 
         {/* ── Form panel ── */}
-        <div className="p-4 md:p-5 border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
+        <div className="border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
+          {/* Mobile form toggle bar */}
+          <div className={`md:hidden flex items-center justify-between px-4 py-2.5${mobileFormOpen ? " border-b border-border/40" : ""}`}>
+            <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+              {selectedJobId && jobWithClips?.videoTitle
+                ? jobWithClips.videoTitle
+                : "Start a new job"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileFormOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-all shrink-0 ml-2"
+            >
+              {mobileFormOpen
+                ? <><ChevronUp className="w-3.5 h-3.5" /> Hide</>
+                : <><Plus className="w-3.5 h-3.5" /> New Job</>}
+            </button>
+          </div>
+          <div className={`${mobileFormOpen ? "" : "hidden md:block"} p-4 md:p-5`}>
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit, (errors) => {
@@ -2109,10 +2135,11 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
               )}
             </form>
           </Form>
+          </div>
         </div>
 
         {/* ── Content area ── */}
-        <ScrollArea className="flex-1 p-5 lg:p-8">
+        <ScrollArea className="flex-1 p-3 md:p-5 lg:p-8">
           {!selectedJobId ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground max-w-md mx-auto text-center mt-16">
               <div className="w-24 h-24 bg-card/50 rounded-2xl flex items-center justify-center mb-8 border border-border/50 shadow-sm relative overflow-hidden">
@@ -2622,7 +2649,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       </Badge>
                     </h3>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
                     {jobWithClips.clips.map((clip) => (
                       <Card key={clip.id} className="overflow-hidden border-border/60 shadow-sm hover:shadow-lg transition-all duration-300 bg-card group relative flex flex-col">
                         <div className="aspect-[9/16] bg-black/90 relative flex items-center justify-center overflow-hidden border-b border-border/30">
