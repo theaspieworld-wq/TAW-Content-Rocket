@@ -44,9 +44,12 @@ export class StripeStorage {
 
   async listProductsWithPrices() {
     const stripe = await getUncachableStripeClient();
-    const products = await stripe.products.list({ active: true, limit: 20 });
+    const products = await stripe.products.list({ active: true, limit: 100 });
+    const contentRocketProducts = products.data.filter(p =>
+      p.name.toLowerCase().includes('content rocket')
+    );
     const result = [];
-    for (const product of products.data) {
+    for (const product of contentRocketProducts) {
       const prices = await stripe.prices.list({ product: product.id, active: true, limit: 10 });
       result.push({
         id: product.id,
