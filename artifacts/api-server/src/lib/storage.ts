@@ -102,6 +102,21 @@ export async function deleteObject(relativeKey: string | null | undefined): Prom
   }
 }
 
+/**
+ * Creates a GCS write stream for direct server-side streaming uploads.
+ * The caller pipes data into the returned Writable stream.
+ */
+export function createGCSUploadStream(
+  relativeKey: string,
+  opts: { contentType?: string } = {}
+): import("stream").Writable {
+  const { bucketName, objectName } = resolveObject(relativeKey);
+  return objectStorageClient
+    .bucket(bucketName)
+    .file(objectName)
+    .createWriteStream({ resumable: true, contentType: opts.contentType });
+}
+
 export function getReadStream(relativeKey: string) {
   const { bucketName, objectName } = resolveObject(relativeKey);
   return objectStorageClient.bucket(bucketName).file(objectName).createReadStream();

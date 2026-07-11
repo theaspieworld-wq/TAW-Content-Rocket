@@ -1,14 +1,62 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import path from "path";
+import { randomUUID } from "crypto";
+import { getAuth } from "@clerk/express";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
+import { createGCSUploadStream } from "../lib/storage";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+
+/**
+ * PUT /storage/uploads/stream
+ *
+ * Server-side streaming upload proxy: the browser PUTs raw file bytes directly
+ * to this same-origin endpoint (no CORS), and the server pipes them straight to
+ * GCS without buffering in memory. Supports files of any size.
+ *
+ * Required headers:
+ *   Content-Type  — MIME type of the file (e.g. video/mp4)
+ *   X-File-Name   — Original filename (used to derive extension)
+ *
+ * Returns JSON: { objectPath: "/objects/uploads/<uuid>.<ext>" }
+ */
+router.put("/storage/uploads/stream", async (req: Request, res: Response): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const fileName = (req.headers["x-file-name"] as string) || "upload.mp4";
+  const contentType = (req.headers["content-type"] as string) || "application/octet-stream";
+  const ext = path.extname(fileName) || ".mp4";
+  const objectKey = `uploads/${randomUUID()}${ext}`;
+
+  try {
+    const writeStream = createGCSUploadStream(objectKey, { contentType });
+
+    await new Promise<void>((resolve, reject) => {
+      req.pipe(writeStream);
+      writeStream.on("finish", resolve);
+      writeStream.on("error", reject);
+      req.on("error", reject);
+    });
+
+    res.json({ objectPath: `/objects/${objectKey}` });
+  } catch (err) {
+    req.log.error({ err }, "Streaming upload to GCS failed");
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Upload failed — please try again" });
+    }
+  }
+});
 
 /**
  * POST /storage/uploads/request-url

@@ -615,20 +615,19 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       toast({ title: "Upload failed", description, variant: "destructive" });
     };
 
-    // Uploads a file directly to object storage via a presigned URL, tracking
-    // progress within the [progressStart, progressEnd] range of the overall bar.
+    // Uploads a file directly to the server streaming proxy (no CORS, no GCS presigned URL),
+    // tracking progress within the [progressStart, progressEnd] range of the overall bar.
     uploadStartTimeRef.current = null;
     setUploadSpeedBps(0);
 
-    const uploadToPresignedUrl = (
+    const uploadToServer = (
       file: File,
-      uploadURL: string,
       progressStart: number,
       progressEnd: number,
-    ): Promise<void> => {
+    ): Promise<{ objectPath: string }> => {
       return new Promise((resolve, reject) => {
-        const putXhr = new XMLHttpRequest();
-        putXhr.upload.onprogress = (e) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const now = Date.now();
             if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
@@ -640,45 +639,36 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
             setUploadProgress(Math.round(progressStart + frac * (progressEnd - progressStart)));
           }
         };
-        putXhr.onload = () => {
-          if (putXhr.status >= 200 && putXhr.status < 300) {
-            resolve();
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
           } else {
-            reject(new Error(`Upload failed (${putXhr.status}) — please try again`));
+            let msg = `Upload failed (${xhr.status})`;
+            try { msg = JSON.parse(xhr.responseText).error ?? msg; } catch {}
+            reject(new Error(msg));
           }
         };
-        putXhr.onerror = () => reject(new Error("Network error during upload — check your connection and try again"));
-        putXhr.ontimeout = () => reject(new Error("Upload timed out — file may be too large for your connection speed"));
-        putXhr.timeout = 14400000;
-        putXhr.open("PUT", uploadURL);
-        putXhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-        putXhr.send(file);
+        xhr.onerror = () => reject(new Error("Network error during upload — check your connection and try again"));
+        xhr.ontimeout = () => reject(new Error("Upload timed out — file may be too large for your connection speed"));
+        xhr.timeout = 14400000;
+        xhr.open("PUT", `${basePath}/api/storage/uploads/stream`);
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.setRequestHeader("X-File-Name", file.name);
+        xhr.withCredentials = true;
+        xhr.send(file);
       });
-    };
-
-    const requestUploadUrl = async (file: File): Promise<{ uploadURL: string; objectPath: string }> => {
-      const res = await fetch(`${basePath}/api/storage/uploads/request-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
-      });
-      if (!res.ok) throw new Error("Failed to request an upload URL");
-      return res.json();
     };
 
     (async () => {
       try {
-        const { uploadURL: videoUploadURL, objectPath: videoObjectPath } = await requestUploadUrl(uploadFile);
         // Reserve the tail of the progress bar for the thumbnail (if any) so the
         // bar still reads sensibly when there are two uploads in sequence.
         const videoProgressEnd = thumbnailFile ? 90 : 100;
-        await uploadToPresignedUrl(uploadFile, videoUploadURL, 0, videoProgressEnd);
+        const { objectPath: videoObjectPath } = await uploadToServer(uploadFile, 0, videoProgressEnd);
 
         let thumbnailObjectPath: string | undefined;
         if (thumbnailFile) {
-          const { uploadURL: thumbUploadURL, objectPath: thumbObjectPath } = await requestUploadUrl(thumbnailFile);
-          await uploadToPresignedUrl(thumbnailFile, thumbUploadURL, videoProgressEnd, 100);
+          const { objectPath: thumbObjectPath } = await uploadToServer(thumbnailFile, videoProgressEnd, 100);
           thumbnailObjectPath = thumbObjectPath;
         }
 
