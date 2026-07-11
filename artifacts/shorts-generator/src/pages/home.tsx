@@ -626,6 +626,8 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       progressEnd: number,
     ): Promise<{ objectPath: string }> => {
       return new Promise((resolve, reject) => {
+        const url = `${basePath}/api/storage/uploads/stream`;
+        console.log("[upload] starting server-stream upload", { url, fileName: file.name, size: file.size, type: file.type });
         const xhr = new XMLHttpRequest();
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
@@ -640,6 +642,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           }
         };
         xhr.onload = () => {
+          console.log("[upload] onload", { status: xhr.status, response: xhr.responseText.slice(0, 200) });
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(JSON.parse(xhr.responseText));
           } else {
@@ -648,13 +651,24 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
             reject(new Error(msg));
           }
         };
-        xhr.onerror = () => reject(new Error("Network error during upload — check your connection and try again"));
-        xhr.ontimeout = () => reject(new Error("Upload timed out — file may be too large for your connection speed"));
+        xhr.onerror = (e) => {
+          console.error("[upload] onerror", { status: xhr.status, readyState: xhr.readyState, event: e });
+          reject(new Error("Network error during upload — check your connection and try again"));
+        };
+        xhr.ontimeout = () => {
+          console.error("[upload] ontimeout");
+          reject(new Error("Upload timed out — file may be too large for your connection speed"));
+        };
+        xhr.onabort = () => {
+          console.error("[upload] onabort");
+          reject(new Error("Upload was aborted"));
+        };
         xhr.timeout = 14400000;
-        xhr.open("PUT", `${basePath}/api/storage/uploads/stream`);
+        xhr.open("PUT", url);
         xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
         xhr.setRequestHeader("X-File-Name", file.name);
         xhr.withCredentials = true;
+        console.log("[upload] sending XHR...");
         xhr.send(file);
       });
     };
