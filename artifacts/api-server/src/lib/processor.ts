@@ -985,7 +985,36 @@ async function renderMainClip(
 
   if (options.captionsEnabled) {
     const style = getCaptionStyle(options.captionStyle, options.brand);
-    const chunks = buildCaptionChunks(transcript, startSeconds, endSeconds);
+    const clipDuration = endSeconds - startSeconds;
+
+    // Re-transcribe just this clip's audio so captions have accurate 0-based
+    // timestamps. The full-video SRT uses sentence-level segments; distributing
+    // words evenly within those coarse chunks causes captions to drift badly.
+    let captionSegments: TranscriptSegment[] = [];
+    const tempClipAudio = outputPath.replace(/\.mp4$/, "_capaud.mp3");
+    try {
+      await execFileAsync(FFMPEG, [
+        "-ss", startSeconds.toString(),
+        "-i", videoPath,
+        "-t", clipDuration.toString(),
+        "-vn", "-ar", "16000", "-ac", "1", "-b:a", "64k",
+        tempClipAudio, "-y",
+      ], { timeout: 60000 });
+      captionSegments = await transcribeAudio(tempClipAudio, clipDuration);
+    } catch (captionErr) {
+      logger.warn({ captionErr }, "Clip audio transcription failed — falling back to rebased full-video transcript");
+      captionSegments = transcript
+        .filter((s) => s.end > startSeconds && s.start < endSeconds)
+        .map((s) => ({
+          start: Math.max(0, s.start - startSeconds),
+          end: Math.min(clipDuration, s.end - startSeconds),
+          text: s.text,
+        }));
+    } finally {
+      try { fs.unlinkSync(tempClipAudio); } catch (_) {}
+    }
+
+    const chunks = buildCaptionChunks(captionSegments, 0, clipDuration);
     for (const chunk of chunks) {
       const rawText = style.uppercase ? chunk.text.toUpperCase() : chunk.text;
       const lines = wrapText(rawText, 22);
