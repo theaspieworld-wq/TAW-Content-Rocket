@@ -1353,11 +1353,11 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     "Caption for Quote 5. Same structure. Different angle."
   ],
   "threadPosts": [
-    "Hook — the single most compelling insight. Start with the insight, no preamble. Max 280 chars.",
+    "Hook — the single most compelling insight from the video. Start with the insight, no preamble. Max 280 chars.",
     "Key insight from the video. Start directly with the content. Max 280 chars.",
     "Another insight or tactical tip. Max 280 chars.",
     "Practical action step the viewer can use immediately. Max 280 chars.",
-    "Wrap-up inviting people to watch the full video — include the URL: ${youtubeUrl}. Max 280 chars."
+    "Closing post — end with the direct CTA link (no 'comment for' or 'DM me' — paste the link itself): ${options?.contentCta ? options.contentCta : youtubeUrl}. Max 280 chars."
   ],
   "newsletterSubject": "Compelling email subject line. Max 60 chars. No clickbait.",
   "newsletterIntro": "3-4 sentences. Direct, upbeat, conversational — like a mate sharing a great video. Do NOT start with 'Hey' — that is already in the template.",
