@@ -186,13 +186,15 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const setSelectedJobId = (id: number | null) => {
     setSelectedJobIdState(id);
     if (id !== null) {
+      setFormPanelOpen(false);
       sessionStorage.setItem("cr_selectedJobId", String(id));
     } else {
+      setFormPanelOpen(true);
       sessionStorage.removeItem("cr_selectedJobId");
     }
   };
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mobileFormOpen, setMobileFormOpen] = useState(true);
+  const [formPanelOpen, setFormPanelOpen] = useState(true);
   const [isUploadingOutro, setIsUploadingOutro] = useState(false);
   const [editingOutroId, setEditingOutroId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -522,7 +524,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   // Auto-collapse the form on mobile when a job is selected so results get full screen
   useEffect(() => {
     if (selectedJobId) {
-      setMobileFormOpen(false);
+      setFormPanelOpen(false);
     }
   }, [selectedJobId]);
 
@@ -623,6 +625,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     setUploadSpeedBps(0);
 
     const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB — safely under proxy limits
+    const CONCURRENCY = 4; // parallel chunk uploads
 
     const uploadFileInChunks = async (
       file: File,
@@ -632,8 +635,9 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       const sessionId = crypto.randomUUID();
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
       const contentType = file.type || "application/octet-stream";
+      let bytesConfirmed = 0;
 
-      for (let i = 0; i < totalChunks; i++) {
+      const uploadChunk = async (i: number) => {
         const start = i * CHUNK_SIZE;
         const chunk = file.slice(start, start + CHUNK_SIZE);
 
@@ -656,16 +660,25 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           throw new Error(msg);
         }
 
-        // Update progress and speed after each successful chunk.
-        const bytesUploaded = Math.min((i + 1) * CHUNK_SIZE, file.size);
+        // Update progress and speed as each chunk lands (JS is single-threaded so no race).
+        bytesConfirmed += chunk.size;
         const now = Date.now();
         if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
         const elapsed = (now - uploadStartTimeRef.current) / 1000;
-        if (elapsed > 0) setUploadSpeedBps(bytesUploaded / elapsed);
-
-        const frac = (i + 1) / totalChunks;
+        if (elapsed > 0) setUploadSpeedBps(bytesConfirmed / elapsed);
         // Reserve the last 5 % of the range for the assemble step.
-        setUploadProgress(Math.round(progressStart + frac * (progressEnd - progressStart) * 0.95));
+        setUploadProgress(Math.round(
+          progressStart + (bytesConfirmed / file.size) * (progressEnd - progressStart) * 0.95
+        ));
+      };
+
+      // Send CONCURRENCY chunks at a time; wait for each batch before the next.
+      for (let batchStart = 0; batchStart < totalChunks; batchStart += CONCURRENCY) {
+        const batch = Array.from(
+          { length: Math.min(CONCURRENCY, totalChunks - batchStart) },
+          (_, j) => uploadChunk(batchStart + j),
+        );
+        await Promise.all(batch);
       }
 
       // Assemble all chunks into the final GCS object.
@@ -1681,23 +1694,23 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         {/* ── Form panel ── */}
         <div className="border-b border-border bg-card/20 backdrop-blur-md sticky top-[57px] md:top-0 z-20">
           {/* Mobile form toggle bar */}
-          <div className={`md:hidden flex items-center justify-between px-4 py-2.5${mobileFormOpen ? " border-b border-border/40" : ""}`}>
-            <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+          <div className={`flex items-center justify-between px-4 py-2${formPanelOpen ? " border-b border-border/40" : ""}`}>
+            <span className="text-xs text-muted-foreground truncate max-w-[240px]">
               {selectedJobId && jobWithClips?.videoTitle
                 ? jobWithClips.videoTitle
                 : "Start a new job"}
             </span>
             <button
               type="button"
-              onClick={() => setMobileFormOpen(o => !o)}
+              onClick={() => setFormPanelOpen(o => !o)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-all shrink-0 ml-2"
             >
-              {mobileFormOpen
+              {formPanelOpen
                 ? <><ChevronUp className="w-3.5 h-3.5" /> Hide</>
                 : <><Plus className="w-3.5 h-3.5" /> New Job</>}
             </button>
           </div>
-          <div className={`${mobileFormOpen ? "" : "hidden md:block"} p-4 md:p-5`}>
+          <div className={`${formPanelOpen ? "" : "hidden"} p-4 md:p-5`}>
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit, (errors) => {
