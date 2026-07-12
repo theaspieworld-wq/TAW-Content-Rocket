@@ -31,7 +31,7 @@ function formatPrice(amount: number, currency: string) {
 export default function PricingPage() {
   const [, setLocation] = useLocation();
   const { user } = useUser();
-  const [billing, setBilling] = useState<"month" | "year">("month");
+  const [billing, setBilling] = useState<"week" | "month">("week");
   const [loading, setLoading] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -103,17 +103,17 @@ export default function PricingPage() {
 
         <div className="flex items-center justify-center gap-3 mb-10">
           <button
-            onClick={() => setBilling("month")}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${billing === "month" ? "bg-[#f21178] text-white" : "text-slate-400 hover:text-white"}`}
+            onClick={() => setBilling("week")}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${billing === "week" ? "bg-[#f21178] text-white" : "text-slate-400 hover:text-white"}`}
           >
-            Monthly
+            Weekly
           </button>
           <button
-            onClick={() => setBilling("year")}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${billing === "year" ? "bg-[#f21178] text-white" : "text-slate-400 hover:text-white"}`}
+            onClick={() => setBilling("month")}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${billing === "month" ? "bg-[#f21178] text-white" : "text-slate-400 hover:text-white"}`}
           >
-            Yearly
-            <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">Save 32%</span>
+            Monthly
+            <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">Save $70/mo</span>
           </button>
         </div>
 
@@ -125,8 +125,9 @@ export default function PricingPage() {
           <p className="text-slate-400 text-sm">No plans available yet.</p>
         ) : (
           products.map((product) => {
+            const intervalMap: Record<string, string> = { week: "week", month: "month" };
             const price = product.prices.find(
-              (p) => p.recurring?.interval === billing
+              (p) => p.recurring?.interval === intervalMap[billing]
             ) ?? product.prices[0];
             if (!price) return null;
             return (
@@ -154,9 +155,9 @@ export default function PricingPage() {
                       <div className="text-slate-400 text-sm">
                         /{price.recurring?.interval ?? "one-time"}
                       </div>
-                      {billing === "year" && (
-                        <div className="text-emerald-400 text-xs mt-0.5 font-medium">
-                          {formatPrice(Math.round(price.unitAmount / 12), price.currency)}/mo billed annually
+                      {billing === "week" && (
+                        <div className="text-slate-400 text-xs mt-0.5 font-medium">
+                          ~{formatPrice(price.unitAmount * 4, price.currency)}/mo at 4 weeks
                         </div>
                       )}
                     </div>

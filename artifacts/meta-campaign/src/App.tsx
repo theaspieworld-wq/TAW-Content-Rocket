@@ -107,7 +107,7 @@ const ADS = [
     id: 1,
     name: "The Transformation",
     creative: "creative-01-before-after.png",
-    primaryText: `Imagine posting on 7 platforms — every single week — without writing a word.\n\nMost content creators spend 10+ hours turning ONE video into blogs, Shorts, newsletters, carousel posts, and social posts.\n\nContent Rocket does it in 5 minutes.\n\nPaste your YouTube URL. In minutes, you get:\n✦ YouTube Shorts (ready to post)\n✦ Full blog post with SEO headings\n✦ Email newsletter\n✦ Carousel post\n✦ Social captions for X, LinkedIn, Threads\n✦ Podcast audio file\n✦ Quote graphics\n\nCreators using Content Rocket are posting 5× more without burning out.\n\n🚀 Start your free trial — $49/mo`,
+    primaryText: `Imagine posting on 7 platforms — every single week — without writing a word.\n\nMost content creators spend 10+ hours turning ONE video into blogs, Shorts, newsletters, carousel posts, and social posts.\n\nContent Rocket does it in 5 minutes.\n\nPaste your YouTube URL. In minutes, you get:\n✦ YouTube Shorts (ready to post)\n✦ Full blog post with SEO headings\n✦ Email newsletter\n✦ Carousel post\n✦ Social captions for X, LinkedIn, Threads\n✦ Podcast audio file\n✦ Quote graphics\n\nCreators using Content Rocket are posting 5× more without burning out.\n\n🚀 Start your free trial — $450/mo`,
     headline: "Stop Spending 10 Hours Repurposing Content",
     description: "Paste one YouTube URL. Get a full content pack in minutes.",
     cta: "Learn More",
@@ -127,8 +127,8 @@ const ADS = [
     id: 3,
     name: "The ROI Play",
     creative: "creative-08-roi-value.png",
-    primaryText: `Hiring a content team costs $3,000–$8,000/month.\n\nContent Rocket costs $49/month.\n\nHere's what you get at $49/mo:\n💎 Unlimited YouTube Shorts\n💎 AI blog posts (SEO-ready)\n💎 Email newsletters\n💎 Carousel posts (4 slides)\n💎 Podcast audio extracts\n💎 X / LinkedIn / Threads captions\n💎 Quote graphics\n💎 Multi-brand support\n\nOne YouTube video in → full content pack out.\n\nUsed by 500+ content creators, agencies, and businesses.\n\n📊 Calculate your ROI below 👇`,
-    headline: "$49/Month. What a Content Agency Charges $3,000 For.",
+    primaryText: `Hiring a content team costs $3,000–$8,000/month.\n\nContent Rocket costs $450/month.\n\nHere's what you get at $450/mo:\n💎 Unlimited YouTube Shorts\n💎 AI blog posts (SEO-ready)\n💎 Email newsletters\n💎 Carousel posts (4 slides)\n💎 Podcast audio extracts\n💎 X / LinkedIn / Threads captions\n💎 Quote graphics\n💎 Multi-brand support\n\nOne YouTube video in → full content pack out.\n\nUsed by 500+ content creators, agencies, and businesses.\n\n📊 Calculate your ROI below 👇`,
+    headline: "$450/Month. What a Content Agency Charges $3,000 For.",
     description: "Unlimited Shorts, blogs, newsletters, carousel posts & more from every video.",
     cta: "Sign Up",
     adSetFit: "Marketing Agencies & Freelancers",
@@ -137,7 +137,7 @@ const ADS = [
     id: 4,
     name: "Social Proof / Testimonial",
     creative: "creative-05-testimonial.png",
-    primaryText: `"I used to spend my entire Sunday repurposing content. Now I do it in 5 minutes on Friday." — Alex M., 250K Subscribers\n\nContent Rocket automatically turns your YouTube videos into:\n→ Vertical Shorts (with captions & title cards)\n→ A full blog post\n→ Your email newsletter\n→ Carousel post\n→ Podcast episode\n→ Thread posts for X & LinkedIn\n\nAI-powered. Brand-consistent. Takes minutes.\n\nJoin hundreds of creators who've reclaimed their weekends.\n\n✅ No contract. Cancel any time.\n🚀 From $49/month`,
+    primaryText: `"I used to spend my entire Sunday repurposing content. Now I do it in 5 minutes on Friday." — Alex M., 250K Subscribers\n\nContent Rocket automatically turns your YouTube videos into:\n→ Vertical Shorts (with captions & title cards)\n→ A full blog post\n→ Your email newsletter\n→ Carousel post\n→ Podcast episode\n→ Thread posts for X & LinkedIn\n\nAI-powered. Brand-consistent. Takes minutes.\n\nJoin hundreds of creators who've reclaimed their weekends.\n\n✅ No contract. Cancel any time.\n🚀 From $450/month`,
     headline: "Creators Are Reclaiming 10 Hours Every Week",
     description: "See why 500+ creators trust Content Rocket to grow on every platform.",
     cta: "Learn More",
@@ -411,7 +411,7 @@ export default function App() {
                   { label: "Monthly Budget", value: "$770/mo" },
                   { label: "Target CPA", value: "< $30" },
                   { label: "Target ROAS", value: "> 3×" },
-                  { label: "Product Price", value: "$49/mo" },
+                  { label: "Product Price", value: "$450/mo" },
                 ].map(s => (
                   <div key={s.label} className="bg-white/5 rounded-xl p-4">
                     <p className="text-xs text-slate-400">{s.label}</p>
@@ -439,19 +439,19 @@ export default function App() {
                   <p className="text-sm font-semibold text-white">Pricing</p>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-300">Monthly Plan</span>
-                      <span className="text-lg font-bold text-white">$49<span className="text-xs text-slate-400">/mo</span></span>
+                      <span className="text-sm text-slate-300">Weekly Plan</span>
+                      <span className="text-lg font-bold text-white">$130<span className="text-xs text-slate-400">/wk</span></span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-300">Annual Plan</span>
+                      <span className="text-sm text-slate-300">Monthly Plan</span>
                       <div className="flex items-center gap-2">
-                        <Badge color="green">32% off</Badge>
-                        <span className="text-lg font-bold text-white">$399<span className="text-xs text-slate-400">/yr</span></span>
+                        <Badge color="green">Save $70/mo</Badge>
+                        <span className="text-lg font-bold text-white">$450<span className="text-xs text-slate-400">/mo</span></span>
                       </div>
                     </div>
                   </div>
                   <div className="pt-2 border-t border-white/8">
-                    <p className="text-xs text-slate-400">Ad strategy: Lead with monthly price ($49) to reduce friction. Upsell to annual on thank-you page.</p>
+                    <p className="text-xs text-slate-400">Ad strategy: Lead with weekly price ($130/wk) to reduce friction. Upsell to monthly ($450) on thank-you page.</p>
                   </div>
                 </div>
               </div>

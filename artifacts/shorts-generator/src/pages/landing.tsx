@@ -91,7 +91,7 @@ const COMPARISON = [
   },
   {
     feature: "Starting price",
-    rocket: "$49/mo", opus: "$15/mo", descript: "$24/mo", repurpose: "$25/mo", vtb: "$29/mo",
+    rocket: "$450/mo", opus: "$15/mo", descript: "$24/mo", repurpose: "$25/mo", vtb: "$29/mo",
     isText: true,
   },
 ];
@@ -436,25 +436,25 @@ export default function LandingPage() {
           <p className="text-[10px] font-bold tracking-[0.2em] text-[#f21178] uppercase mb-3">Pricing</p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5">One plan. Everything included.</h2>
           <p className="text-slate-400 text-lg mb-10 max-w-xl mx-auto">
-            No feature tiers. No per-video credits. Unlimited processing for a flat monthly or annual fee.
+            No feature tiers. No per-video credits. Unlimited processing for a flat monthly or weekly fee.
           </p>
 
           <div className="grid sm:grid-cols-2 gap-4 max-w-lg mx-auto mb-10">
             <div className="p-6 rounded-2xl bg-[#0d0920] border border-white/10 text-left">
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-2">Monthly</p>
-              <p className="text-3xl font-extrabold text-white mb-1">$49<span className="text-base font-normal text-slate-500">/mo</span></p>
-              <p className="text-xs text-slate-500 mb-5">Billed monthly. Cancel anytime.</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-2">Weekly</p>
+              <p className="text-3xl font-extrabold text-white mb-1">$130<span className="text-base font-normal text-slate-500">/wk</span></p>
+              <p className="text-xs text-slate-500 mb-5">Billed weekly. Cancel anytime.</p>
               <Button className="w-full bg-[#f21178] hover:bg-[#d91068] text-white border-0 font-semibold" onClick={() => setLocation("/pricing")}>
                 Get Started
               </Button>
             </div>
             <div className="p-6 rounded-2xl bg-gradient-to-br from-[#f21178]/10 to-violet-600/10 border border-[#f21178]/30 text-left relative overflow-hidden">
               <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-[#f21178] text-white text-[10px] font-bold">BEST VALUE</div>
-              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Annual</p>
-              <p className="text-3xl font-extrabold text-white mb-1">$399<span className="text-base font-normal text-slate-400">/yr</span></p>
-              <p className="text-xs text-slate-500 mb-5">Save $189 — equivalent to $33/mo.</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Monthly</p>
+              <p className="text-3xl font-extrabold text-white mb-1">$450<span className="text-base font-normal text-slate-400">/mo</span></p>
+              <p className="text-xs text-slate-500 mb-5">Save $70/mo vs weekly — billed monthly.</p>
               <Button className="w-full bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 text-white border-0 font-semibold" onClick={() => setLocation("/pricing")}>
-                Get Annual Plan
+                Get Monthly Plan
               </Button>
             </div>
           </div>
