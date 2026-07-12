@@ -615,62 +615,75 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       toast({ title: "Upload failed", description, variant: "destructive" });
     };
 
-    // Uploads a file directly to the server streaming proxy (no CORS, no GCS presigned URL),
-    // tracking progress within the [progressStart, progressEnd] range of the overall bar.
+    // Uploads a file in 4 MB chunks via POST /api/storage/uploads/chunk, then
+    // calls /api/storage/uploads/assemble to stream them to GCS in one pass.
+    // This bypasses any reverse-proxy body-size limits while giving accurate
+    // progress tracking.
     uploadStartTimeRef.current = null;
     setUploadSpeedBps(0);
 
-    const uploadToServer = (
+    const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB — safely under proxy limits
+
+    const uploadFileInChunks = async (
       file: File,
       progressStart: number,
       progressEnd: number,
     ): Promise<{ objectPath: string }> => {
-      return new Promise((resolve, reject) => {
-        const url = `${basePath}/api/storage/uploads/stream`;
-        console.log("[upload] starting server-stream upload", { url, fileName: file.name, size: file.size, type: file.type });
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const now = Date.now();
-            if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
-            const elapsed = (now - uploadStartTimeRef.current) / 1000;
-            if (elapsed > 0 && e.loaded > 0) {
-              setUploadSpeedBps(e.loaded / elapsed);
-            }
-            const frac = e.loaded / e.total;
-            setUploadProgress(Math.round(progressStart + frac * (progressEnd - progressStart)));
-          }
-        };
-        xhr.onload = () => {
-          console.log("[upload] onload", { status: xhr.status, response: xhr.responseText.slice(0, 200) });
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            let msg = `Upload failed (${xhr.status})`;
-            try { msg = JSON.parse(xhr.responseText).error ?? msg; } catch {}
-            reject(new Error(msg));
-          }
-        };
-        xhr.onerror = (e) => {
-          console.error("[upload] onerror", { status: xhr.status, readyState: xhr.readyState, event: e });
-          reject(new Error("Network error during upload — check your connection and try again"));
-        };
-        xhr.ontimeout = () => {
-          console.error("[upload] ontimeout");
-          reject(new Error("Upload timed out — file may be too large for your connection speed"));
-        };
-        xhr.onabort = () => {
-          console.error("[upload] onabort");
-          reject(new Error("Upload was aborted"));
-        };
-        xhr.timeout = 14400000;
-        xhr.open("PUT", url);
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-        xhr.setRequestHeader("X-File-Name", file.name);
-        xhr.withCredentials = true;
-        console.log("[upload] sending XHR...");
-        xhr.send(file);
+      const sessionId = crypto.randomUUID();
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
+      const contentType = file.type || "application/octet-stream";
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const chunk = file.slice(start, start + CHUNK_SIZE);
+
+        const res = await fetch(`${basePath}/api/storage/uploads/chunk`, {
+          method: "POST",
+          headers: {
+            "Content-Type": contentType,
+            "X-Session-Id": sessionId,
+            "X-Chunk-Index": String(i),
+            "X-Total-Chunks": String(totalChunks),
+            "X-File-Name": file.name,
+          },
+          body: chunk,
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          let msg = `Chunk ${i + 1}/${totalChunks} failed (${res.status})`;
+          try { msg = (await res.json() as { error?: string }).error ?? msg; } catch {}
+          throw new Error(msg);
+        }
+
+        // Update progress and speed after each successful chunk.
+        const bytesUploaded = Math.min((i + 1) * CHUNK_SIZE, file.size);
+        const now = Date.now();
+        if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
+        const elapsed = (now - uploadStartTimeRef.current) / 1000;
+        if (elapsed > 0) setUploadSpeedBps(bytesUploaded / elapsed);
+
+        const frac = (i + 1) / totalChunks;
+        // Reserve the last 5 % of the range for the assemble step.
+        setUploadProgress(Math.round(progressStart + frac * (progressEnd - progressStart) * 0.95));
+      }
+
+      // Assemble all chunks into the final GCS object.
+      const assembleRes = await fetch(`${basePath}/api/storage/uploads/assemble`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+        credentials: "include",
       });
+
+      if (!assembleRes.ok) {
+        let msg = `Assembly failed (${assembleRes.status})`;
+        try { msg = (await assembleRes.json() as { error?: string }).error ?? msg; } catch {}
+        throw new Error(msg);
+      }
+
+      setUploadProgress(progressEnd);
+      return assembleRes.json() as Promise<{ objectPath: string }>;
     };
 
     (async () => {
@@ -678,11 +691,11 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         // Reserve the tail of the progress bar for the thumbnail (if any) so the
         // bar still reads sensibly when there are two uploads in sequence.
         const videoProgressEnd = thumbnailFile ? 90 : 100;
-        const { objectPath: videoObjectPath } = await uploadToServer(uploadFile, 0, videoProgressEnd);
+        const { objectPath: videoObjectPath } = await uploadFileInChunks(uploadFile, 0, videoProgressEnd);
 
         let thumbnailObjectPath: string | undefined;
         if (thumbnailFile) {
-          const { objectPath: thumbObjectPath } = await uploadToServer(thumbnailFile, videoProgressEnd, 100);
+          const { objectPath: thumbObjectPath } = await uploadFileInChunks(thumbnailFile, videoProgressEnd, 100);
           thumbnailObjectPath = thumbObjectPath;
         }
 

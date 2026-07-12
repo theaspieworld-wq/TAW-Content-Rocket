@@ -1,6 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { Readable } from "stream";
+import { Readable, pipeline as streamPipeline } from "stream";
+import { promisify } from "util";
 import path from "path";
+import os from "os";
+import fs from "fs";
 import { randomUUID } from "crypto";
 import { getAuth } from "@clerk/express";
 import {
@@ -11,50 +14,128 @@ import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage"
 import { ObjectPermission } from "../lib/objectAcl";
 import { createGCSUploadStream } from "../lib/storage";
 
+const pipelineAsync = promisify(streamPipeline);
+
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
 /**
- * PUT /storage/uploads/stream
+ * POST /storage/uploads/chunk
  *
- * Server-side streaming upload proxy: the browser PUTs raw file bytes directly
- * to this same-origin endpoint (no CORS), and the server pipes them straight to
- * GCS without buffering in memory. Supports files of any size.
+ * Receive one chunk of a multi-part file upload and persist it to a temp
+ * directory keyed by the caller's session ID. Each chunk is small (≤ 4 MB)
+ * so it passes through the Replit reverse proxy without issue.
  *
  * Required headers:
- *   Content-Type  — MIME type of the file (e.g. video/mp4)
- *   X-File-Name   — Original filename (used to derive extension)
- *
- * Returns JSON: { objectPath: "/objects/uploads/<uuid>.<ext>" }
+ *   X-Session-Id    — UUID that groups all chunks for one file
+ *   X-Chunk-Index   — 0-based integer position of this chunk
+ *   X-Total-Chunks  — total number of chunks the file was split into
+ *   X-File-Name     — original filename (used by /assemble for the extension)
+ *   Content-Type    — MIME type of the file (forwarded to GCS on assemble)
  */
-router.put("/storage/uploads/stream", async (req: Request, res: Response): Promise<void> => {
+router.post("/storage/uploads/chunk", async (req: Request, res: Response): Promise<void> => {
   const auth = getAuth(req);
   if (!auth.userId) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
+  const sessionId = (req.headers["x-session-id"] as string) || "";
+  const chunkIndex = parseInt((req.headers["x-chunk-index"] as string) || "0", 10);
+  const totalChunks = parseInt((req.headers["x-total-chunks"] as string) || "1", 10);
   const fileName = (req.headers["x-file-name"] as string) || "upload.mp4";
   const contentType = (req.headers["content-type"] as string) || "application/octet-stream";
-  const ext = path.extname(fileName) || ".mp4";
-  const objectKey = `uploads/${randomUUID()}${ext}`;
+
+  if (!sessionId || isNaN(chunkIndex) || isNaN(totalChunks)) {
+    res.status(400).json({ error: "Missing required upload headers" });
+    return;
+  }
 
   try {
-    const writeStream = createGCSUploadStream(objectKey, { contentType });
+    const sessionDir = path.join(os.tmpdir(), "upload-sessions", sessionId);
+    await fs.promises.mkdir(sessionDir, { recursive: true });
 
+    // Write meta on first chunk so /assemble has all the info it needs.
+    if (chunkIndex === 0) {
+      await fs.promises.writeFile(
+        path.join(sessionDir, "meta.json"),
+        JSON.stringify({ fileName, contentType, totalChunks }),
+      );
+    }
+
+    const chunkPath = path.join(sessionDir, `chunk-${String(chunkIndex).padStart(8, "0")}`);
+    const writeStream = fs.createWriteStream(chunkPath);
+    await pipelineAsync(req, writeStream);
+
+    res.json({ ok: true, chunkIndex });
+  } catch (err) {
+    req.log.error({ err }, "Failed to save upload chunk");
+    if (!res.headersSent) res.status(500).json({ error: "Failed to save chunk" });
+  }
+});
+
+/**
+ * POST /storage/uploads/assemble
+ *
+ * After all chunks have been uploaded via /chunk, call this endpoint to
+ * concatenate them and stream the result directly to GCS. Returns the
+ * object path that should be passed to the job creation endpoint.
+ *
+ * Body JSON: { sessionId: string }
+ */
+router.post("/storage/uploads/assemble", async (req: Request, res: Response): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { sessionId } = req.body as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required" });
+    return;
+  }
+
+  const sessionDir = path.join(os.tmpdir(), "upload-sessions", sessionId);
+
+  try {
+    const metaRaw = await fs.promises.readFile(path.join(sessionDir, "meta.json"), "utf8");
+    const meta = JSON.parse(metaRaw) as { fileName: string; contentType: string; totalChunks: number };
+    const { fileName, contentType, totalChunks } = meta;
+
+    // Verify all chunks exist before we start streaming.
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkPath = path.join(sessionDir, `chunk-${String(i).padStart(8, "0")}`);
+      await fs.promises.access(chunkPath);
+    }
+
+    const ext = path.extname(fileName) || ".mp4";
+    const objectKey = `uploads/${randomUUID()}${ext}`;
+    const gcsStream = createGCSUploadStream(objectKey, { contentType });
+
+    // Stream each chunk into the single GCS write stream sequentially.
     await new Promise<void>((resolve, reject) => {
-      req.pipe(writeStream);
-      writeStream.on("finish", resolve);
-      writeStream.on("error", reject);
-      req.on("error", reject);
+      gcsStream.on("error", reject);
+      gcsStream.on("finish", resolve);
+
+      (async () => {
+        for (let i = 0; i < totalChunks; i++) {
+          const chunkPath = path.join(sessionDir, `chunk-${String(i).padStart(8, "0")}`);
+          await pipelineAsync(fs.createReadStream(chunkPath), gcsStream, { end: false });
+        }
+        gcsStream.end();
+      })().catch(reject);
     });
+
+    // Clean up temp files after successful upload.
+    fs.promises.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
 
     res.json({ objectPath: `/objects/${objectKey}` });
   } catch (err) {
-    req.log.error({ err }, "Streaming upload to GCS failed");
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Upload failed — please try again" });
-    }
+    req.log.error({ err }, "Failed to assemble upload chunks");
+    if (!res.headersSent) res.status(500).json({ error: "Failed to assemble upload" });
+    // Best-effort cleanup on error.
+    fs.promises.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
   }
 });
 
