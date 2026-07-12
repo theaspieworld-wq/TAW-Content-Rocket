@@ -174,6 +174,174 @@ function getStatusLabel(status: string) {
   return labels[status] ?? status;
 }
 
+const QUOTE_CARD_STYLES = [
+  { key: "classic",   label: "Classic",   desc: "Centered, bold shadow" },
+  { key: "editorial", label: "Editorial", desc: "Serif, bottom quote" },
+  { key: "bold",      label: "Bold",      desc: "Large text, high contrast" },
+  { key: "modern",    label: "Modern",    desc: "Clean, bottom-anchored" },
+] as const;
+
+function QuotesTab({
+  jobId,
+  jobContent,
+  basePath,
+  copyWithCta,
+  copiedKey,
+}: {
+  jobId: number;
+  jobContent: Record<string, unknown>;
+  basePath: string;
+  copyWithCta: (text: string, key: string) => void;
+  copiedKey: string | null;
+}) {
+  const quotes: string[] = Array.isArray(jobContent.quotes) ? (jobContent.quotes as string[]) : [];
+  const instagramCaptions: string[] = Array.isArray(jobContent.instagramCaptions) ? (jobContent.instagramCaptions as string[]) : [];
+
+  const [selectedStyle, setSelectedStyle] = useState<string>(
+    typeof jobContent.quoteCardStyle === "string" ? jobContent.quoteCardStyle : "classic",
+  );
+  const [quoteImages, setQuoteImages] = useState<string[]>(
+    Array.isArray(jobContent.quoteImages) ? (jobContent.quoteImages as string[]) : [],
+  );
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+
+  const handleRegenerate = async (style: string) => {
+    setSelectedStyle(style);
+    setIsRegenerating(true);
+    setRegenError(null);
+    try {
+      const res = await fetch(`${basePath}/api/jobs/${jobId}/regenerate-quote-cards`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ style }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        throw new Error(err.error ?? `Request failed (${res.status})`);
+      }
+      const updated = await res.json() as { quoteImages?: string[] };
+      setQuoteImages(Array.isArray(updated.quoteImages) ? (updated.quoteImages as string[]) : []);
+    } catch (e) {
+      setRegenError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-bold flex items-center gap-2">
+          <MessageSquareQuote className="w-4 h-4 text-[#f21178]" />
+          Quotes &amp; Captions
+        </h3>
+        <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+          if (!quotes.length) return;
+          const rows = quotes.map((q, i) => {
+            const caption = instagramCaptions[i] ?? "";
+            return `"${q.replace(/"/g, '""')}","${caption.replace(/"/g, '""')}"`;
+          });
+          const csv = `"Quote","Instagram / TikTok Caption"\n${rows.join("\n")}`;
+          const blob = new Blob([csv], { type: "text/csv" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a"); a.href = url; a.download = `quotes-${jobId}.csv`; a.click();
+          URL.revokeObjectURL(url);
+        }}>
+          <Download className="w-3 h-3" /> Export CSV
+        </Button>
+      </div>
+
+      {/* Quote card style selector */}
+      <div className="rounded-xl border border-border/60 bg-muted/10 p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <p className="text-xs font-bold text-foreground uppercase tracking-widest">Quote Card Style</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">1:1 Instagram cards with video frame backgrounds</p>
+          </div>
+          {isRegenerating && <span className="text-[11px] text-muted-foreground animate-pulse">Generating cards…</span>}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {QUOTE_CARD_STYLES.map(s => (
+            <button
+              key={s.key}
+              type="button"
+              disabled={isRegenerating}
+              onClick={() => handleRegenerate(s.key)}
+              className={`flex flex-col items-center gap-1 rounded-lg border px-3 py-2.5 text-center transition-all disabled:opacity-50 ${
+                selectedStyle === s.key
+                  ? "border-[#f21178] bg-[#f21178]/10 text-[#f21178]"
+                  : "border-border/60 bg-background hover:border-border text-foreground hover:bg-muted/20"
+              }`}
+            >
+              <span className="text-xs font-bold">{s.label}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">{s.desc}</span>
+            </button>
+          ))}
+        </div>
+        {regenError && <p className="text-[11px] text-destructive mt-1">{regenError}</p>}
+      </div>
+
+      {/* Quote list with card images */}
+      {quotes.length > 0 ? (
+        <div className="space-y-5">
+          {quotes.map((quote, i) => {
+            const caption = instagramCaptions[i] ?? "";
+            const cardImage = quoteImages[i];
+            return (
+              <div key={i} className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden">
+                {cardImage && (
+                  <div className="relative aspect-square bg-black overflow-hidden">
+                    <img
+                      src={`${basePath}/api/images/${cardImage}`}
+                      alt={`Quote ${i + 1} card`}
+                      className="w-full h-full object-cover"
+                    />
+                    <a
+                      href={`${basePath}/api/images/${cardImage}`}
+                      download={`quote-card-${i + 1}.jpg`}
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/70 text-white text-[11px] font-semibold hover:bg-black/90 transition-colors"
+                    >
+                      <Download className="w-3 h-3" /> Download
+                    </a>
+                  </div>
+                )}
+                <div className="p-4 border-b border-border/40">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-widest">Quote {i + 1}</span>
+                    <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyWithCta(quote, `quote-${i}`)}>
+                      {copiedKey === `quote-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
+                      Copy
+                    </Button>
+                  </div>
+                  <p className="text-sm leading-relaxed text-foreground font-medium italic border-l-2 pl-3" style={{ borderColor: i % 2 === 0 ? "#f21178" : "#7c3aed" }}>
+                    "{quote}"
+                  </p>
+                </div>
+                {caption && (
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-foreground uppercase tracking-widest">Instagram / TikTok Caption</span>
+                      <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyWithCta(caption, `caption-${i}`)}>
+                        {copiedKey === `caption-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
+                        Copy
+                      </Button>
+                    </div>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{caption}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-8 text-muted-foreground text-sm">No quotes available.</div>
+      )}
+    </div>
+  );
+}
+
 export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [, setLocation] = useLocation();
   const { user } = useUser();
@@ -248,6 +416,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const [uploadSpeedBps, setUploadSpeedBps] = useState(0);
   const uploadStartTimeRef = useRef<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const basePath = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
   const [playingClipId, setPlayingClipId] = useState<number | null>(null);
   const [chapters, setChapters] = useState<{ title: string; start: string; end: string }[]>([
     { title: "", start: "", end: "" },
@@ -599,8 +768,6 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
     setIsUploading(true);
     setUploadProgress(0);
-
-    const basePath = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
 
     const resetUploadState = () => {
       setUploadFile(null);
@@ -2509,65 +2676,14 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
 
                       {/* Quotes */}
                       <TabsContent value="quotes" className="m-0">
-                        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-bold flex items-center gap-2">
-                              <MessageSquareQuote className="w-4 h-4 text-[#f21178]" />
-                              Quotes &amp; Captions
-                            </h3>
-                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
-                              if (!jobContent.quotes?.length) return;
-                              const rows = jobContent.quotes.map((q: string, i: number) => {
-                                const caption = jobContent.instagramCaptions?.[i] ?? "";
-                                return `"${q.replace(/"/g, '""')}","${caption.replace(/"/g, '""')}"`;
-                              });
-                              const csv = `"Quote","Instagram / TikTok Caption"\n${rows.join("\n")}`;
-                              const blob = new Blob([csv], { type: "text/csv" });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a"); a.href = url; a.download = `quotes-${jobWithClips.id}.csv`; a.click();
-                              URL.revokeObjectURL(url);
-                            }}>
-                              <Download className="w-3 h-3" /> Export CSV
-                            </Button>
-                          </div>
-                          {jobContent.quotes?.length > 0 ? (
-                            <div className="space-y-5">
-                              {jobContent.quotes.map((quote: string, i: number) => {
-                                const caption = jobContent.instagramCaptions?.[i] ?? "";
-                                return (
-                                  <div key={i} className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden">
-                                    <div className="p-4 border-b border-border/40">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold text-foreground uppercase tracking-widest">Quote {i + 1}</span>
-                                        <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyWithCta(quote, `quote-${i}`)}>
-                                          {copiedKey === `quote-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
-                                          Copy
-                                        </Button>
-                                      </div>
-                                      <p className="text-sm leading-relaxed text-foreground font-medium italic border-l-2 pl-3" style={{ borderColor: i % 2 === 0 ? "#f21178" : "#7c3aed" }}>
-                                        "{quote}"
-                                      </p>
-                                    </div>
-                                    {caption && (
-                                      <div className="p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                          <span className="text-xs font-bold text-foreground uppercase tracking-widest">Instagram / TikTok Caption</span>
-                                          <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => copyWithCta(caption, `caption-${i}`)}>
-                                            {copiedKey === `caption-${i}` ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
-                                            Copy
-                                          </Button>
-                                        </div>
-                                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/85">{caption}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 text-muted-foreground text-sm">No quotes available.</div>
-                          )}
-                        </div>
+                        <QuotesTab
+                          key={jobWithClips.id}
+                          jobId={jobWithClips.id}
+                          jobContent={jobContent}
+                          basePath={basePath}
+                          copyWithCta={copyWithCta}
+                          copiedKey={copiedKey}
+                        />
                       </TabsContent>
 
                       {/* Carousel */}

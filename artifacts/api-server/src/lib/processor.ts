@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { db, jobsTable, clipsTable, outrosTable, brandsTable, brandOutrosTable, brandDocumentsTable, brandCarouselTemplatesTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 import { downloadToLocalFile, uploadLocalFile, objectExists } from "./storage";
@@ -166,7 +166,9 @@ export interface GeneratedContent {
   socialArticle: string;
   newsletterEmail: NewsletterEmail;
   quotes: string[];
+  quoteTimestamps: number[];
   quoteImages: string[];
+  quoteCardStyle: string;
   instagramCaptions: string[];
   carouselImages: string[];
   carouselCaption: string;
@@ -523,12 +525,163 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   return lines.length > 0 ? lines : [text];
 }
 
+// ── Quote card visual style presets ─────────────────────────────────────────
+const QUOTE_CARD_STYLES: Record<string, {
+  fontFamily: string | null;
+  overlayFull: boolean;
+  overlayAlpha: number;
+  fontSize: number;
+  textYPosition: "center" | "bottom";
+  accentBar: boolean;
+  quoteMark: boolean;
+}> = {
+  classic:   { fontFamily: null,               overlayFull: true,  overlayAlpha: 0.55, fontSize: 64, textYPosition: "center", accentBar: true,  quoteMark: true  },
+  editorial: { fontFamily: "Playfair Display", overlayFull: false, overlayAlpha: 0.78, fontSize: 56, textYPosition: "bottom", accentBar: false, quoteMark: true  },
+  bold:      { fontFamily: "Montserrat",        overlayFull: true,  overlayAlpha: 0.70, fontSize: 72, textYPosition: "center", accentBar: true,  quoteMark: false },
+  modern:    { fontFamily: "Inter",             overlayFull: false, overlayAlpha: 0.72, fontSize: 58, textYPosition: "bottom", accentBar: false, quoteMark: false },
+};
+
+// Extracts one JPEG frame per carousel slide from the uploaded video,
+// distributing timestamps evenly between 15% and 85% of the video duration.
+async function extractVideoFramesForSlides(
+  jobId: number,
+  count: number,
+  videoPath: string,
+  videoDuration: number,
+  tempDir: string,
+): Promise<(string | null)[]> {
+  return Promise.all(
+    Array.from({ length: count }, async (_, i) => {
+      const t = videoDuration * (count > 1 ? 0.15 + (i / (count - 1)) * 0.70 : 0.40);
+      const framePath = path.join(tempDir, `cs_frame_${jobId}_${i}.jpg`);
+      try {
+        await execFileAsync(FFMPEG, [
+          "-ss", t.toFixed(2), "-i", videoPath, "-frames:v", "1", "-q:v", "2", framePath, "-y",
+        ], { timeout: 30000 });
+        if (fs.existsSync(framePath) && fs.statSync(framePath).size > 0) return framePath;
+        return null;
+      } catch (_) { return null; }
+    }),
+  );
+}
+
+// Renders 1:1 (1080×1080) quote card images using video frame screenshots as
+// the background, with the quote text overlaid in the chosen visual style.
+async function generateQuoteCards(
+  jobId: number,
+  quotes: string[],
+  quoteTimestamps: number[],
+  videoPath: string,
+  style: string,
+  brand: typeof brandsTable.$inferSelect | null,
+  tempDir: string,
+  videoDuration: number,
+): Promise<string[]> {
+  const primary = brand?.primaryColor ?? "#f21178";
+  const primaryFf = hexToFfmpeg(primary);
+  const brandLabel = brand?.name ?? "Content Rocket";
+
+  const styleKey = (style in QUOTE_CARD_STYLES ? style : "classic") as keyof typeof QUOTE_CARD_STYLES;
+  const preset = QUOTE_CARD_STYLES[styleKey];
+  const fontFile = await getFontPath(preset.fontFamily);
+
+  const results = await Promise.allSettled(
+    quotes.map(async (quote, i) => {
+      // Clamp timestamp to valid video range
+      const rawTs = quoteTimestamps[i] != null
+        ? quoteTimestamps[i]
+        : videoDuration * (quotes.length > 1 ? 0.15 + (i / (quotes.length - 1)) * 0.70 : 0.40);
+      const ts = Math.max(0, Math.min(rawTs, videoDuration - 1));
+
+      // Extract frame at timestamp
+      const framePath = path.join(tempDir, `qf_${jobId}_${i}.jpg`);
+      await execFileAsync(FFMPEG, [
+        "-ss", ts.toFixed(2), "-i", videoPath, "-frames:v", "1", "-q:v", "2", framePath, "-y",
+      ], { timeout: 30000 });
+      if (!fs.existsSync(framePath) || fs.statSync(framePath).size === 0) {
+        throw new Error(`Frame extraction failed for quote ${i}`);
+      }
+
+      const lines = wrapText(quote, 28);
+      const lineHeight = Math.round(preset.fontSize * 1.35);
+      const totalTextH = lines.length * lineHeight;
+
+      const filters: string[] = [
+        "scale=1080:1080:force_original_aspect_ratio=increase",
+        "crop=1080:1080",
+      ];
+
+      // Dark overlay — full canvas or bottom-partial
+      if (preset.overlayFull) {
+        filters.push(`drawbox=x=0:y=0:w=1080:h=1080:color=black@${preset.overlayAlpha}:t=fill`);
+      } else {
+        const overlayTop = Math.max(380, 1080 - totalTextH - 200);
+        filters.push(`drawbox=x=0:y=${overlayTop}:w=1080:h=${1080 - overlayTop}:color=black@${preset.overlayAlpha}:t=fill`);
+      }
+
+      // Text Y starting position
+      let textStartY: number;
+      if (preset.textYPosition === "center") {
+        textStartY = Math.round((1080 - totalTextH) / 2) + (preset.quoteMark ? 35 : 0);
+      } else {
+        textStartY = 1080 - totalTextH - 100;
+      }
+
+      // Decorative open-quote character
+      if (preset.quoteMark) {
+        const qY = Math.max(20, textStartY - 68);
+        filters.push(
+          `drawtext=text='"':fontfile=${fontFile}:fontsize=${preset.fontSize + 36}:fontcolor=${primaryFf}@0.9:x=(w-text_w)/2:y=${qY}:shadowx=2:shadowy=2:shadowcolor=black@0.8`,
+        );
+      }
+
+      // Quote text lines
+      lines.forEach((line, j) => {
+        filters.push(
+          `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=${preset.fontSize}:fontcolor=white:x=(w-text_w)/2:y=${textStartY + j * lineHeight}:shadowx=3:shadowy=3:shadowcolor=black@0.9`,
+        );
+      });
+
+      // Left accent bar
+      if (preset.accentBar) {
+        filters.push(`drawbox=x=0:y=0:w=8:h=1080:color=${primaryFf}@1:t=fill`);
+      }
+
+      // Brand label at bottom
+      filters.push(
+        `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(brandLabel)}':fontsize=26:fontcolor=${primaryFf}:x=(w-text_w)/2:y=1042:shadowx=1:shadowy=1:shadowcolor=black@0.8`,
+      );
+
+      const filename = `quote_card_${jobId}_${i}.jpg`;
+      const outputPath = path.join(tempDir, filename);
+      await execFileAsync(FFMPEG, [
+        "-i", framePath, "-vf", filters.join(","), "-frames:v", "1", "-q:v", "3", outputPath, "-y",
+      ], { timeout: 30000 });
+
+      try { fs.unlinkSync(framePath); } catch (_) {}
+      await uploadLocalFile(`clips/${filename}`, outputPath, "image/jpeg");
+      try { fs.unlinkSync(outputPath); } catch (_) {}
+
+      logger.info({ jobId, i, ts, styleKey }, "Quote card rendered");
+      return filename;
+    }),
+  );
+
+  return results.flatMap(r =>
+    r.status === "fulfilled"
+      ? [r.value]
+      : (logger.warn({ jobId, err: (r as PromiseRejectedResult).reason }, "Quote card render failed — skipping"), []),
+  );
+}
+
 async function generateCarouselSlides(
   jobId: number,
   slides: CarouselSlide[],
   brand: typeof brandsTable.$inferSelect | null,
   tempDir: string,
   templateKeys: string[] = [],
+  videoPath?: string | null,
+  videoDuration?: number,
 ): Promise<string[]> {
   const fontFile = await getFontPath(brand?.fontFamily ?? null);
   const primary = brand?.primaryColor ?? "#f21178";
@@ -538,6 +691,7 @@ async function generateCarouselSlides(
   const brandLabel = brand?.name ?? "Content Rocket";
 
   // Step A: use brand-provided template images if any, cycling through them;
+  // otherwise use video frame screenshots (if video available);
   // otherwise fall back to AI-generated backgrounds per slide.
   let bgPaths: (string | null)[];
   if (templateKeys.length > 0) {
@@ -558,6 +712,9 @@ async function generateCarouselSlides(
     bgPaths = validTemplates.length > 0
       ? slides.map((_, i) => validTemplates[i % validTemplates.length])
       : await Promise.all(slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir)));
+  } else if (videoPath && videoDuration && videoDuration > 4) {
+    logger.info({ jobId, count: slides.length }, "Using video frame screenshots as carousel backgrounds");
+    bgPaths = await extractVideoFramesForSlides(jobId, slides.length, videoPath, videoDuration, tempDir);
   } else {
     bgPaths = await Promise.all(
       slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir))
@@ -1110,10 +1267,17 @@ export async function generateContent(
     carouselTemplates?: string[];
     thumbnailUrl?: string | null;
     videoDescription?: string | null;
+    videoPath?: string | null;
+    videoDuration?: number;
+    quoteCardStyle?: string;
   },
 ): Promise<GeneratedContent> {
   const thumbnailUrl = options?.thumbnailUrl ?? getThumbnailUrl(youtubeUrl);
-  const transcriptText = transcript.map((s) => s.text).join(" ").slice(0, 10000);
+  // Include timestamps so the AI can reference which seconds each quote comes from
+  const transcriptText = transcript
+    .map((s) => `[${Math.round(s.start)}s] ${s.text}`)
+    .join(" ")
+    .slice(0, 12000);
   const jobId = options?.jobId ?? 0;
 
   const brandVoiceNote = options?.brandVoice
@@ -1151,6 +1315,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     "Fourth quote — actionable or memorable. Max 220 chars.",
     "Fifth quote — a fresh angle not covered by the above four. Max 220 chars."
   ],
+  "quoteTimestamps": [45, 120, 240, 380, 500],
   "instagramCaptions": [
     "Instagram/TikTok caption for Quote 1. Hook line. 3-4 first-person story paragraphs elaborating on the quote using real insights. Open question. 8-10 hashtags on their own line. CTA line. 250-350 words total.",
     "Caption for Quote 2. Same structure. Different angle.",
@@ -1300,6 +1465,12 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
     brandName: options?.brandName ?? undefined,
   });
 
+  const quotes = Array.isArray(a.quotes) ? (a.quotes as string[]).slice(0, 5) : [];
+  const rawTimestamps = Array.isArray(a.quoteTimestamps) ? (a.quoteTimestamps as number[]) : [];
+  const quoteTimestamps = quotes.map((_, i) => typeof rawTimestamps[i] === "number" ? rawTimestamps[i] : 0);
+
+  const tmpDir = options?.tempDir ?? os.tmpdir();
+
   // Generate carousel images if slides were returned
   let carouselImages: string[] = [];
   const rawSlides = a.carouselSlides;
@@ -1308,7 +1479,27 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       title: s.title ?? "Key Insight",
       bullets: Array.isArray(s.bullets) ? s.bullets : [],
     }));
-    carouselImages = await generateCarouselSlides(jobId, slides, options?.brand ?? null, options?.tempDir ?? os.tmpdir(), options?.carouselTemplates ?? []);
+    carouselImages = await generateCarouselSlides(
+      jobId, slides, options?.brand ?? null, tmpDir,
+      options?.carouselTemplates ?? [],
+      options?.videoPath ?? null,
+      options?.videoDuration,
+    );
+  }
+
+  // Generate quote card images if video is available
+  const quoteCardStyle = options?.quoteCardStyle ?? "classic";
+  let quoteImages: string[] = [];
+  if (jobId > 0 && options?.videoPath && options?.videoDuration && quotes.length > 0) {
+    try {
+      quoteImages = await generateQuoteCards(
+        jobId, quotes, quoteTimestamps,
+        options.videoPath, quoteCardStyle,
+        options?.brand ?? null, tmpDir, options.videoDuration,
+      );
+    } catch (e) {
+      logger.warn({ jobId, e }, "Quote card generation failed — continuing without quote images");
+    }
   }
 
   return {
@@ -1322,8 +1513,10 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       subject: (a.newsletterSubject as string) ?? "",
       body: newsletterHtml,
     },
-    quotes: Array.isArray(a.quotes) ? (a.quotes as string[]).slice(0, 5) : [],
-    quoteImages: [],
+    quotes,
+    quoteTimestamps,
+    quoteImages,
+    quoteCardStyle,
     instagramCaptions: Array.isArray(a.instagramCaptions) ? (a.instagramCaptions as string[]).slice(0, 5) : [],
     carouselImages,
     carouselCaption: (a.carouselCaption as string) ?? "",
@@ -1528,6 +1721,8 @@ export async function processJob(jobId: number): Promise<void> {
         carouselTemplates: brandCarouselTemplateKeys,
         thumbnailUrl: getUploadedThumbnailUrl(jobId, !!thumbnailPath),
         videoDescription: job.userVideoDescription ?? null,
+        videoPath,
+        videoDuration,
       }),
     ]);
 
@@ -1757,5 +1952,58 @@ export async function processJob(jobId: number): Promise<void> {
     } catch (e) {
       logger.warn({ e }, "Failed to clean up temp dir");
     }
+  }
+}
+
+// Re-generates quote card images in a new visual style without re-running the
+// full AI pipeline.  Reads existing quotes + timestamps from stored content.
+export async function regenerateQuoteCards(
+  jobId: number,
+  style: string,
+  userId: string,
+): Promise<GeneratedContent> {
+  const [job] = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.id, jobId), eq(jobsTable.userId, userId)));
+  if (!job) throw new Error(`Job ${jobId} not found`);
+  if (!job.generatedContent) throw new Error("No generated content found for this job");
+
+  const content: GeneratedContent = JSON.parse(job.generatedContent);
+  const quotes = content.quotes ?? [];
+  const quoteTimestamps = content.quoteTimestamps ?? [];
+
+  if (quotes.length === 0) throw new Error("No quotes available for this job");
+
+  // Resolve the video path (prefer already-downloaded local path)
+  let videoPath = job.localFilePath;
+  if (!videoPath || !fs.existsSync(videoPath)) {
+    if (!job.videoObjectPath) throw new Error("No video available for quote card generation");
+    const destPath = path.join(os.tmpdir(), `qc_regen_${jobId}${path.extname(job.videoObjectPath) || ".mp4"}`);
+    if (!fs.existsSync(destPath)) {
+      const objectFile = await objectStorageService.getObjectEntityFile(job.videoObjectPath);
+      await objectFile.download({ destination: destPath });
+    }
+    videoPath = destPath;
+  }
+
+  let brand: typeof brandsTable.$inferSelect | null = null;
+  if (job.brandId) {
+    const [foundBrand] = await db.select().from(brandsTable).where(eq(brandsTable.id, job.brandId));
+    if (foundBrand) brand = foundBrand;
+  }
+
+  const videoDuration = await getVideoDuration(videoPath);
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `qc_${jobId}_`));
+
+  try {
+    const newImages = await generateQuoteCards(
+      jobId, quotes, quoteTimestamps, videoPath, style, brand, tempDir, videoDuration,
+    );
+    const updated: GeneratedContent = { ...content, quoteImages: newImages, quoteCardStyle: style };
+    await db.update(jobsTable)
+      .set({ generatedContent: JSON.stringify(updated) })
+      .where(eq(jobsTable.id, jobId));
+    return updated;
+  } finally {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
   }
 }

@@ -1044,11 +1044,19 @@ components:
           items:
             type: string
           description: 5 powerful quotes from the transcript
+        quoteTimestamps:
+          type: array
+          items:
+            type: number
+          description: Seconds into the video where each quote occurs (same length as quotes)
         quoteImages:
           type: array
           items:
             type: string
-          description: Legacy field - always empty array
+          description: Filenames of 1:1 quote card images - fetch via GET /api/images/{filename}
+        quoteCardStyle:
+          type: string
+          description: Current quote card visual style (classic | editorial | bold | modern)
         instagramCaptions:
           type: array
           items:
@@ -1074,7 +1082,9 @@ components:
         - socialArticle
         - newsletterEmail
         - quotes
+        - quoteTimestamps
         - quoteImages
+        - quoteCardStyle
         - instagramCaptions
         - carouselImages
         - carouselCaption

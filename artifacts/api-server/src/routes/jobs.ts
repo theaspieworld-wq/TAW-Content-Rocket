@@ -13,7 +13,7 @@ import {
   DeleteJobParams,
   DownloadClipParams,
 } from "@workspace/api-zod";
-import { processJob, generateContent, generatePodcastAudio } from "../lib/processor";
+import { processJob, generateContent, generatePodcastAudio, regenerateQuoteCards } from "../lib/processor";
 import { objectExists, deleteObject, streamToResponse, streamRangeToResponse, getReadStream } from "../lib/storage";
 
 const router: IRouter = Router();
@@ -538,6 +538,27 @@ router.post("/jobs/:id/content", async (req, res): Promise<void> => {
   await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, job.id));
 
   res.json(content);
+});
+
+router.post("/jobs/:id/regenerate-quote-cards", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const params = GetJobParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const { style } = req.body as { style?: string };
+  if (!style || !["classic", "editorial", "bold", "modern"].includes(style)) {
+    res.status(400).json({ error: "style must be one of: classic, editorial, bold, modern" });
+    return;
+  }
+  try {
+    const updated = await regenerateQuoteCards(params.data.id, style, userId);
+    res.json(updated);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
 router.get("/images/:filename", async (req, res): Promise<void> => {
