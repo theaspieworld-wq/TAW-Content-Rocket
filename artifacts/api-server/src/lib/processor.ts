@@ -75,12 +75,34 @@ function hexToFfmpeg(hex: string): string {
   return "0x" + hex.replace(/^#/, "");
 }
 
-async function getFontPath(fontFamily: string | null): Promise<string> {
+const NON_GOOGLE_FONTS = new Set(["Gilroy"]);
+
+async function getFontPath(fontFamily: string | null, customFontObjectPath?: string | null): Promise<string> {
   const defaultFont = fs.existsSync(POPPINS_BOLD_PATH) ? POPPINS_BOLD_PATH : DEJAVU_BOLD_PATH;
+
+  if (customFontObjectPath) {
+    const safeKey = customFontObjectPath.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const cached = path.join(FONTS_CACHE_DIR, `custom_${safeKey}`);
+    if (fs.existsSync(cached)) return cached;
+    try {
+      await downloadToLocalFile(customFontObjectPath, cached);
+      logger.info({ customFontObjectPath }, "Custom brand font downloaded and cached");
+      return cached;
+    } catch (err) {
+      logger.warn({ customFontObjectPath, err }, "Failed to download custom brand font, using default");
+      return defaultFont;
+    }
+  }
+
   if (!fontFamily || fontFamily.toLowerCase() === "poppins") return defaultFont;
 
   const safe = fontFamily.replace(/[^a-zA-Z0-9 ]/g, "").trim();
   if (!safe) return defaultFont;
+
+  if (NON_GOOGLE_FONTS.has(safe)) {
+    logger.warn({ fontFamily }, "Font is not on Google Fonts — upload a custom font file for this brand");
+    return defaultFont;
+  }
 
   const filename = `${safe.replace(/ /g, "_")}_700.ttf`;
   const cached = path.join(FONTS_CACHE_DIR, filename);
@@ -705,7 +727,7 @@ async function generateCarouselSlides(
   videoPath?: string | null,
   videoDuration?: number,
 ): Promise<string[]> {
-  const fontFile = await getFontPath(brand?.fontFamily ?? null);
+  const fontFile = await getFontPath(brand?.fontFamily ?? null, brand?.customFontPath ?? null);
   const primary = brand?.primaryColor ?? "#f21178";
   const secondary = brand?.secondaryColor ?? "#7c3aed";
   const primaryFf = hexToFfmpeg(primary);
@@ -1080,7 +1102,7 @@ async function renderMainClip(
   },
 ): Promise<void> {
   const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
-  const fontFile = await getFontPath(options.brand?.fontFamily ?? null);
+  const fontFile = await getFontPath(options.brand?.fontFamily ?? null, options.brand?.customFontPath ?? null);
   const filterStages: string[] = [portraitCrop];
 
   if (options.showTitle && title.trim()) {

@@ -27,6 +27,7 @@ export const brandsTable = pgTable("brands", {
   exportFolderUrl: text("export_folder_url"),
   shortFormOutroPath: text("short_form_outro_path"),
   carouselEndSlidePath: text("carousel_end_slide_path"),
+  customFontPath: text("custom_font_path"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

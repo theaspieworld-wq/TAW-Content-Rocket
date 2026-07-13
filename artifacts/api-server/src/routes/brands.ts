@@ -65,6 +65,18 @@ const uploadDocument = multer({
   },
 });
 
+const uploadFont = multer({
+  storage: memoryStorage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.originalname.match(/\.(ttf|otf|woff|woff2)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only font files (.ttf, .otf, .woff, .woff2) are allowed"));
+    }
+  },
+});
+
 function objectKeyFor(prefix: string, originalname: string, fallbackExt: string): string {
   const ext = path.extname(originalname) || fallbackExt;
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
@@ -81,6 +93,7 @@ function brandToJson(b: typeof brandsTable.$inferSelect) {
     introAudioPath: b.introAudioPath ?? null,
     outroAudioPath: b.outroAudioPath ?? null,
     fontFamily: b.fontFamily ?? null,
+    customFontPath: b.customFontPath ?? null,
     primaryColor: b.primaryColor ?? null,
     secondaryColor: b.secondaryColor ?? null,
     website: b.website ?? null,
@@ -212,7 +225,7 @@ router.delete("/brands/:id", async (req, res): Promise<void> => {
     .where(eq(brandCarouselTemplatesTable.brandId, brand.id));
 
   await Promise.all(
-    [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath, brand.carouselEndSlidePath, ...templates.map(t => t.filePath)]
+    [brand.logoPath, brand.introAudioPath, brand.outroAudioPath, brand.shortFormOutroPath, brand.carouselEndSlidePath, brand.customFontPath, ...templates.map(t => t.filePath)]
       .map((key) => deleteObject(key))
   );
 
@@ -341,6 +354,50 @@ router.post("/brands/:id/carousel-end-slide", uploadLogo.single("file"), async (
 
   const [updated] = await db.update(brandsTable)
     .set({ carouselEndSlidePath: key })
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
+    .returning();
+
+  res.json(brandToJson(updated));
+});
+
+router.post("/brands/:id/font", uploadFont.single("file"), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+  if (!req.file) { res.status(400).json({ error: "No font file provided" }); return; }
+
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
+  if (!brand) {
+    res.status(404).json({ error: "Brand not found" });
+    return;
+  }
+
+  const key = objectKeyFor("brands/font", req.file.originalname, ".ttf");
+  await uploadBuffer(key, req.file.buffer, "font/sfnt");
+  await deleteObject(brand.customFontPath);
+
+  const [updated] = await db.update(brandsTable)
+    .set({ customFontPath: key })
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
+    .returning();
+
+  res.json(brandToJson(updated));
+});
+
+router.delete("/brands/:id/font", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid brand ID" }); return; }
+
+  const [brand] = await db.select().from(brandsTable)
+    .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)));
+  if (!brand) { res.status(404).json({ error: "Brand not found" }); return; }
+
+  await deleteObject(brand.customFontPath);
+
+  const [updated] = await db.update(brandsTable)
+    .set({ customFontPath: null })
     .where(and(eq(brandsTable.id, id), eq(brandsTable.userId, userId)))
     .returning();
 

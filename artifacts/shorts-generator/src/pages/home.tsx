@@ -79,6 +79,7 @@ import {
   ChevronRight,
   Smartphone,
   LayoutGrid,
+  Type,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserButton, useUser } from "@clerk/react";
@@ -117,6 +118,7 @@ const GOOGLE_FONTS = [
   "Poppins", "Montserrat", "Inter", "Roboto", "Oswald",
   "Raleway", "Lato", "Open Sans", "Nunito", "Playfair Display",
   "Space Grotesk", "DM Sans", "Bebas Neue", "Syne", "Plus Jakarta Sans",
+  "Gilroy",
 ] as const;
 
 const formSchema = z.object({
@@ -677,10 +679,11 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     }
   }, [defaultOutro?.id]);
 
-  // Load Google Fonts for live preview in the font picker
+  // Load Google Fonts for live preview in the font picker (skip Poppins + non-Google fonts like Gilroy)
+  const NON_GOOGLE_FONTS = new Set(["Poppins", "Gilroy"]);
   useEffect(() => {
     const families = GOOGLE_FONTS
-      .filter(f => f !== "Poppins")
+      .filter(f => !NON_GOOGLE_FONTS.has(f))
       .map(f => f.replace(/ /g, "+") + ":wght@400;700")
       .join("&family=");
     const link = document.createElement("link");
@@ -1087,11 +1090,17 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
     setEditBrandSecondary(brand.secondaryColor ?? "#7c3aed");
   };
 
-  const handleBrandFileUpload = async (brandId: number, type: "logo" | "short-form-outro" | "intro-audio" | "outro-audio" | "carousel-end-slide", file: File) => {
+  const handleBrandFileUpload = async (brandId: number, type: "logo" | "short-form-outro" | "intro-audio" | "outro-audio" | "carousel-end-slide" | "font", file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`/api/brands/${brandId}/${type}`, { method: "POST", body: formData });
+    const res = await fetch(`${basePath}/api/brands/${brandId}/${type}`, { method: "POST", body: formData });
     if (!res.ok) throw new Error("Upload failed");
+    queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
+  };
+
+  const handleDeleteBrandFont = async (brandId: number) => {
+    const res = await fetch(`${basePath}/api/brands/${brandId}/font`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Delete failed");
     queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
   };
 
@@ -1589,6 +1598,49 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                                     </label>
                                   );
                                 })}
+                              </div>
+
+                              {/* Custom Font File */}
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] text-muted-foreground/70">Brand Font File <span className="text-[9px]">(TTF/OTF — required for Gilroy or custom fonts)</span></p>
+                                {(brand as any).customFontPath ? (
+                                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                                    <Type className="w-3 h-3 text-emerald-500 shrink-0" />
+                                    <span className="text-[10px] text-foreground/80 truncate flex-1">
+                                      {(brand as any).customFontPath.split("/").pop()?.replace(/^[^_]+_\d+_[a-z0-9]+\./, "") || "Custom font"}
+                                    </span>
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      className="h-5 w-5 shrink-0 hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={async () => {
+                                        try {
+                                          await handleDeleteBrandFont(brand.id);
+                                          toast({ title: "Font removed" });
+                                        } catch {
+                                          toast({ title: "Failed to remove font", variant: "destructive" });
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <label className="flex items-center gap-2 p-2 rounded-lg border border-dashed border-border/50 bg-card/30 cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/30">
+                                    <Type className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span className="text-[10px] text-muted-foreground">Upload font file (.ttf, .otf, .woff)</span>
+                                    <input type="file" accept=".ttf,.otf,.woff,.woff2" className="hidden" onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      try {
+                                        await handleBrandFileUpload(brand.id, "font", file);
+                                        toast({ title: "Font uploaded", description: "Will be used for all video text in this brand." });
+                                      } catch {
+                                        toast({ title: "Upload failed", variant: "destructive" });
+                                      }
+                                      e.target.value = "";
+                                    }} />
+                                  </label>
+                                )}
                               </div>
                             </div>
 
