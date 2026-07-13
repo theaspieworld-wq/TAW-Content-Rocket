@@ -932,6 +932,83 @@ interface CaptionStylePreset {
   uppercase: boolean;
 }
 
+// ── ASS subtitle helpers ─────────────────────────────────────────────────────
+// Using an ASS subtitle file + single `subtitles=` filter is dramatically faster
+// than chaining N drawtext filters. libass renders O(1) per frame (only the
+// currently-visible line), whereas chained drawtext runs all N evaluations every
+// frame regardless of the `enable=` condition. For a 30s clip this is the
+// difference between 0.06x speed (5-min timeout breach) and ~0.5x speed.
+
+function formatAssTime(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  const cs = Math.round((secs % 1) * 100);
+  return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
+}
+
+// Convert ffmpeg/CSS color (white, black, 0xRRGGBB, #RRGGBB) to ASS &HAABBGGRR
+function toAssColor(color: string, alphaFrac = 0): string {
+  const a = Math.round(alphaFrac * 255).toString(16).padStart(2, "0");
+  if (color === "white") return `&H${a}FFFFFF`.toUpperCase();
+  if (color === "black") return `&H${a}000000`.toUpperCase();
+  const hex = color.replace(/^0x/i, "").replace(/^#/, "").padEnd(6, "0");
+  const r = hex.slice(0, 2), g = hex.slice(2, 4), b = hex.slice(4, 6);
+  return `&H${a}${b}${g}${r}`.toUpperCase();
+}
+
+function buildAssFile(
+  chunks: CaptionChunk[],
+  style: CaptionStylePreset,
+  fontName: string,
+): string {
+  const primaryColor = toAssColor(style.fontcolor);
+  const outlineColor = toAssColor(style.bordercolor ?? "black");
+
+  let borderStyle: number, outlineWidth: number, backColor: string;
+  if (style.box) {
+    const bc = style.boxcolor ?? "black@0.8";
+    const [colorPart, alphaStr] = bc.split("@");
+    const alpha = alphaStr ? parseFloat(alphaStr) : 0.8;
+    backColor = toAssColor(colorPart.trim(), 1 - alpha);
+    borderStyle = 3; outlineWidth = 0;
+  } else {
+    backColor = "&H00000000";
+    borderStyle = 1; outlineWidth = style.borderw ?? 3;
+  }
+
+  // Place captions at ~72% from top → 28% from bottom = 0.28 × 1920 ≈ 538px MarginV
+  const marginV = Math.round(1920 * 0.28);
+
+  const styleRow =
+    `Style: Default,${fontName},${style.fontsize},${primaryColor},&H000000FF,` +
+    `${outlineColor},${backColor},1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${marginV},1`;
+
+  const header = [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "PlayResX: 1080",
+    "PlayResY: 1920",
+    "ScaledBorderAndShadow: yes",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    styleRow,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+  ].join("\n");
+
+  const dialogues = chunks.map((chunk) => {
+    const raw = style.uppercase ? chunk.text.toUpperCase() : chunk.text;
+    // wrapText gives us lines; join with ASS hard-newline tag
+    const assText = wrapText(raw, 22).join("\\N").replace(/\{/g, "\\{");
+    return `Dialogue: 0,${formatAssTime(chunk.start)},${formatAssTime(chunk.end)},Default,,0,0,0,,${assText}`;
+  });
+
+  return `${header}\n${dialogues.join("\n")}\n`;
+}
+
 // 4 default burned-in caption presets — all rendered lower-third, centered.
 function getCaptionStyle(style: string | null | undefined, brand: typeof brandsTable.$inferSelect | null): CaptionStylePreset {
   switch (style) {
@@ -1018,6 +1095,8 @@ async function renderMainClip(
     });
   }
 
+  let assFilePath: string | null = null;
+
   if (options.captionsEnabled) {
     const style = getCaptionStyle(options.captionStyle, options.brand);
     const clipDuration = endSeconds - startSeconds;
@@ -1050,22 +1129,20 @@ async function renderMainClip(
     }
 
     const chunks = buildCaptionChunks(captionSegments, 0, clipDuration);
-    for (const chunk of chunks) {
-      const rawText = style.uppercase ? chunk.text.toUpperCase() : chunk.text;
-      const lines = wrapText(rawText, 22);
-      lines.forEach((line, li) => {
-        const yExpr = `(h*0.72)+${li * (style.fontsize + 10)}`;
-        const enable = `enable='between(t\\,${chunk.start.toFixed(2)}\\,${chunk.end.toFixed(2)})'`;
-        if (style.box) {
-          filterStages.push(
-            `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=${style.fontsize}:fontcolor=${style.fontcolor}:box=1:boxcolor=${style.boxcolor}:boxborderw=14:x=(w-text_w)/2:y=${yExpr}:${enable}`,
-          );
-        } else {
-          filterStages.push(
-            `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=${style.fontsize}:fontcolor=${style.fontcolor}:borderw=${style.borderw}:bordercolor=${style.bordercolor}:x=(w-text_w)/2:y=${yExpr}:${enable}`,
-          );
-        }
-      });
+    if (chunks.length > 0) {
+      // Write an ASS subtitle file and use a SINGLE subtitles= filter instead
+      // of N chained drawtext filters.  libass evaluates only the currently-visible
+      // subtitle per frame (O(1)), while drawtext evaluates ALL N enable= conditions
+      // every frame (O(N)) — with 50-100 chunks this was causing 0.06x real-time
+      // speed and breaching the 5-minute render timeout.
+      const fontName = options.brand?.fontFamily ?? "Poppins";
+      assFilePath = outputPath.replace(/\.mp4$/, "_captions.ass");
+      fs.writeFileSync(assFilePath, buildAssFile(chunks, style, fontName), "utf-8");
+      const fontsDir = path.dirname(fontFile);
+      // Escape single quotes and backslashes for lavfi filter string
+      const escapedAss = assFilePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const escapedFontsDir = fontsDir.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      filterStages.push(`subtitles='${escapedAss}':fontsdir='${escapedFontsDir}'`);
     }
   }
 
@@ -1096,7 +1173,11 @@ async function renderMainClip(
     outputPath, "-y",
   );
 
-  await execFileAsync(FFMPEG, args, { timeout: 300000 });
+  try {
+    await execFileAsync(FFMPEG, args, { timeout: 600000 });
+  } finally {
+    if (assFilePath) { try { fs.unlinkSync(assFilePath); } catch (_) {} }
+  }
 
   void clipId;
 }
