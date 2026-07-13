@@ -690,9 +690,23 @@ async function generateCarouselSlides(
   const secondaryFf = hexToFfmpeg(secondary);
   const brandLabel = brand?.name ?? "Content Rocket";
 
-  // Step A: use brand-provided template images if any, cycling through them;
-  // otherwise use video frame screenshots (if video available);
-  // otherwise fall back to AI-generated backgrounds per slide.
+  // Step A: resolve backgrounds — priority order:
+  //   1. Brand-uploaded carousel template images (if any are set up)
+  //   2. Video frame screenshots (always preferred over AI generation)
+  //   3. null → dark gradient fallback rendered by ffmpeg (no AI generation)
+
+  // Pre-extract video frames so they're available as fallback even when
+  // brand templates are configured but fail to download.
+  let videoBgPaths: (string | null)[] | null = null;
+  if (videoPath && videoDuration && videoDuration > 4) {
+    try {
+      logger.info({ jobId, count: slides.length }, "Extracting video frame screenshots for carousel backgrounds");
+      videoBgPaths = await extractVideoFramesForSlides(jobId, slides.length, videoPath, videoDuration, tempDir);
+    } catch (e) {
+      logger.warn({ jobId, e }, "Video frame extraction failed — will use dark gradient fallback");
+    }
+  }
+
   let bgPaths: (string | null)[];
   if (templateKeys.length > 0) {
     const localTemplatePaths = await Promise.all(
@@ -709,16 +723,15 @@ async function generateCarouselSlides(
       })
     );
     const validTemplates = localTemplatePaths.filter((p): p is string => !!p);
-    bgPaths = validTemplates.length > 0
-      ? slides.map((_, i) => validTemplates[i % validTemplates.length])
-      : await Promise.all(slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir)));
-  } else if (videoPath && videoDuration && videoDuration > 4) {
-    logger.info({ jobId, count: slides.length }, "Using video frame screenshots as carousel backgrounds");
-    bgPaths = await extractVideoFramesForSlides(jobId, slides.length, videoPath, videoDuration, tempDir);
+    if (validTemplates.length > 0) {
+      bgPaths = slides.map((_, i) => validTemplates[i % validTemplates.length]);
+    } else {
+      // Templates all failed — fall back to video frames
+      bgPaths = videoBgPaths ?? slides.map(() => null);
+    }
   } else {
-    bgPaths = await Promise.all(
-      slides.map(slide => generateSlideBackground(slide.title, slide.bullets, primary, tempDir))
-    );
+    // No brand templates — always use video frames (null = dark gradient if video unavailable)
+    bgPaths = videoBgPaths ?? slides.map(() => null);
   }
 
   // Step B: render all slides in parallel — each ffmpeg call is fully independent
