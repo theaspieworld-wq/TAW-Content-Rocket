@@ -1,5 +1,6 @@
 import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
+import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -42,12 +43,33 @@ function resolveBinary(name: string): string {
 const FFMPEG  = resolveBinary("ffmpeg");
 const FFPROBE = resolveBinary("ffprobe");
 
-const FONTS_CACHE_DIR = path.join(process.cwd(), "fonts");
+// In the compiled ESM bundle (dist/index.mjs), import.meta.url is the bundle
+// file URL — go up one level to reach the server root regardless of cwd.
+const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const FONTS_CACHE_DIR = path.join(SERVER_ROOT, "fonts");
 fs.mkdirSync(FONTS_CACHE_DIR, { recursive: true });
 
-const LOGO_PATH = path.join(process.cwd(), "src", "assets", "taw-logo.png");
-const POPPINS_BOLD_PATH = path.join(process.cwd(), "src", "assets", "fonts", "Poppins-Bold.ttf");
-const DEJAVU_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+const LOGO_PATH = path.join(SERVER_ROOT, "src", "assets", "taw-logo.png");
+const POPPINS_BOLD_PATH = path.join(SERVER_ROOT, "src", "assets", "fonts", "Poppins-Bold.ttf");
+
+// Resolve the system fallback font once at startup using fontconfig so the path
+// is correct across both the dev Nix environment and the production container.
+function resolveSystemFont(): string {
+  try {
+    const r = execFileSync("fc-match", ["sans-serif:bold", "--format=%{file}"], {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 3000,
+    }).trim();
+    if (r && fs.existsSync(r)) {
+      logger.info({ fontPath: r }, "System font resolved via fc-match");
+      return r;
+    }
+  } catch { /* fc-match unavailable */ }
+  return "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+}
+const DEJAVU_BOLD_PATH = resolveSystemFont();
 
 function hexToFfmpeg(hex: string): string {
   return "0x" + hex.replace(/^#/, "");
@@ -1145,7 +1167,7 @@ async function prepareOutroWithCta(
 
   const startSec = ctaStartSeconds ?? 0;
   const outroText = escapeFfmpegText(ctaText.toUpperCase());
-  const ctaFilter = `drawtext=text='${outroText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=30:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='gte(t,${startSec.toFixed(2)})':borderw=3:bordercolor=black@0.8`;
+  const ctaFilter = `drawtext=text='${outroText}':fontfile=${DEJAVU_BOLD_PATH}:fontsize=30:fontcolor=white:x=(w-text_w)/2:y=h-th-60:enable='gte(t,${startSec.toFixed(2)})':borderw=3:bordercolor=black@0.8`;
 
   await execFileAsync(FFMPEG, [
     "-i", outroFilePath,

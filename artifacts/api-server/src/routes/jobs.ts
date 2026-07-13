@@ -358,17 +358,16 @@ router.post("/jobs/upload-from-storage", async (req, res): Promise<void> => {
   res.status(201).json(await jobToJson(job));
 });
 
-// Serve an uploaded job thumbnail image
+// Serve an uploaded job thumbnail image — no auth required so that <img> tags
+// embedded in generated blog HTML can load the image directly in the browser.
 router.get("/jobs/:id/thumbnail", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid job ID" });
     return;
   }
 
-  const [job] = await db.select().from(jobsTable)
-    .where(and(eq(jobsTable.id, id), eq(jobsTable.userId, userId)));
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   if (!job || !job.thumbnailPath || !fs.existsSync(job.thumbnailPath)) {
     res.status(404).json({ error: "Thumbnail not found" });
     return;
