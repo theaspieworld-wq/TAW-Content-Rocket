@@ -751,6 +751,16 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
     }
   }
 
+  if (content?.quoteImages?.length > 0) {
+    for (let i = 0; i < content.quoteImages.length; i++) {
+      const imgKey = `clips/${content.quoteImages[i]}`;
+      if (await objectExists(imgKey)) {
+        const ext = content.quoteImages[i].endsWith(".png") ? "png" : "jpg";
+        archive.append(getReadStream(imgKey), { name: `${folder}/quote_cards/quote_${i + 1}.${ext}` });
+      }
+    }
+  }
+
   if (content) {
     if (content.blogPost) {
       archive.append(content.blogPost, { name: `${folder}/content/blog.html` });
