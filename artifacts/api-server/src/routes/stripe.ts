@@ -105,12 +105,8 @@ router.post('/stripe/checkout-free', async (req, res) => {
   if (!priceId || !promotionCodeId) { res.status(400).json({ error: 'priceId and promotionCodeId required' }); return; }
 
   try {
-    // Re-validate the promo code is still 100% off before creating
-    const promoInfo = await stripeService.validatePromoCode(req.body.code ?? '');
-    // We trust the promotionCodeId from the client but still verify it's a real 100%-off code
     const claims = auth.sessionClaims as any;
     const userEmail = claims?.email ?? claims?.primary_email_address ?? null;
-    void promoInfo;
     const customerId = await stripeService.ensureCustomer(userId, userEmail);
     const subscriptionId = await stripeService.createFreeSubscription(customerId, priceId, promotionCodeId);
     await stripeStorage.updateUserStripeInfo(userId, { stripeSubscriptionId: subscriptionId });
