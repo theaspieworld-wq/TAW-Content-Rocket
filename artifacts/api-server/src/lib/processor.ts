@@ -1089,7 +1089,7 @@ async function renderMainClip(
 
   args.push(
     "-sn",
-    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
     "-c:a", "aac", "-b:a", "128k",
     "-metadata", `title=${title}`,
     "-movflags", "+faststart",
@@ -1141,7 +1141,7 @@ async function renderFullFacebookVideo(
   await execFileAsync(FFMPEG, [
     "-i", videoPath,
     "-vf", squareCrop,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
     "-c:a", "aac", "-b:a", "192k",
     "-movflags", "+faststart",
     outputPath, "-y",
@@ -1896,6 +1896,29 @@ export async function processJob(jobId: number): Promise<void> {
         }
       }
 
+      // Start Facebook square video + podcast audio immediately in the background —
+      // both only need the source video and don't depend on clip output, so there's
+      // no reason to wait for clips to finish before encoding them.
+      const facebookBgPromise = (async () => {
+        try {
+          const facebookLocalPath = path.join(tempDir, `job_${jobId}_facebook.mp4`);
+          await renderFullFacebookVideo(videoPath, jobId, transcript, facebookLocalPath);
+          await uploadLocalFile(`clips/job_${jobId}_facebook.mp4`, facebookLocalPath, "video/mp4");
+          try { fs.unlinkSync(facebookLocalPath); } catch (_) {}
+          logger.info({ jobId }, "Full Facebook 1:1 video rendered");
+        } catch (fbErr) {
+          logger.warn({ jobId, err: fbErr }, "Full Facebook video render failed — skipping");
+        }
+      })();
+      const podcastBgPromise = (async () => {
+        if (!wantPodcast) { logger.info({ jobId }, "Podcast generation skipped (disabled)"); return; }
+        try {
+          await generatePodcastAudio(jobId, videoPath, brand);
+        } catch (podErr) {
+          logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
+        }
+      })();
+
       for (let batchStart = 0; batchStart < insertedClips.length; batchStart += CLIP_BATCH_SIZE) {
         const batch = insertedClips.slice(batchStart, batchStart + CLIP_BATCH_SIZE);
         const batchEnd = Math.min(batchStart + CLIP_BATCH_SIZE, insertedClips.length);
@@ -1967,30 +1990,8 @@ export async function processJob(jobId: number): Promise<void> {
         }));
       }
 
-      // Steps 6 & 7: Facebook square video + podcast audio run in parallel — both only need the source video
-      const step67Label = wantPodcast ? "Rendering Facebook video & podcast audio…" : "Rendering Facebook video…";
-      await updateJobStatus(jobId, "rendering", { errorMessage: step67Label });
-      await Promise.allSettled([
-        (async () => {
-          try {
-            const facebookLocalPath = path.join(tempDir, `job_${jobId}_facebook.mp4`);
-            await renderFullFacebookVideo(videoPath, jobId, transcript, facebookLocalPath);
-            await uploadLocalFile(`clips/job_${jobId}_facebook.mp4`, facebookLocalPath, "video/mp4");
-            try { fs.unlinkSync(facebookLocalPath); } catch (_) {}
-            logger.info({ jobId }, "Full Facebook 1:1 video rendered");
-          } catch (fbErr) {
-            logger.warn({ jobId, err: fbErr }, "Full Facebook video render failed — skipping");
-          }
-        })(),
-        (async () => {
-          if (!wantPodcast) { logger.info({ jobId }, "Podcast generation skipped (disabled)"); return; }
-          try {
-            await generatePodcastAudio(jobId, videoPath, brand);
-          } catch (podErr) {
-            logger.warn({ jobId, err: podErr }, "Podcast generation failed — skipping");
-          }
-        })(),
-      ]);
+      // Wait for background renders to finish (they've been running alongside clips)
+      await Promise.allSettled([facebookBgPromise, podcastBgPromise]);
     } else {
       // No clips — still generate podcast audio if enabled
       if (wantPodcast) {
