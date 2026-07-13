@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { Check, Loader2, Zap, Crown, ExternalLink, Sparkles } from "lucide-react";
+import { Check, Loader2, Zap, Crown, ExternalLink, Sparkles, Tag, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -18,6 +19,15 @@ interface Product {
   name: string;
   description: string;
   prices: Price[];
+}
+
+interface CouponInfo {
+  valid: boolean;
+  promotionCodeId: string | null;
+  percentOff: number | null;
+  amountOff: number | null;
+  currency: string | null;
+  name: string | null;
 }
 
 function formatPrice(amount: number, currency: string) {
@@ -36,12 +46,43 @@ export default function PricingPage() {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const [couponInput, setCouponInput] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponInfo, setCouponInfo] = useState<CouponInfo | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
   useEffect(() => {
     fetch(`${basePath}/api/stripe/products`)
       .then((r) => r.json())
       .then((d) => setProducts(d.data ?? []))
       .catch(() => setFetchError("Failed to load plans"));
   }, []);
+
+  async function applyCoupon() {
+    if (!couponInput.trim()) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponInfo(null);
+    try {
+      const res = await fetch(`${basePath}/api/stripe/validate-coupon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponInput.trim() }),
+      });
+      const data: CouponInfo = await res.json();
+      if (!data.valid) {
+        setCouponError("Code not found or expired. Check your code and try again.");
+      } else {
+        setCouponInfo(data);
+      }
+    } catch {
+      setCouponError("Couldn't validate the code. Please try again.");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  const isFree = couponInfo?.valid && couponInfo.percentOff === 100;
 
   async function handleCheckout(priceId: string) {
     if (!user) {
@@ -50,14 +91,32 @@ export default function PricingPage() {
     }
     setLoading(priceId);
     try {
-      const res = await fetch(`${basePath}/api/stripe/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId }),
-      });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else setLoading(null);
+      if (isFree && couponInfo?.promotionCodeId) {
+        const res = await fetch(`${basePath}/api/stripe/checkout-free`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priceId, promotionCodeId: couponInfo.promotionCodeId }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setLocation("/app?subscribed=1");
+        } else {
+          setCouponError(data.error ?? "Failed to activate. Please try again.");
+          setLoading(null);
+        }
+      } else {
+        const res = await fetch(`${basePath}/api/stripe/checkout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            priceId,
+            ...(couponInfo?.promotionCodeId ? { promotionCodeId: couponInfo.promotionCodeId } : {}),
+          }),
+        });
+        const data = await res.json();
+        if (data.url) window.location.href = data.url;
+        else setLoading(null);
+      }
     } catch {
       setLoading(null);
     }
@@ -149,21 +208,32 @@ export default function PricingPage() {
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-3xl font-bold text-white">
-                        {formatPrice(price.unitAmount, price.currency)}
-                      </div>
-                      <div className="text-slate-400 text-sm">
-                        /{price.recurring?.interval ?? "one-time"}
-                      </div>
-                      {billing === "week" && (
-                        <div className="text-slate-400 text-xs mt-0.5 font-medium">
-                          ~{formatPrice(price.unitAmount * 4, price.currency)}/mo at 4 weeks
-                        </div>
+                      {isFree ? (
+                        <>
+                          <div className="text-3xl font-bold text-emerald-400">$0</div>
+                          <div className="text-slate-500 text-sm line-through">
+                            {formatPrice(price.unitAmount, price.currency)}/{price.recurring?.interval ?? "one-time"}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-3xl font-bold text-white">
+                            {formatPrice(price.unitAmount, price.currency)}
+                          </div>
+                          <div className="text-slate-400 text-sm">
+                            /{price.recurring?.interval ?? "one-time"}
+                          </div>
+                          {billing === "week" && (
+                            <div className="text-slate-400 text-xs mt-0.5 font-medium">
+                              ~{formatPrice(price.unitAmount * 4, price.currency)}/mo at 4 weeks
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
 
-                  <ul className="space-y-2.5 mb-8">
+                  <ul className="space-y-2.5 mb-6">
                     {features.map((f) => (
                       <li key={f} className="flex items-center gap-2.5 text-slate-300 text-sm">
                         <div className="h-4 w-4 rounded-full bg-[#f21178]/15 flex items-center justify-center shrink-0">
@@ -174,21 +244,73 @@ export default function PricingPage() {
                     ))}
                   </ul>
 
+                  {/* Coupon code section */}
+                  <div className="mb-6 space-y-2">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <Input
+                          placeholder="Discount code"
+                          value={couponInput}
+                          onChange={(e) => {
+                            setCouponInput(e.target.value.toUpperCase());
+                            setCouponInfo(null);
+                            setCouponError(null);
+                          }}
+                          onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
+                          className="pl-9 bg-[#0a0618] border-[#2a1e4a] text-white placeholder:text-slate-600 focus:border-[#f21178]/50 h-10"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={applyCoupon}
+                        disabled={couponLoading || !couponInput.trim()}
+                        className="border-[#2a1e4a] text-slate-300 hover:text-white hover:border-[#f21178]/50 hover:bg-[#f21178]/10 h-10 px-4"
+                      >
+                        {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                      </Button>
+                    </div>
+
+                    {couponError && (
+                      <div className="flex items-center gap-2 text-red-400 text-sm">
+                        <XCircle className="w-4 h-4 shrink-0" />
+                        {couponError}
+                      </div>
+                    )}
+
+                    {couponInfo?.valid && (
+                      <div className={`flex items-center gap-2 text-sm font-medium ${isFree ? "text-emerald-400" : "text-[#f21178]"}`}>
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        {isFree
+                          ? "100% discount applied — no payment needed!"
+                          : `${couponInfo.percentOff != null ? `${couponInfo.percentOff}% off` : couponInfo.amountOff != null ? `${formatPrice(couponInfo.amountOff, couponInfo.currency ?? "usd")} off` : "Discount"} applied`}
+                      </div>
+                    )}
+                  </div>
+
                   <Button
                     size="lg"
-                    disabled={loading === price.id}
+                    disabled={!!loading}
                     onClick={() => handleCheckout(price.id)}
-                    className="w-full bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 text-white font-semibold h-12 text-base shadow-lg shadow-[#f21178]/20 border-0 disabled:opacity-60"
+                    className={`w-full font-semibold h-12 text-base shadow-lg border-0 disabled:opacity-60 ${
+                      isFree
+                        ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-emerald-500/20"
+                        : "bg-gradient-to-r from-[#f21178] to-violet-600 hover:from-[#d91068] hover:to-violet-700 shadow-[#f21178]/20"
+                    }`}
                   >
-                    {loading === price.id ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Redirecting...</>
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {isFree ? "Activating…" : "Redirecting…"}</>
+                    ) : isFree ? (
+                      "Activate Free Account"
                     ) : (
                       "Subscribe Now"
                     )}
                   </Button>
 
                   <p className="text-center text-slate-500 text-xs mt-4">
-                    Secure payment via Stripe · Cancel anytime
+                    {isFree
+                      ? "Free access forever — no credit card required"
+                      : "Secure payment via Stripe · Cancel anytime"}
                   </p>
                 </div>
               </div>

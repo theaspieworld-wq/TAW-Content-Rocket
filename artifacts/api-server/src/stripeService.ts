@@ -18,7 +18,12 @@ export class StripeService {
     return customer.id;
   }
 
-  async createCheckoutSession(customerId: string, priceId: string, baseUrl: string) {
+  async createCheckoutSession(
+    customerId: string,
+    priceId: string,
+    baseUrl: string,
+    promotionCodeId?: string | null,
+  ) {
     const stripe = await getUncachableStripeClient();
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -27,8 +32,44 @@ export class StripeService {
       mode: 'subscription',
       success_url: `${baseUrl}/app?subscribed=1`,
       cancel_url: `${baseUrl}/pricing`,
+      ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : { allow_promotion_codes: false }),
     });
     return session;
+  }
+
+  async validatePromoCode(code: string): Promise<{
+    valid: boolean;
+    promotionCodeId: string | null;
+    couponId: string | null;
+    percentOff: number | null;
+    amountOff: number | null;
+    currency: string | null;
+    name: string | null;
+  }> {
+    const stripe = await getUncachableStripeClient();
+    const results = await stripe.promotionCodes.list({ code, active: true, limit: 1 });
+    const pc = results.data[0];
+    if (!pc) return { valid: false, promotionCodeId: null, couponId: null, percentOff: null, amountOff: null, currency: null, name: null };
+    const coupon = pc.coupon as any;
+    return {
+      valid: true,
+      promotionCodeId: pc.id,
+      couponId: coupon.id,
+      percentOff: coupon.percent_off ?? null,
+      amountOff: coupon.amount_off ?? null,
+      currency: coupon.currency ?? null,
+      name: coupon.name ?? null,
+    };
+  }
+
+  async createFreeSubscription(customerId: string, priceId: string, promotionCodeId: string): Promise<string> {
+    const stripe = await getUncachableStripeClient();
+    const subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: priceId }],
+      discounts: [{ promotion_code: promotionCodeId }],
+    });
+    return subscription.id;
   }
 
   async createPortalSession(customerId: string, baseUrl: string) {

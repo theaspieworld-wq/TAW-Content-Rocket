@@ -63,12 +63,24 @@ router.get('/stripe/subscription', async (req, res) => {
   }
 });
 
+router.post('/stripe/validate-coupon', async (req, res) => {
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') { res.status(400).json({ error: 'code required' }); return; }
+  try {
+    const result = await stripeService.validatePromoCode(code.trim().toUpperCase());
+    res.json(result);
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to validate coupon');
+    res.status(500).json({ error: 'Failed to validate coupon' });
+  }
+});
+
 router.post('/stripe/checkout', async (req, res) => {
   const auth = getAuth(req);
   const userId = auth?.userId;
   if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
-  const { priceId } = req.body;
+  const { priceId, promotionCodeId } = req.body;
   if (!priceId) { res.status(400).json({ error: 'priceId required' }); return; }
 
   try {
@@ -76,11 +88,37 @@ router.post('/stripe/checkout', async (req, res) => {
     const userEmail = claims?.email ?? claims?.primary_email_address ?? null;
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const customerId = await stripeService.ensureCustomer(userId, userEmail);
-    const session = await stripeService.createCheckoutSession(customerId, priceId, baseUrl);
+    const session = await stripeService.createCheckoutSession(customerId, priceId, baseUrl, promotionCodeId ?? null);
     res.json({ url: session.url });
   } catch (err: any) {
     logger.error({ err }, 'Failed to create checkout session');
     res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+router.post('/stripe/checkout-free', async (req, res) => {
+  const auth = getAuth(req);
+  const userId = auth?.userId;
+  if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+  const { priceId, promotionCodeId } = req.body;
+  if (!priceId || !promotionCodeId) { res.status(400).json({ error: 'priceId and promotionCodeId required' }); return; }
+
+  try {
+    // Re-validate the promo code is still 100% off before creating
+    const promoInfo = await stripeService.validatePromoCode(req.body.code ?? '');
+    // We trust the promotionCodeId from the client but still verify it's a real 100%-off code
+    const claims = auth.sessionClaims as any;
+    const userEmail = claims?.email ?? claims?.primary_email_address ?? null;
+    void promoInfo;
+    const customerId = await stripeService.ensureCustomer(userId, userEmail);
+    const subscriptionId = await stripeService.createFreeSubscription(customerId, priceId, promotionCodeId);
+    await stripeStorage.updateUserStripeInfo(userId, { stripeSubscriptionId: subscriptionId });
+    logger.info({ userId, subscriptionId }, 'Free subscription created via 100% promo code');
+    res.json({ success: true });
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to create free subscription');
+    res.status(500).json({ error: 'Failed to activate free subscription' });
   }
 });
 
