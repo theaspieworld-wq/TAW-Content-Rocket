@@ -91,7 +91,7 @@ async function jobToJson(j: typeof jobsTable.$inferSelect) {
     hasContent: j.generatedContent != null,
     hasFacebookVideo,
     hasPodcast,
-    hasThumbnail: !!j.thumbnailPath && fs.existsSync(j.thumbnailPath),
+    hasThumbnail: (!!j.thumbnailPath && fs.existsSync(j.thumbnailPath)) || !!j.thumbnailObjectPath,
     manualChapters: j.manualChapters ?? null,
     generatePodcast: j.generatePodcast !== "false",
     createdAt: j.createdAt.toISOString(),
@@ -368,12 +368,28 @@ router.get("/jobs/:id/thumbnail", async (req, res): Promise<void> => {
   }
 
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
-  if (!job || !job.thumbnailPath || !fs.existsSync(job.thumbnailPath)) {
+  if (!job) {
     res.status(404).json({ error: "Thumbnail not found" });
     return;
   }
 
-  res.sendFile(job.thumbnailPath);
+  // Prefer local file; fall back to object storage (temp dir may have been cleaned up)
+  if (job.thumbnailPath && fs.existsSync(job.thumbnailPath)) {
+    res.sendFile(job.thumbnailPath);
+    return;
+  }
+
+  if (job.thumbnailObjectPath) {
+    const found = await streamToResponse(job.thumbnailObjectPath, res, {
+      contentType: job.thumbnailObjectPath.endsWith(".png") ? "image/png" : "image/jpeg",
+      cacheControl: "public, max-age=86400",
+      inline: true,
+    });
+    if (!found) res.status(404).json({ error: "Thumbnail not found in storage" });
+    return;
+  }
+
+  res.status(404).json({ error: "Thumbnail not found" });
 });
 
 router.get("/jobs/:id", async (req, res): Promise<void> => {

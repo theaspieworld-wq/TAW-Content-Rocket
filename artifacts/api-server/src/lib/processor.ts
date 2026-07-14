@@ -1528,6 +1528,13 @@ ${transcriptText}
 Return ONLY a valid JSON object with these exact keys — no markdown fences, no explanation:
 
 {
+  "carouselSlides": [
+    { "title": "Slide 1 title — the main insight (max 5 words)", "bullets": ["Concise point 1 (max 7 words)", "Concise point 2 (max 7 words)", "Concise point 3 (max 7 words)"] },
+    { "title": "Slide 2 title — second key takeaway", "bullets": ["Point 1", "Point 2", "Point 3"] },
+    { "title": "Slide 3 title — third key takeaway", "bullets": ["Point 1", "Point 2", "Point 3"] },
+    { "title": "Slide 4 title — actionable final slide", "bullets": ["Point 1", "Point 2", "Point 3"] }
+  ],
+  "carouselCaption": "Instagram caption for the 4-slide carousel post. Hook line inviting people to swipe. 3-4 paragraphs of insight. Open question. 6-8 hashtags on their own line. CTA. 200-280 words.",
   "quotes": [
     "Powerful verbatim or near-verbatim quote from the transcript. Max 220 chars. No attribution.",
     "Second quote — different theme or insight. Max 220 chars.",
@@ -1568,14 +1575,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown fences, no
       ]
     }
   ],
-  "newsletterCta": "2-3 sentences of enthusiastic closing. No button — plain text only.",
-  "carouselSlides": [
-    { "title": "Slide 1 title — the main insight (max 5 words)", "bullets": ["Concise point 1 (max 7 words)", "Concise point 2 (max 7 words)", "Concise point 3 (max 7 words)"] },
-    { "title": "Slide 2 title — second key takeaway", "bullets": ["Point 1", "Point 2", "Point 3"] },
-    { "title": "Slide 3 title — third key takeaway", "bullets": ["Point 1", "Point 2", "Point 3"] },
-    { "title": "Slide 4 title — actionable final slide", "bullets": ["Point 1", "Point 2", "Point 3"] }
-  ],
-  "carouselCaption": "Instagram caption for the 4-slide carousel post. Hook line inviting people to swipe. 3-4 paragraphs of insight. Open question. 6-8 hashtags on their own line. CTA. 200-280 words."
+  "newsletterCta": "2-3 sentences of enthusiastic closing. No button — plain text only."
 }`;
 
   // ── Call B: long-form content ─────────────────────────────────────────
