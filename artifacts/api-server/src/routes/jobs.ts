@@ -94,6 +94,7 @@ async function jobToJson(j: typeof jobsTable.$inferSelect) {
     hasThumbnail: (!!j.thumbnailPath && fs.existsSync(j.thumbnailPath)) || !!j.thumbnailObjectPath,
     manualChapters: j.manualChapters ?? null,
     generatePodcast: j.generatePodcast !== "false",
+    videoLayout: j.videoLayout ?? "normal",
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
   };
@@ -177,6 +178,7 @@ router.post("/jobs", async (req, res): Promise<void> => {
     brandId: brandId ?? null,
     manualTranscript: manualTranscript ?? null,
     generatePodcast: generatePodcast === false ? "false" : "true",
+    videoLayout: "normal",
   }).returning();
 
   processJob(job.id).catch(() => {});
@@ -228,6 +230,7 @@ router.post(
     const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
     const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
     const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
+    const videoLayoutRaw = req.body.videoLayout === "podcast" ? "podcast" : "normal";
 
     let manualChaptersRaw: string | null = null;
     if (clipModeRaw === "chapters" && req.body.manualChapters) {
@@ -266,6 +269,7 @@ router.post(
       status: "pending",
       outroId: outroIdRaw,
       brandId: brandIdRaw,
+      videoLayout: videoLayoutRaw,
     }).returning();
 
     processJob(job.id).catch(() => {});
@@ -313,6 +317,7 @@ router.post("/jobs/upload-from-storage", async (req, res): Promise<void> => {
   const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
   const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
   const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
+  const videoLayoutRaw = req.body.videoLayout === "podcast" ? "podcast" : "normal";
 
   let manualChaptersRaw: string | null = null;
   if (clipModeRaw === "chapters" && req.body.manualChapters) {
@@ -351,6 +356,7 @@ router.post("/jobs/upload-from-storage", async (req, res): Promise<void> => {
     status: "pending",
     outroId: outroIdRaw,
     brandId: brandIdRaw,
+    videoLayout: videoLayoutRaw,
   }).returning();
 
   processJob(job.id).catch(() => {});

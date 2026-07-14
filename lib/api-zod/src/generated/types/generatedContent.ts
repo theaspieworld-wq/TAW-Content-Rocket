@@ -20,8 +20,12 @@ export interface GeneratedContent {
   newsletterEmail: NewsletterEmail;
   /** 5 powerful quotes from the transcript */
   quotes: string[];
-  /** Legacy field - always empty array */
+  /** Seconds into the video where each quote occurs (same length as quotes) */
+  quoteTimestamps: number[];
+  /** Filenames of 1:1 quote card images - fetch via GET /api/images/{filename} */
   quoteImages: string[];
+  /** Current quote card visual style (classic | editorial | bold | modern) */
+  quoteCardStyle: string;
   /** One Instagram/TikTok caption per quote */
   instagramCaptions: string[];
   /** Filenames of 4 infographic carousel slides - fetch via GET /api/images/{filename} */

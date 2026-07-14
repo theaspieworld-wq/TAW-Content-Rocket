@@ -8,6 +8,7 @@
 import type { JobCaptionStyle } from "./jobCaptionStyle";
 import type { JobClipMode } from "./jobClipMode";
 import type { JobStatus } from "./jobStatus";
+import type { JobVideoLayout } from "./jobVideoLayout";
 
 export interface Job {
   id: number;
@@ -48,6 +49,8 @@ export interface Job {
   manualChapters?: string | null;
   /** Whether podcast generation was requested for this job */
   generatePodcast: boolean;
+  /** Layout mode used when rendering clips */
+  videoLayout: JobVideoLayout;
   createdAt: Date;
   updatedAt: Date;
 }

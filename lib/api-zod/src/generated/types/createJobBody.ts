@@ -7,6 +7,7 @@
  */
 import type { CreateJobBodyCaptionStyle } from "./createJobBodyCaptionStyle";
 import type { CreateJobBodyClipMode } from "./createJobBodyClipMode";
+import type { CreateJobBodyVideoLayout } from "./createJobBodyVideoLayout";
 
 export interface CreateJobBody {
   /** Paste a transcript directly. No video is downloaded or rendered — only written content is generated. */
@@ -45,4 +46,6 @@ export interface CreateJobBody {
   brandOutroIds?: string | null;
   /** Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided. */
   generatePodcast?: boolean;
+  /** Layout for rendered clips — "normal" portrait crop, or "podcast" split-screen (left speaker on top / right speaker on bottom) */
+  videoLayout?: CreateJobBodyVideoLayout;
 }

@@ -134,6 +134,7 @@ const formSchema = z.object({
   brandId: z.string().min(1, { message: "Please select a brand before running" }),
   includeShorts: z.boolean().default(true),
   generatePodcast: z.boolean().default(true),
+  videoLayout: z.enum(["normal", "podcast"]).default("normal"),
   manualTranscript: z.string().optional(),
 });
 
@@ -649,12 +650,14 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       brandId: "",
       includeShorts: true,
       generatePodcast: true,
+      videoLayout: "normal" as const,
       manualTranscript: "",
     },
   });
 
   const includeShorts = form.watch("includeShorts");
   const generatePodcast = form.watch("generatePodcast");
+  const videoLayout = form.watch("videoLayout");
   const selectedDuration = form.watch("clipDurationSeconds");
   const selectedBrandId = form.watch("brandId");
   const clipMode = form.watch("clipMode");
@@ -714,6 +717,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       brandId: values.brandId,
       includeShorts: values.includeShorts,
       generatePodcast: values.generatePodcast,
+      videoLayout: values.videoLayout,
       manualTranscript: "",
     };
 
@@ -893,6 +897,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           showTitle: String(values.showTitle ?? true),
           showWatermark: String(values.showWatermark ?? true),
         };
+        payload.videoLayout = values.videoLayout ?? "normal";
         if (thumbnailObjectPath) payload.thumbnailObjectPath = thumbnailObjectPath;
         if (values.contentCta?.trim()) payload.contentCta = values.contentCta.trim();
         if (values.outroId && values.outroId !== "none") payload.outroId = values.outroId;
@@ -2177,7 +2182,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                   </div>
                 )}
 
-                {/* Podcast toggle — hidden in transcript mode */}
+                {/* Podcast audio toggle — hidden in transcript mode */}
                 {sourceType !== "transcript" && (
                   <div className="flex items-center gap-2">
                     <button
@@ -2187,7 +2192,21 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                     >
                       <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${generatePodcast ? "translate-x-4" : "translate-x-0"}`} />
                     </button>
-                    <span className="text-xs text-muted-foreground font-medium">Podcast</span>
+                    <span className="text-xs text-muted-foreground font-medium">Podcast audio</span>
+                  </div>
+                )}
+
+                {/* Podcast video layout toggle — split two speakers top/bottom */}
+                {sourceType !== "transcript" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("videoLayout", videoLayout === "podcast" ? "normal" : "podcast")}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none ${videoLayout === "podcast" ? "bg-primary border-primary" : "bg-muted border-muted-foreground/30"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${videoLayout === "podcast" ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-muted-foreground font-medium">Podcast video</span>
                   </div>
                 )}
 

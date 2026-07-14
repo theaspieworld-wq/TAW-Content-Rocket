@@ -371,6 +371,9 @@ export const ListJobsResponseItem = zod.object({
   generatePodcast: zod
     .boolean()
     .describe("Whether podcast generation was requested for this job"),
+  videoLayout: zod
+    .enum(["normal", "podcast"])
+    .describe("Layout mode used when rendering clips"),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -390,6 +393,7 @@ export const createJobBodyCaptionStyleDefault = `classic`;
 export const createJobBodyShowTitleDefault = true;
 export const createJobBodyShowWatermarkDefault = true;
 export const createJobBodyGeneratePodcastDefault = true;
+export const createJobBodyVideoLayoutDefault = `normal`;
 
 export const CreateJobBody = zod.object({
   manualTranscript: zod
@@ -458,6 +462,12 @@ export const CreateJobBody = zod.object({
     .describe(
       "Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided.",
     ),
+  videoLayout: zod
+    .enum(["normal", "podcast"])
+    .default(createJobBodyVideoLayoutDefault)
+    .describe(
+      'Layout for rendered clips — \"normal\" portrait crop, or \"podcast\" split-screen (left speaker on top \/ right speaker on bottom)',
+    ),
 });
 
 /**
@@ -513,6 +523,9 @@ export const GetJobResponse = zod
     generatePodcast: zod
       .boolean()
       .describe("Whether podcast generation was requested for this job"),
+    videoLayout: zod
+      .enum(["normal", "podcast"])
+      .describe("Layout mode used when rendering clips"),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -572,9 +585,21 @@ export const GetJobContentResponse = zod.object({
   quotes: zod
     .array(zod.string())
     .describe("5 powerful quotes from the transcript"),
+  quoteTimestamps: zod
+    .array(zod.number())
+    .describe(
+      "Seconds into the video where each quote occurs (same length as quotes)",
+    ),
   quoteImages: zod
     .array(zod.string())
-    .describe("Legacy field - always empty array"),
+    .describe(
+      "Filenames of 1:1 quote card images - fetch via GET \/api\/images\/{filename}",
+    ),
+  quoteCardStyle: zod
+    .string()
+    .describe(
+      "Current quote card visual style (classic | editorial | bold | modern)",
+    ),
   instagramCaptions: zod
     .array(zod.string())
     .describe("One Instagram\/TikTok caption per quote"),
@@ -620,9 +645,21 @@ export const RegenerateJobContentResponse = zod.object({
   quotes: zod
     .array(zod.string())
     .describe("5 powerful quotes from the transcript"),
+  quoteTimestamps: zod
+    .array(zod.number())
+    .describe(
+      "Seconds into the video where each quote occurs (same length as quotes)",
+    ),
   quoteImages: zod
     .array(zod.string())
-    .describe("Legacy field - always empty array"),
+    .describe(
+      "Filenames of 1:1 quote card images - fetch via GET \/api\/images\/{filename}",
+    ),
+  quoteCardStyle: zod
+    .string()
+    .describe(
+      "Current quote card visual style (classic | editorial | bold | modern)",
+    ),
   instagramCaptions: zod
     .array(zod.string())
     .describe("One Instagram\/TikTok caption per quote"),

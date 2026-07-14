@@ -1149,19 +1149,20 @@ async function renderMainClip(
     showWatermark: boolean;
     watermarkLocalPath: string | null;
     brand: typeof brandsTable.$inferSelect | null;
+    videoLayout?: string;
   },
 ): Promise<void> {
-  const portraitCrop = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
+  const isPodcast = (options.videoLayout ?? "normal") === "podcast";
   const fontFile = await getFontPath(options.brand?.fontFamily ?? null, options.brand?.customFontPath ?? null);
-  const filterStages: string[] = [portraitCrop];
+  const overlayStages: string[] = [];
 
   if (options.showTitle && title.trim()) {
     const barColor = options.brand?.primaryColor ? hexToFfmpeg(options.brand.primaryColor) : "black";
     const titleLines = wrapText(title.toUpperCase(), 22).slice(0, 3);
     const barHeight = 70 + titleLines.length * 70;
-    filterStages.push(`drawbox=x=0:y=0:w=1080:h=${barHeight}:color=${barColor}@0.88:t=fill`);
+    overlayStages.push(`drawbox=x=0:y=0:w=1080:h=${barHeight}:color=${barColor}@0.88:t=fill`);
     titleLines.forEach((line, i) => {
-      filterStages.push(
+      overlayStages.push(
         `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=56:fontcolor=white:x=(w-text_w)/2:y=${40 + i * 70}:shadowx=2:shadowy=2:shadowcolor=black@0.8`,
       );
     });
@@ -1214,7 +1215,7 @@ async function renderMainClip(
       // Escape single quotes and backslashes for lavfi filter string
       const escapedAss = assFilePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
       const escapedFontsDir = fontsDir.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-      filterStages.push(`subtitles='${escapedAss}':fontsdir='${escapedFontsDir}'`);
+      overlayStages.push(`subtitles='${escapedAss}':fontsdir='${escapedFontsDir}'`);
     }
   }
 
@@ -1225,15 +1226,44 @@ async function renderMainClip(
     "-t", (endSeconds - startSeconds).toString(),
   ];
 
-  if (useWatermark) {
-    args.push("-loop", "1", "-i", options.watermarkLocalPath as string);
-    const filterComplex =
-      `[0:v]${filterStages.join(",")}[base];` +
-      `[1:v]scale=160:-1[wm];` +
-      `[base][wm]overlay=36:36:shortest=1[vout]`;
-    args.push("-filter_complex", filterComplex, "-map", "[vout]", "-map", "0:a?");
+  if (isPodcast) {
+    // Split the wide landscape frame: left person on top half, right person on bottom half
+    const podcastSplit = [
+      "[0:v]split=2[_pl][_pr]",
+      "[_pl]crop=iw/2:ih:0:0,scale=1080:960[_top]",
+      "[_pr]crop=iw/2:ih:iw/2:0,scale=1080:960[_bot]",
+      "[_top][_bot]vstack[_stacked]",
+    ].join(";");
+
+    if (useWatermark) {
+      args.push("-loop", "1", "-i", options.watermarkLocalPath as string);
+      const overlayPart = overlayStages.length > 0
+        ? `;[_stacked]${overlayStages.join(",")}[_base]`
+        : ";[_stacked]null[_base]";
+      const fc = `${podcastSplit}${overlayPart};[1:v]scale=160:-1[_wm];[_base][_wm]overlay=36:36:shortest=1[vout]`;
+      args.push("-filter_complex", fc, "-map", "[vout]", "-map", "0:a?");
+    } else if (overlayStages.length > 0) {
+      const fc = `${podcastSplit};[_stacked]${overlayStages.join(",")}[vout]`;
+      args.push("-filter_complex", fc, "-map", "[vout]", "-map", "0:a?");
+    } else {
+      args.push("-filter_complex", podcastSplit, "-map", "[_stacked]", "-map", "0:a?");
+    }
   } else {
-    args.push("-vf", filterStages.join(","));
+    // Normal portrait layout: scale + crop to 1080×1920 then overlays
+    const filterStages = [
+      "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+      ...overlayStages,
+    ];
+    if (useWatermark) {
+      args.push("-loop", "1", "-i", options.watermarkLocalPath as string);
+      const filterComplex =
+        `[0:v]${filterStages.join(",")}[base];` +
+        `[1:v]scale=160:-1[wm];` +
+        `[base][wm]overlay=36:36:shortest=1[vout]`;
+      args.push("-filter_complex", filterComplex, "-map", "[vout]", "-map", "0:a?");
+    } else {
+      args.push("-vf", filterStages.join(","));
+    }
   }
 
   args.push(
@@ -2098,6 +2128,7 @@ export async function processJob(jobId: number): Promise<void> {
                 showWatermark,
                 watermarkLocalPath,
                 brand,
+                videoLayout: job.videoLayout ?? "normal",
               },
             );
 

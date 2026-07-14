@@ -123,6 +123,7 @@ export const jobsTable = pgTable("jobs", {
   generatedContent: text("generated_content"),
   manualTranscript: text("manual_transcript"),
   generatePodcast: text("generate_podcast").notNull().default("true"),
+  videoLayout: text("video_layout").notNull().default("normal"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

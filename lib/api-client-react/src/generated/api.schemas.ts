@@ -149,6 +149,17 @@ export const CreateJobBodyCaptionStyle = {
   brand: "brand",
 } as const;
 
+/**
+ * Layout for rendered clips — "normal" portrait crop, or "podcast" split-screen (left speaker on top / right speaker on bottom)
+ */
+export type CreateJobBodyVideoLayout =
+  (typeof CreateJobBodyVideoLayout)[keyof typeof CreateJobBodyVideoLayout];
+
+export const CreateJobBodyVideoLayout = {
+  normal: "normal",
+  podcast: "podcast",
+} as const;
+
 export interface CreateJobBody {
   /** Paste a transcript directly. No video is downloaded or rendered — only written content is generated. */
   manualTranscript?: string;
@@ -186,6 +197,8 @@ export interface CreateJobBody {
   brandOutroIds?: string | null;
   /** Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided. */
   generatePodcast?: boolean;
+  /** Layout for rendered clips — "normal" portrait crop, or "podcast" split-screen (left speaker on top / right speaker on bottom) */
+  videoLayout?: CreateJobBodyVideoLayout;
 }
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
@@ -215,6 +228,17 @@ export const JobCaptionStyle = {
   bold: "bold",
   boxed: "boxed",
   brand: "brand",
+} as const;
+
+/**
+ * Layout mode used when rendering clips
+ */
+export type JobVideoLayout =
+  (typeof JobVideoLayout)[keyof typeof JobVideoLayout];
+
+export const JobVideoLayout = {
+  normal: "normal",
+  podcast: "podcast",
 } as const;
 
 export interface Job {
@@ -256,6 +280,8 @@ export interface Job {
   manualChapters?: string | null;
   /** Whether podcast generation was requested for this job */
   generatePodcast: boolean;
+  /** Layout mode used when rendering clips */
+  videoLayout: JobVideoLayout;
   createdAt: string;
   updatedAt: string;
 }
@@ -311,8 +337,12 @@ export interface GeneratedContent {
   newsletterEmail: NewsletterEmail;
   /** 5 powerful quotes from the transcript */
   quotes: string[];
-  /** Legacy field - always empty array */
+  /** Seconds into the video where each quote occurs (same length as quotes) */
+  quoteTimestamps: number[];
+  /** Filenames of 1:1 quote card images - fetch via GET /api/images/{filename} */
   quoteImages: string[];
+  /** Current quote card visual style (classic | editorial | bold | modern) */
+  quoteCardStyle: string;
   /** One Instagram/TikTok caption per quote */
   instagramCaptions: string[];
   /** Filenames of 4 infographic carousel slides - fetch via GET /api/images/{filename} */

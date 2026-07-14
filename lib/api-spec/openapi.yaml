@@ -880,6 +880,11 @@ components:
           type: boolean
           default: true
           description: Whether to generate a podcast audio file (default true). Ignored when manualTranscript is provided.
+        videoLayout:
+          type: string
+          enum: [normal, podcast]
+          default: normal
+          description: Layout for rendered clips — "normal" portrait crop, or "podcast" split-screen (left speaker on top / right speaker on bottom)
     Job:
       type: object
       properties:
@@ -935,6 +940,10 @@ components:
         generatePodcast:
           type: boolean
           description: Whether podcast generation was requested for this job
+        videoLayout:
+          type: string
+          enum: [normal, podcast]
+          description: Layout mode used when rendering clips
         createdAt:
           type: string
           format: date-time
@@ -957,6 +966,7 @@ components:
         - hasPodcast
         - hasThumbnail
         - generatePodcast
+        - videoLayout
         - createdAt
         - updatedAt
     Clip:
