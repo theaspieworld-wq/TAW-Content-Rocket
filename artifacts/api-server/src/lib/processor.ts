@@ -256,8 +256,11 @@ function parseSrtToSegments(srt: string): TranscriptSegment[] {
   return segments;
 }
 
-async function transcribeAudio(audioPath: string, videoDuration: number): Promise<TranscriptSegment[]> {
-  const audioBuffer = fs.readFileSync(audioPath);
+// Max audio length per API call — stay well under the token limit
+const TRANSCRIBE_CHUNK_SECONDS = 480; // 8 minutes per chunk
+
+async function transcribeChunk(chunkPath: string, chunkDuration: number): Promise<TranscriptSegment[]> {
+  const audioBuffer = fs.readFileSync(chunkPath);
   const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mp3" });
 
   try {
@@ -269,12 +272,9 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
 
     const srtText = typeof srtResponse === "string" ? srtResponse : String(srtResponse);
     const segments = parseSrtToSegments(srtText);
-    if (segments.length > 0) {
-      logger.info({ count: segments.length }, "Transcription using real SRT timestamps");
-      return segments;
-    }
-  } catch (srtErr) {
-    logger.warn({ srtErr }, "SRT format failed — falling back to json + estimation");
+    if (segments.length > 0) return segments;
+  } catch (_srtErr) {
+    // fall through to json
   }
 
   const response = await openai.audio.transcriptions.create({
@@ -303,8 +303,7 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
     .filter(Boolean);
 
   const totalChars = sentences.reduce((n, s) => n + s.length, 0) || 1;
-  const duration = Math.max(1, videoDuration);
-
+  const duration = Math.max(1, chunkDuration);
   const segments: TranscriptSegment[] = [];
   let elapsed = 0;
   for (const sentence of sentences) {
@@ -313,6 +312,60 @@ async function transcribeAudio(audioPath: string, videoDuration: number): Promis
     elapsed += segDuration;
   }
   return segments;
+}
+
+async function transcribeAudio(audioPath: string, videoDuration: number): Promise<TranscriptSegment[]> {
+  // For short audio, transcribe in one shot
+  if (videoDuration <= TRANSCRIBE_CHUNK_SECONDS) {
+    const segments = await transcribeChunk(audioPath, videoDuration);
+    logger.info({ count: segments.length }, "Transcription completed (single chunk)");
+    return segments;
+  }
+
+  // Long audio: split into chunks using ffmpeg and transcribe sequentially
+  const numChunks = Math.ceil(videoDuration / TRANSCRIBE_CHUNK_SECONDS);
+  logger.info({ videoDuration, numChunks, chunkSize: TRANSCRIBE_CHUNK_SECONDS }, "Audio too long — splitting into chunks for transcription");
+
+  const chunkDir = fs.mkdtempSync(path.join(os.tmpdir(), "transcribe_chunks_"));
+  const allSegments: TranscriptSegment[] = [];
+
+  try {
+    for (let i = 0; i < numChunks; i++) {
+      const startSec = i * TRANSCRIBE_CHUNK_SECONDS;
+      const chunkDuration = Math.min(TRANSCRIBE_CHUNK_SECONDS, videoDuration - startSec);
+      const chunkPath = path.join(chunkDir, `chunk_${i}.mp3`);
+
+      // Extract chunk with ffmpeg
+      await execFileAsync(FFMPEG, [
+        "-ss", String(startSec),
+        "-t", String(chunkDuration),
+        "-i", audioPath,
+        "-ar", "16000",
+        "-ac", "1",
+        "-q:a", "5",
+        "-y", chunkPath,
+      ], { timeout: 60000 });
+
+      logger.info({ chunk: i + 1, numChunks, startSec, chunkDuration }, "Transcribing audio chunk");
+      const chunkSegments = await transcribeChunk(chunkPath, chunkDuration);
+
+      // Offset timestamps by chunk start position
+      for (const seg of chunkSegments) {
+        allSegments.push({
+          start: seg.start + startSec,
+          end: seg.end + startSec,
+          text: seg.text,
+        });
+      }
+
+      try { fs.unlinkSync(chunkPath); } catch (_) {}
+    }
+  } finally {
+    try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch (_) {}
+  }
+
+  logger.info({ totalSegments: allSegments.length, numChunks }, "Chunked transcription completed");
+  return allSegments;
 }
 
 function makeFallbackClips(clipCount: number, videoDuration: number, clipDurationSeconds: number): ClipSegment[] {
