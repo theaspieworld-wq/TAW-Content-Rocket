@@ -9,9 +9,6 @@ import { eq, inArray, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 import { downloadToLocalFile, uploadLocalFile, objectExists } from "./storage";
-import { ObjectStorageService } from "./objectStorage";
-
-const objectStorageService = new ObjectStorageService();
 
 const execFileAsync = promisify(execFile);
 
@@ -1862,9 +1859,8 @@ export async function processJob(jobId: number): Promise<void> {
     if (!localVideoPath || !fs.existsSync(localVideoPath)) {
       if (job.videoObjectPath) {
         logger.info({ jobId, videoObjectPath: job.videoObjectPath }, "Downloading uploaded video from object storage");
-        const objectFile = await objectStorageService.getObjectEntityFile(job.videoObjectPath);
         const destPath = path.join(tempDir, `upload_${jobId}${path.extname(job.videoObjectPath) || ".mp4"}`);
-        await objectFile.download({ destination: destPath });
+        await downloadToLocalFile(job.videoObjectPath, destPath);
         localVideoPath = destPath;
         await db.update(jobsTable).set({ localFilePath: destPath }).where(eq(jobsTable.id, jobId));
       } else {
@@ -1886,9 +1882,8 @@ export async function processJob(jobId: number): Promise<void> {
     if (!thumbnailPath && job.thumbnailObjectPath) {
       try {
         logger.info({ jobId, thumbnailObjectPath: job.thumbnailObjectPath }, "Downloading uploaded thumbnail from object storage");
-        const thumbFile = await objectStorageService.getObjectEntityFile(job.thumbnailObjectPath);
         const destThumbPath = path.join(tempDir, `thumb_${jobId}${path.extname(job.thumbnailObjectPath) || ".jpg"}`);
-        await thumbFile.download({ destination: destThumbPath });
+        await downloadToLocalFile(job.thumbnailObjectPath, destThumbPath);
         thumbnailPath = destThumbPath;
         await db.update(jobsTable).set({ thumbnailPath: destThumbPath }).where(eq(jobsTable.id, jobId));
       } catch (e) {
@@ -2200,8 +2195,7 @@ export async function regenerateQuoteCards(
     if (!job.videoObjectPath) throw new Error("No video available for quote card generation");
     const destPath = path.join(os.tmpdir(), `qc_regen_${jobId}${path.extname(job.videoObjectPath) || ".mp4"}`);
     if (!fs.existsSync(destPath)) {
-      const objectFile = await objectStorageService.getObjectEntityFile(job.videoObjectPath);
-      await objectFile.download({ destination: destPath });
+      await downloadToLocalFile(job.videoObjectPath, destPath);
     }
     videoPath = destPath;
   }
