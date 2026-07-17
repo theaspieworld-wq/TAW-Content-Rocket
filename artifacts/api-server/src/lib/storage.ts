@@ -46,7 +46,10 @@ function parsePrivateDir(): { bucketName: string; prefix: string } {
 
 function resolveObject(relativeKey: string): { bucketName: string; objectName: string } {
   const { bucketName, prefix } = parsePrivateDir();
-  const objectName = prefix ? `${prefix}/${relativeKey}` : relativeKey;
+  // Strip leading slashes and the legacy "/objects/" prefix that the chunked-upload
+  // assemble route used to include in the returned objectPath.
+  const normalized = relativeKey.replace(/^\/+/, "").replace(/^objects\//, "");
+  const objectName = prefix ? `${prefix}/${normalized}` : normalized;
   return { bucketName, objectName };
 }
 
