@@ -1868,7 +1868,7 @@ export async function processJob(jobId: number): Promise<void> {
           brand,
           tempDir,
           carouselTemplates: brandCarouselTemplateKeys,
-          thumbnailUrl: getUploadedThumbnailUrl(jobId, !!job.thumbnailPath),
+          thumbnailUrl: getUploadedThumbnailUrl(jobId, !!(job.thumbnailPath || job.thumbnailObjectPath)),
         });
         await db.update(jobsTable).set({ generatedContent: JSON.stringify(content) }).where(eq(jobsTable.id, jobId));
         logger.info({ jobId }, "Content generation completed for transcript job");
