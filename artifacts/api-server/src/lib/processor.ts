@@ -1033,6 +1033,7 @@ function buildAssFile(
   chunks: CaptionChunk[],
   style: CaptionStylePreset,
   fontName: string,
+  isPodcast = false,
 ): string {
   const primaryColor = toAssColor(style.fontcolor);
   const outlineColor = toAssColor(style.bordercolor ?? "black");
@@ -1049,12 +1050,17 @@ function buildAssFile(
     borderStyle = 1; outlineWidth = style.borderw ?? 3;
   }
 
-  // Place captions at ~72% from top → 28% from bottom = 0.28 × 1920 ≈ 538px MarginV
-  const marginV = Math.round(1920 * 0.28);
+  // Podcast layout: two speakers stacked at 960px each (total 1920px).
+  // Use ASS Alignment 5 (middle-center) so captions sit at the midpoint
+  // of the frame (y ≈ 960) — the seam between the two speaker panels —
+  // instead of covering the bottom speaker's face.
+  // Normal layout: Alignment 2 (bottom-center) at ~28% margin from bottom.
+  const alignment = isPodcast ? 5 : 2;
+  const marginV = isPodcast ? 0 : Math.round(1920 * 0.28);
 
   const styleRow =
     `Style: Default,${fontName},${style.fontsize},${primaryColor},&H000000FF,` +
-    `${outlineColor},${backColor},1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${marginV},1`;
+    `${outlineColor},${backColor},1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,${alignment},10,10,${marginV},1`;
 
   const header = [
     "[Script Info]",
@@ -1210,7 +1216,7 @@ async function renderMainClip(
       // speed and breaching the 5-minute render timeout.
       const fontName = options.brand?.fontFamily ?? "Poppins";
       assFilePath = outputPath.replace(/\.mp4$/, "_captions.ass");
-      fs.writeFileSync(assFilePath, buildAssFile(chunks, style, fontName), "utf-8");
+      fs.writeFileSync(assFilePath, buildAssFile(chunks, style, fontName, isPodcast), "utf-8");
       const fontsDir = path.dirname(fontFile);
       // Escape single quotes and backslashes for lavfi filter string
       const escapedAss = assFilePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
