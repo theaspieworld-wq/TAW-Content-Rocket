@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { processJob, generateContent, generatePodcastAudio, regenerateQuoteCards } from "../lib/processor";
 import { objectExists, deleteObject, streamToResponse, streamRangeToResponse, getReadStream } from "../lib/storage";
+import { htmlToPdf } from "../lib/htmlToPdf";
 
 const router: IRouter = Router();
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -734,6 +735,41 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
 
   const content = job.generatedContent ? JSON.parse(job.generatedContent) : null;
 
+  const folder = safeTitle;
+
+  // Generate PDFs from HTML content before starting the archive stream.
+  let blogPdf: Buffer | null = null;
+  let socialPdf: Buffer | null = null;
+  let newsletterPdf: Buffer | null = null;
+
+  if (content) {
+    const pdfJobs: Promise<void>[] = [];
+    if (content.blogPost) {
+      const titleMatch = (content.blogPost as string).match(/<h1[^>]*>(.*?)<\/h1>/i);
+      const blogTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "") : (job.videoTitle ?? "Blog Post");
+      pdfJobs.push(
+        htmlToPdf(content.blogPost as string, blogTitle)
+          .then(buf => { blogPdf = buf; })
+          .catch(() => { /* skip PDF on error, HTML still included */ })
+      );
+    }
+    if (content.socialArticle) {
+      pdfJobs.push(
+        htmlToPdf(content.socialArticle as string, `${job.videoTitle ?? "Social Article"} — Social Article`)
+          .then(buf => { socialPdf = buf; })
+          .catch(() => {})
+      );
+    }
+    if (content.newsletterEmail?.subject && content.newsletterEmail?.body) {
+      pdfJobs.push(
+        htmlToPdf(content.newsletterEmail.body as string, content.newsletterEmail.subject as string)
+          .then(buf => { newsletterPdf = buf; })
+          .catch(() => {})
+      );
+    }
+    await Promise.all(pdfJobs);
+  }
+
   res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.zip"`);
   res.setHeader("Content-Type", "application/zip");
 
@@ -742,8 +778,6 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
   archive.pipe(res);
-
-  const folder = safeTitle;
 
   const completedClips = clips.filter(c => c.status === "completed" && c.filePath);
   const clipExistChecks = await Promise.all(completedClips.map(c => objectExists(c.filePath)));
@@ -786,13 +820,16 @@ router.get("/jobs/:id/download-all", async (req, res): Promise<void> => {
   if (content) {
     if (content.blogPost) {
       archive.append(content.blogPost, { name: `${folder}/content/blog.html` });
+      if (blogPdf) archive.append(blogPdf, { name: `${folder}/content/blog.pdf` });
     }
     if (content.socialArticle) {
       archive.append(content.socialArticle, { name: `${folder}/content/social_article.html` });
+      if (socialPdf) archive.append(socialPdf, { name: `${folder}/content/social_article.pdf` });
     }
     if (content.newsletterEmail?.subject && content.newsletterEmail?.body) {
       archive.append(`Subject: ${content.newsletterEmail.subject}\n\n`, { name: `${folder}/content/newsletter_subject.txt` });
       archive.append(content.newsletterEmail.body, { name: `${folder}/content/newsletter.html` });
+      if (newsletterPdf) archive.append(newsletterPdf, { name: `${folder}/content/newsletter.pdf` });
     }
     if (content.threadPosts?.length > 0) {
       const threadText = content.threadPosts
