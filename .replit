@@ -11,7 +11,7 @@ router = "application"
 deploymentTarget = "autoscale"
 
 [deployment.postBuild]
-args = ["sh", "-c", "pnpm store prune && rm -rf .git .local .cache artifacts/api-server/uploads artifacts/api-server/clips artifacts/api-server/brands artifacts/api-server/outros"]
+args = ["sh", "-c", "pnpm store prune && rm -rf .git .cache artifacts/api-server/uploads artifacts/api-server/clips artifacts/api-server/brands artifacts/api-server/outros"]
 env = { "CI" = "true" }
 
 [workflows]
