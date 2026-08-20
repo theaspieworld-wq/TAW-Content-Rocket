@@ -791,86 +791,66 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       toast({ title: "Upload failed", description, variant: "destructive" });
     };
 
-    // Uploads a file in 4 MB chunks via POST /api/storage/uploads/chunk, then
-    // calls /api/storage/uploads/assemble to stream them to GCS in one pass.
-    // This bypasses any reverse-proxy body-size limits while giving accurate
-    // progress tracking.
+    // Upload directly to object storage with a presigned URL. This avoids
+    // routing chunks through ephemeral autoscaling servers, which can lose
+    // their shared temporary state in production.
     uploadStartTimeRef.current = null;
     setUploadSpeedBps(0);
 
-    const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB — safely under proxy limits
-    const CONCURRENCY = 4; // parallel chunk uploads
-
-    const uploadFileInChunks = async (
+    const uploadFileDirectly = async (
       file: File,
       progressStart: number,
       progressEnd: number,
     ): Promise<{ objectPath: string }> => {
-      const sessionId = crypto.randomUUID();
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
       const contentType = file.type || "application/octet-stream";
-      let bytesConfirmed = 0;
-
-      const uploadChunk = async (i: number) => {
-        const start = i * CHUNK_SIZE;
-        const chunk = file.slice(start, start + CHUNK_SIZE);
-
-        const res = await fetch(`${basePath}/api/storage/uploads/chunk`, {
-          method: "POST",
-          headers: {
-            "Content-Type": contentType,
-            "X-Session-Id": sessionId,
-            "X-Chunk-Index": String(i),
-            "X-Total-Chunks": String(totalChunks),
-            "X-File-Name": file.name,
-          },
-          body: chunk,
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          let msg = `Chunk ${i + 1}/${totalChunks} failed (${res.status})`;
-          try { msg = (await res.json() as { error?: string }).error ?? msg; } catch {}
-          throw new Error(msg);
-        }
-
-        // Update progress and speed as each chunk lands (JS is single-threaded so no race).
-        bytesConfirmed += chunk.size;
-        const now = Date.now();
-        if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
-        const elapsed = (now - uploadStartTimeRef.current) / 1000;
-        if (elapsed > 0) setUploadSpeedBps(bytesConfirmed / elapsed);
-        // Reserve the last 5 % of the range for the assemble step.
-        setUploadProgress(Math.round(
-          progressStart + (bytesConfirmed / file.size) * (progressEnd - progressStart) * 0.95
-        ));
-      };
-
-      // Send CONCURRENCY chunks at a time; wait for each batch before the next.
-      for (let batchStart = 0; batchStart < totalChunks; batchStart += CONCURRENCY) {
-        const batch = Array.from(
-          { length: Math.min(CONCURRENCY, totalChunks - batchStart) },
-          (_, j) => uploadChunk(batchStart + j),
-        );
-        await Promise.all(batch);
-      }
-
-      // Assemble all chunks into the final GCS object.
-      const assembleRes = await fetch(`${basePath}/api/storage/uploads/assemble`, {
+      const requestUrlRes = await fetch(`${basePath}/api/storage/uploads/request-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ name: file.name, size: file.size, contentType }),
         credentials: "include",
       });
 
-      if (!assembleRes.ok) {
-        let msg = `Assembly failed (${assembleRes.status})`;
-        try { msg = (await assembleRes.json() as { error?: string }).error ?? msg; } catch {}
+      if (!requestUrlRes.ok) {
+        let msg = `Could not prepare upload (${requestUrlRes.status})`;
+        try { msg = (await requestUrlRes.json() as { error?: string }).error ?? msg; } catch {}
         throw new Error(msg);
       }
 
-      setUploadProgress(progressEnd);
-      return assembleRes.json() as Promise<{ objectPath: string }>;
+      const { uploadURL, objectPath } = await requestUrlRes.json() as {
+        uploadURL: string;
+        objectPath: string;
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("PUT", uploadURL, true);
+        request.timeout = 60 * 60 * 1000;
+        request.setRequestHeader("Content-Type", contentType);
+
+        request.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const now = Date.now();
+          if (!uploadStartTimeRef.current) uploadStartTimeRef.current = now;
+          const elapsed = (now - uploadStartTimeRef.current) / 1000;
+          if (elapsed > 0) setUploadSpeedBps(event.loaded / elapsed);
+          setUploadProgress(Math.round(
+            progressStart + (event.loaded / event.total) * (progressEnd - progressStart)
+          ));
+        };
+        request.onload = () => {
+          if (request.status >= 200 && request.status < 300) {
+            setUploadProgress(progressEnd);
+            resolve();
+          } else {
+            reject(new Error(`Storage upload failed (${request.status || "network error"})`));
+          }
+        };
+        request.onerror = () => reject(new Error("Storage upload failed — please check your connection and try again."));
+        request.ontimeout = () => reject(new Error("Upload timed out. Please try again with a smaller file or a faster connection."));
+        request.send(file);
+      });
+
+      return { objectPath };
     };
 
     (async () => {
@@ -878,11 +858,11 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
         // Reserve the tail of the progress bar for the thumbnail (if any) so the
         // bar still reads sensibly when there are two uploads in sequence.
         const videoProgressEnd = thumbnailFile ? 90 : 100;
-        const { objectPath: videoObjectPath } = await uploadFileInChunks(uploadFile, 0, videoProgressEnd);
+        const { objectPath: videoObjectPath } = await uploadFileDirectly(uploadFile, 0, videoProgressEnd);
 
         let thumbnailObjectPath: string | undefined;
         if (thumbnailFile) {
-          const { objectPath: thumbObjectPath } = await uploadFileInChunks(thumbnailFile, videoProgressEnd, 100);
+          const { objectPath: thumbObjectPath } = await uploadFileDirectly(thumbnailFile, videoProgressEnd, 100);
           thumbnailObjectPath = thumbObjectPath;
         }
 
@@ -918,7 +898,10 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           const newJob = await createRes.json();
           resetUploadState();
           setSelectedJobId(newJob.id);
-          toast({ title: "Job Created 🚀", description: "Video uploaded and processing has started." });
+          toast({
+            title: "Your content is now processing",
+            description: "You can safely check back later — your results will be saved in Recent Projects.",
+          });
           queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
         } else {
           const err = await createRes.json().catch(() => ({}) as { error?: string });
@@ -2517,7 +2500,19 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                 </div>
 
                 {!["completed", "failed"].includes(jobWithClips.status) && (
-                  <div className="mt-4">
+                  <div className="mt-4 space-y-4">
+                    <div
+                      role="status"
+                      className="flex items-start gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <div>
+                        <p className="font-semibold text-foreground">Your content is being created in the background.</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                          You don&apos;t need to wait here. Feel free to close this page and check back later — this project will stay in Recent Projects while we finish it.
+                        </p>
+                      </div>
+                    </div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-muted-foreground font-medium">{getStatusLabel(jobWithClips.status)}…</span>
                       <span className="text-xs font-mono text-muted-foreground">{getStatusProgress(jobWithClips.status)}%</span>

@@ -1,2 +1,3 @@
 - [GCS presigned URL upload limits](gcs-upload.md) — simple PUT presigned URLs need TTL ≥3600s for large files; XHR must set `timeout`; `streamRangeToResponse` needed for video seeking.
+- [Autoscale video uploads](autoscale-uploads.md) — upload browser video directly to object storage; server-local chunk staging is unsafe across production instances.
 - [Zod v4 + hookform incompatibility](zod-hookform.md) — `zod/v4` breaks @hookform/resolvers v3.10; must use `import * as z from "zod"` (v3 API) in all form schemas.
