@@ -47,3 +47,10 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Runtime-generated Content Rocket media is persisted in object storage and
+# must not be included in source control or the production image.
+artifacts/api-server/uploads/
+artifacts/api-server/clips/
+artifacts/api-server/brands/
+artifacts/api-server/outros/
