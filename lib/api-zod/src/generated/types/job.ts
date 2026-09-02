@@ -8,6 +8,7 @@
 import type { JobCaptionStyle } from "./jobCaptionStyle";
 import type { JobClipMode } from "./jobClipMode";
 import type { JobStatus } from "./jobStatus";
+import type { JobTitleFontColor } from "./jobTitleFontColor";
 import type { JobVideoLayout } from "./jobVideoLayout";
 
 export interface Job {
@@ -24,6 +25,8 @@ export interface Job {
   captionsEnabled: boolean;
   captionStyle: JobCaptionStyle;
   showTitle: boolean;
+  /** Font colour used for the snippet title overlay */
+  titleFontColor: JobTitleFontColor;
   showWatermark: boolean;
   /** @nullable */
   contentCta?: string | null;

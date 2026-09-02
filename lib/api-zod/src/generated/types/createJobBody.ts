@@ -7,6 +7,7 @@
  */
 import type { CreateJobBodyCaptionStyle } from "./createJobBodyCaptionStyle";
 import type { CreateJobBodyClipMode } from "./createJobBodyClipMode";
+import type { CreateJobBodyTitleFontColor } from "./createJobBodyTitleFontColor";
 import type { CreateJobBodyVideoLayout } from "./createJobBodyVideoLayout";
 
 export interface CreateJobBody {
@@ -28,6 +29,8 @@ export interface CreateJobBody {
   captionStyle?: CreateJobBodyCaptionStyle;
   /** Whether to overlay the snippet title text at the top of the video */
   showTitle?: boolean;
+  /** Font colour for the snippet title overlay */
+  titleFontColor?: CreateJobBodyTitleFontColor;
   /** Whether to overlay the brand logo as a watermark in the top-left corner (requires a brand with a logo) */
   showWatermark?: boolean;
   /**

@@ -128,6 +128,7 @@ const formSchema = z.object({
   captionsEnabled: z.boolean().default(true),
   captionStyle: z.enum(["classic", "bold", "boxed", "brand"]).default("classic"),
   showTitle: z.boolean().default(true),
+  titleFontColor: z.enum(["white", "black"]).default("white"),
   showWatermark: z.boolean().default(true),
   contentCta: z.string().optional(),
   outroId: z.string().optional(),
@@ -644,6 +645,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       captionsEnabled: true,
       captionStyle: "classic",
       showTitle: true,
+      titleFontColor: "white",
       showWatermark: true,
       contentCta: "",
       outroId: "none",
@@ -664,6 +666,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
   const captionsEnabled = form.watch("captionsEnabled");
   const captionStyle = form.watch("captionStyle");
   const showTitle = form.watch("showTitle");
+  const titleFontColor = form.watch("titleFontColor");
   const showWatermark = form.watch("showWatermark");
 
   // Auto-fill CTA from selected brand
@@ -711,6 +714,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
       captionsEnabled: values.captionsEnabled,
       captionStyle: values.captionStyle,
       showTitle: values.showTitle,
+      titleFontColor: values.titleFontColor,
       showWatermark: values.showWatermark,
       contentCta: values.contentCta,
       outroId: values.outroId,
@@ -875,6 +879,7 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
           captionsEnabled: String(values.captionsEnabled ?? true),
           captionStyle: values.captionStyle ?? "classic",
           showTitle: String(values.showTitle ?? true),
+          titleFontColor: values.titleFontColor ?? "white",
           showWatermark: String(values.showWatermark ?? true),
         };
         payload.videoLayout = values.videoLayout ?? "normal";
@@ -2313,6 +2318,17 @@ export default function Home({ isAdmin = false }: { isAdmin?: boolean }) {
                       <span className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${showTitle ? "translate-x-4" : "translate-x-0"}`} />
                     </button>
                     <span className="text-xs text-muted-foreground font-medium">Title overlay</span>
+                    {showTitle && (
+                      <Select value={titleFontColor} onValueChange={(v) => form.setValue("titleFontColor", v as "white" | "black")}>
+                        <SelectTrigger className="h-7 w-24 bg-background border-border/60 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="white">White text</SelectItem>
+                          <SelectItem value="black">Black text</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
 
                   <div className="h-4 w-px bg-border/60 hidden sm:block" />

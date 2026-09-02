@@ -346,6 +346,9 @@ export const ListJobsResponseItem = zod.object({
   captionsEnabled: zod.boolean(),
   captionStyle: zod.enum(["classic", "bold", "boxed", "brand"]),
   showTitle: zod.boolean(),
+  titleFontColor: zod
+    .enum(["white", "black"])
+    .describe("Font colour used for the snippet title overlay"),
   showWatermark: zod.boolean(),
   contentCta: zod.string().nullish(),
   outroId: zod.number().nullish(),
@@ -391,6 +394,7 @@ export const createJobBodyClipModeDefault = `ai`;
 export const createJobBodyCaptionsEnabledDefault = true;
 export const createJobBodyCaptionStyleDefault = `classic`;
 export const createJobBodyShowTitleDefault = true;
+export const createJobBodyTitleFontColorDefault = `white`;
 export const createJobBodyShowWatermarkDefault = true;
 export const createJobBodyGeneratePodcastDefault = true;
 export const createJobBodyVideoLayoutDefault = `normal`;
@@ -438,6 +442,10 @@ export const CreateJobBody = zod.object({
     .describe(
       "Whether to overlay the snippet title text at the top of the video",
     ),
+  titleFontColor: zod
+    .enum(["white", "black"])
+    .default(createJobBodyTitleFontColorDefault)
+    .describe("Font colour for the snippet title overlay"),
   showWatermark: zod
     .boolean()
     .default(createJobBodyShowWatermarkDefault)
@@ -498,6 +506,9 @@ export const GetJobResponse = zod
     captionsEnabled: zod.boolean(),
     captionStyle: zod.enum(["classic", "bold", "boxed", "brand"]),
     showTitle: zod.boolean(),
+    titleFontColor: zod
+      .enum(["white", "black"])
+      .describe("Font colour used for the snippet title overlay"),
     showWatermark: zod.boolean(),
     contentCta: zod.string().nullish(),
     outroId: zod.number().nullish(),

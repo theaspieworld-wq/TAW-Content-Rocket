@@ -150,6 +150,17 @@ export const CreateJobBodyCaptionStyle = {
 } as const;
 
 /**
+ * Font colour for the snippet title overlay
+ */
+export type CreateJobBodyTitleFontColor =
+  (typeof CreateJobBodyTitleFontColor)[keyof typeof CreateJobBodyTitleFontColor];
+
+export const CreateJobBodyTitleFontColor = {
+  white: "white",
+  black: "black",
+} as const;
+
+/**
  * Layout for rendered clips — "normal" portrait crop, or "podcast" split-screen (left speaker on top / right speaker on bottom)
  */
 export type CreateJobBodyVideoLayout =
@@ -179,6 +190,8 @@ export interface CreateJobBody {
   captionStyle?: CreateJobBodyCaptionStyle;
   /** Whether to overlay the snippet title text at the top of the video */
   showTitle?: boolean;
+  /** Font colour for the snippet title overlay */
+  titleFontColor?: CreateJobBodyTitleFontColor;
   /** Whether to overlay the brand logo as a watermark in the top-left corner (requires a brand with a logo) */
   showWatermark?: boolean;
   /**
@@ -231,6 +244,17 @@ export const JobCaptionStyle = {
 } as const;
 
 /**
+ * Font colour used for the snippet title overlay
+ */
+export type JobTitleFontColor =
+  (typeof JobTitleFontColor)[keyof typeof JobTitleFontColor];
+
+export const JobTitleFontColor = {
+  white: "white",
+  black: "black",
+} as const;
+
+/**
  * Layout mode used when rendering clips
  */
 export type JobVideoLayout =
@@ -255,6 +279,8 @@ export interface Job {
   captionsEnabled: boolean;
   captionStyle: JobCaptionStyle;
   showTitle: boolean;
+  /** Font colour used for the snippet title overlay */
+  titleFontColor: JobTitleFontColor;
   showWatermark: boolean;
   /** @nullable */
   contentCta?: string | null;

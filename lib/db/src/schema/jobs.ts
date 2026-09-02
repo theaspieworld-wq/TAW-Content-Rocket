@@ -114,6 +114,7 @@ export const jobsTable = pgTable("jobs", {
   captionsEnabled: text("captions_enabled").notNull().default("true"),
   captionStyle: text("caption_style").notNull().default("classic"),
   showTitle: text("show_title").notNull().default("true"),
+  titleFontColor: text("title_font_color").notNull().default("white"),
   showWatermark: text("show_watermark").notNull().default("true"),
   contentCta: text("content_cta"),
   outroId: integer("outro_id").references(() => outrosTable.id, { onDelete: "set null" }),

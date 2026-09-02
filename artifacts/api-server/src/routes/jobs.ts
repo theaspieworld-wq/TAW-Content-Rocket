@@ -85,6 +85,7 @@ async function jobToJson(j: typeof jobsTable.$inferSelect) {
     captionsEnabled: j.captionsEnabled !== "false",
     captionStyle: j.captionStyle ?? "classic",
     showTitle: j.showTitle !== "false",
+    titleFontColor: j.titleFontColor === "black" ? "black" : "white",
     showWatermark: j.showWatermark !== "false",
     contentCta: j.contentCta ?? null,
     outroId: j.outroId ?? null,
@@ -129,6 +130,7 @@ router.post("/jobs", async (req, res): Promise<void> => {
     captionsEnabled,
     captionStyle,
     showTitle,
+    titleFontColor,
     showWatermark,
     contentCta,
     outroId,
@@ -172,6 +174,7 @@ router.post("/jobs", async (req, res): Promise<void> => {
     captionsEnabled: captionsEnabled === false ? "false" : "true",
     captionStyle: captionStyle ?? "classic",
     showTitle: showTitle === false ? "false" : "true",
+    titleFontColor: titleFontColor === "black" ? "black" : "white",
     showWatermark: showWatermark === false ? "false" : "true",
     contentCta: contentCta ?? null,
     status: "pending",
@@ -230,6 +233,7 @@ router.post(
     const captionsEnabledRaw = req.body.captionsEnabled === "false" ? "false" : "true";
     const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
     const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
+    const titleFontColorRaw = req.body.titleFontColor === "black" ? "black" : "white";
     const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
     const videoLayoutRaw = req.body.videoLayout === "podcast" ? "podcast" : "normal";
 
@@ -265,6 +269,7 @@ router.post(
       captionsEnabled: captionsEnabledRaw,
       captionStyle: captionStyleRaw,
       showTitle: showTitleRaw,
+      titleFontColor: titleFontColorRaw,
       showWatermark: showWatermarkRaw,
       contentCta: req.body.contentCta?.trim() || null,
       status: "pending",
@@ -317,6 +322,7 @@ router.post("/jobs/upload-from-storage", async (req, res): Promise<void> => {
   const captionsEnabledRaw = req.body.captionsEnabled === "false" ? "false" : "true";
   const captionStyleRaw = ["classic", "bold", "boxed", "brand"].includes(req.body.captionStyle) ? req.body.captionStyle : "classic";
   const showTitleRaw = req.body.showTitle === "false" ? "false" : "true";
+  const titleFontColorRaw = req.body.titleFontColor === "black" ? "black" : "white";
   const showWatermarkRaw = req.body.showWatermark === "false" ? "false" : "true";
   const videoLayoutRaw = req.body.videoLayout === "podcast" ? "podcast" : "normal";
 
@@ -352,6 +358,7 @@ router.post("/jobs/upload-from-storage", async (req, res): Promise<void> => {
     captionsEnabled: captionsEnabledRaw,
     captionStyle: captionStyleRaw,
     showTitle: showTitleRaw,
+    titleFontColor: titleFontColorRaw,
     showWatermark: showWatermarkRaw,
     contentCta: req.body.contentCta?.trim() || null,
     status: "pending",

@@ -862,6 +862,11 @@ components:
           type: boolean
           default: true
           description: Whether to overlay the snippet title text at the top of the video
+        titleFontColor:
+          type: string
+          enum: [white, black]
+          default: white
+          description: Font colour for the snippet title overlay
         showWatermark:
           type: boolean
           default: true
@@ -913,6 +918,10 @@ components:
           enum: [classic, bold, boxed, brand]
         showTitle:
           type: boolean
+        titleFontColor:
+          type: string
+          enum: [white, black]
+          description: Font colour used for the snippet title overlay
         showWatermark:
           type: boolean
         contentCta:
@@ -960,6 +969,7 @@ components:
         - captionsEnabled
         - captionStyle
         - showTitle
+        - titleFontColor
         - showWatermark
         - hasContent
         - hasFacebookVideo

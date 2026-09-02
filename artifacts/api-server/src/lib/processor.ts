@@ -1152,6 +1152,7 @@ async function renderMainClip(
     captionsEnabled: boolean;
     captionStyle: string;
     showTitle: boolean;
+    titleFontColor?: string;
     showWatermark: boolean;
     watermarkLocalPath: string | null;
     brand: typeof brandsTable.$inferSelect | null;
@@ -1169,7 +1170,7 @@ async function renderMainClip(
     overlayStages.push(`drawbox=x=0:y=0:w=1080:h=${barHeight}:color=${barColor}@0.88:t=fill`);
     titleLines.forEach((line, i) => {
       overlayStages.push(
-        `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=56:fontcolor=white:x=(w-text_w)/2:y=${40 + i * 70}:shadowx=2:shadowy=2:shadowcolor=black@0.8`,
+        `drawtext=fontfile=${fontFile}:text='${escapeFfmpegText(line)}':fontsize=56:fontcolor=${options.titleFontColor === "black" ? "black" : "white"}:x=(w-text_w)/2:y=${40 + i * 70}:shadowx=2:shadowy=2:shadowcolor=${options.titleFontColor === "black" ? "white@0.8" : "black@0.8"}`,
       );
     });
   }
@@ -2058,6 +2059,7 @@ export async function processJob(jobId: number): Promise<void> {
       const captionsEnabled = job.captionsEnabled !== "false";
       const captionStyle = job.captionStyle || "classic";
       const showTitle = job.showTitle !== "false";
+      const titleFontColor = job.titleFontColor === "black" ? "black" : "white";
 
       // Single-source fallback (brand shortFormOutroPath or global outro)
       let singleOutroPath: string | null = null;
@@ -2131,6 +2133,7 @@ export async function processJob(jobId: number): Promise<void> {
                 captionsEnabled,
                 captionStyle,
                 showTitle,
+                titleFontColor,
                 showWatermark,
                 watermarkLocalPath,
                 brand,
